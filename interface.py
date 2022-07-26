@@ -17,6 +17,9 @@ VALID_FEATURES = {
     'twt': ['r', 'x', 'g', 'b', 'rated_u1', 'rated_u2', 'rated_s', 'p1', 'q1', 'i1', 'p2', 'q2', 'i2',
             'connected1', 'connected2']
 }
+
+# TEST
+
 VALID_ADDRESSES = {
     'bus': ['id'],
     'gen': ['id', 'bus_id'],

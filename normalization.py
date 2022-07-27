@@ -6,64 +6,53 @@ from scipy import interpolate
 import numpy as np
 from tqdm import tqdm
 
-
-VALID_FEATURES = {
-    'bus': ['v_mag', 'v_angle'],
-    'gen': ['target_p', 'min_p', 'max_p', 'min_q', 'max_q', 'target_v', 'target_q', 'voltage_regulator_on',
-            'p', 'q', 'i', 'connected'],
-    'load': ['p0', 'q0', 'p', 'q', 'i', 'connected'],
-    'shunt': ['g', 'b', 'voltage_regulation_on', 'target_v', 'connected'],
-    'linear_shunt_compensator_sections': ['g_per_section','b_per_section'],
-    'line': ['r', 'x', 'g1', 'b1', 'g2', 'b2', 'p1', 'q1', 'i1', 'p2', 'q2', 'i2', 'connected1', 'connected2'],
-    'twt': ['r', 'x', 'g', 'b', 'rated_u1', 'rated_u2', 'rated_s', 'p1', 'q1', 'i1', 'p2', 'q2', 'i2',
-            'connected1', 'connected2']
-}
+from backend.pypowsybl import PyPowSyblBackend
+from backend.pandapower import PandaPowerBackend
 
 
 class Normalizer:
 
-    # TODO : permettre d'utiliser d'autres backends pour la normalisation des données
-
-    def __init__(self, options=None, file=None):
+    def __init__(self, file=None, **kwargs):
         self.features = {}
         self.functions = {}
-        if options is None and file is None:
-            raise AttributeError("Please define options or a file to reload.")
-        elif file is not None:
+
+        if file is not None:
             self.load(file)
         else:
-            self.data_dir = options['data_dir']
-            self.check_features(options['features'])
-            self.get_data_files()
-            self.shuffle = options.get('shuffle', False)
-            self.amount_of_samples = options.get('amount_of_samples', 100)
-            self.break_points = options.get('break_points', 10)
-            if self.shuffle:
-                np.random.shuffle(self.data_files)
+            self.data_dir = kwargs.get("data_dir", None)
+            self.backend_name = kwargs.get("backend_name", 'pypowsybl')
+            self.shuffle = kwargs.get("shuffle", False)
+            self.amount_of_samples = kwargs.get('amount_of_samples', 100)
+            self.break_points = kwargs.get('break_points', 200)
+
+            if self.backend_name == 'pypowsybl':
+                self.backend = PyPowSyblBackend()
+            elif self.backend_name == 'pandapower':
+                self.backend = PandaPowerBackend()
+            else:
+                raise ValueError('Not a valid backend !')
+
+            self.features = kwargs.get("features", self.backend.valid_features)
+
+            self.backend.check_features(self.features)
+
+
+            self.data_files = self.get_data_files()
             self.build_functions()
 
     def get_data_files(self):
-        self.data_files = []
-        # Get list of valid files
+        all_data_files = []
         for f in sorted(os.listdir(self.data_dir)):
-            if f.endswith((".mat", ".xiidm")):
-                self.data_files.append(os.path.join(self.data_dir, f))
-        # Make sure that there is at least one valid file
-        if not self.data_files:
+            if f.endswith(self.backend.valid_extensions):
+                all_data_files.append(os.path.join(self.data_dir, f))
+
+        if not all_data_files:
             raise FileNotFoundError("There is no valid file in {}".format(self.data_dir))
 
-    def check_features(self, features):
-        for k in features.keys():
-            if k in VALID_FEATURES.keys():
-                self.features[k] = []
-                for f in features[k]:
-                    if f in VALID_FEATURES[k]:
-                        self.features[k].append(f)
-                    else:
-                        raise Warning('{} is not a valid feature for {}. '.format(f,k) + \
-                                      'Please pick from this list : {}'.format(VALID_FEATURES[k]))
-            else:
-                raise Warning('{} is not a valid name. Please pick from this list : {}'.format(k, VALID_FEATURES))
+        if self.shuffle:
+            np.random.shuffle(all_data_files)
+
+        return all_data_files[:self.amount_of_samples]
 
     def build_functions(self):
         dict_of_all_values = self.get_all_values()
@@ -74,46 +63,20 @@ class Normalizer:
                 self.functions[k][f] = self.build_single_function(dict_of_all_values[k][f])
 
     def get_all_values(self):
-        values_dict = {}
-        for k in self.features.keys():
-            values_dict[k] = {}
-            for f in self.features[k]:
-                values_dict[k][f] = []
-
-        for file in tqdm(self.data_files[:self.amount_of_samples], desc='Loading all the dataset'):
-            net = pn.load(file)
+        values_dict = {k: {f: [] for f in f_list} for k, f_list in self.features.items()}
+        for file in tqdm(self.data_files, desc='Loading all the dataset'):
+            net = self.backend.load_network(file)
             for k in self.features.keys():
-                if k == 'bus':
-                    table = net.get_buses()
-                elif k == 'gen':
-                    table = net.get_generators()
-                elif k == 'load':
-                    table = net.get_loads()
-                elif k == 'shunt':
-                    table = net.get_shunt_compensators()
-                elif k == 'line':
-                    table = net.get_lines()
-                elif k == 'twt':
-                    table = net.get_2_windings_transformers()
-                elif k == 'linear_shunt_compensator_sections':
-                    table = net.get_linear_shunt_compensator_sections()
-                else:
-                    raise ValueError('Object {} is not a valid object name. ' + \
-                                     'Please pick from this list : {}'.format(k, VALID_FEATURES))
+                table = self.backend.get_table(net, k)
                 for f in self.features[k]:
-                    # TODO : remplacer inf par autre chose que 0
-                    table[f].replace([np.inf, -np.inf], 0, inplace=True)
-                    values_dict[k][f].append(table[f].fillna(0.).to_numpy().flatten()*1.)
+                    values_dict[k][f].append(table[f].to_numpy().flatten().astype(float))
         return values_dict
 
     def build_single_function(self, values):
-        # Get pairs of quantiles and percentages
         v, p = self.get_quantiles(values)
-        # Get rid of identical values for quantiles by merging them together
         v_unique, p_unique = self.merge_equal_quantiles(v, p)
         if len(v_unique) == 1:
-            subtract_function = SubtractFunction(v_unique[0])
-            return subtract_function
+            return SubtractFunction(v_unique[0])
         else:
             return interpolate.interp1d(v_unique, -1 + 2 * p_unique, fill_value="extrapolate")
 

@@ -57,7 +57,6 @@ class Interface:
     def __init__(self, **kwargs):
         """Inits interface."""
 
-        # Get arguments if specified, or set to default value
         self.backend_name = kwargs.get("backend_name", "pypowsybl")
         self.series_length = kwargs.get("series_length", 1)
         self.validation_portion = kwargs.get("validation_portion", [0.9, 1.0])

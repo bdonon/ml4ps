@@ -23,8 +23,7 @@ class AbstractBackend(ABC):
         pass
 
     def get_table_dict_batch(self, network_batch, features):
-        r = [[self.get_table_dict(ns, features) for ns in nw] for nw in network_batch]
-        return r
+        return [[self.get_table_dict(ns, features) for ns in nw] for nw in network_batch]
 
     def get_table_dict(self, network, features):
         return {k: self.get_table(network, k) for k in features.keys()}
@@ -77,8 +76,7 @@ class AbstractBackend(ABC):
     def get_unique_id_dict(self, table_dict, addresses):
         all_addresses = [list(table_dict[k][f].values.astype(str)) for k, v in addresses.items() for f in v]
         unique_addresses = list(np.unique(np.concatenate(all_addresses)))
-        address_to_id_dict = {address: i for i, address in enumerate(unique_addresses)}
-        return address_to_id_dict
+        return {address: i for i, address in enumerate(unique_addresses)}
 
     def batch_to_concat(self, v_batch, address=False):
         # TODO : One should be able to concatenate networks of varying size

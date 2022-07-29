@@ -27,7 +27,7 @@ VALID_FEATURES = {
     'poly_cost': ['cp0_eur', 'cp1_eur_per_mw', 'cp2_eur_per_mw2', 'cq0_eur', 'cq1_eur_per_mvar', 'cq2_eur_per_mvar2'],
 }
 VALID_ADDRESSES = {
-    'bus': ['name'],
+    'bus': ['id'],
     'load': ['bus', 'name'],
     'sgen': ['bus', 'name'],
     'gen': ['bus', 'name'],

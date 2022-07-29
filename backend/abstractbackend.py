@@ -62,7 +62,14 @@ class AbstractBackend(ABC):
         return [[self.extract_features(tds, features) for tds in tdw] for tdw in table_dict_batch]
 
     def extract_features(self, table_dict, features):
-        return {k: {f: table_dict[k][f].astype(float).to_numpy() for f in v} for k, v in features.items()}
+        r = {}
+        for k, v in features.items():
+            r[k] = {}
+            for f in v:
+                if f in table_dict[k].keys():
+                    r[k][f] = table_dict[k][f].astype(float).to_numpy()
+        return r
+        #return {k: {f: table_dict[k][f].astype(float).to_numpy() for f in v} for k, v in features.items()}
 
     def extract_address_batch(self, network_batch, addresses):
         table_dict_batch = self.get_table_dict_batch(network_batch, addresses)
@@ -132,3 +139,16 @@ class AbstractBackend(ABC):
             else:
                 raise Warning('{} is not a valid name. Please pick from this list : {}'.format(k, self.valid_addresses))
 
+    def clean_dict(self, v):
+        keys_to_erase = []
+        for k, v_k in v.items():
+            keys_to_erase_k = []
+            for f, v_k_f in v_k.items():
+                if np.prod(np.shape(v_k_f)) == 0:
+                    keys_to_erase_k.append(f)
+            for f in keys_to_erase_k:
+                del v_k[f]
+            if not v_k:
+                keys_to_erase.append(k)
+        for k in keys_to_erase:
+            del v[k]

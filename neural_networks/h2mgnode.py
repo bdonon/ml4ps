@@ -145,6 +145,7 @@ class H2MGNODE:
 
     def forward(self, weights, a, x):
         """Performs a forward pass for a single sample."""
+        self.check_keys(a, self.addresses), self.check_keys(x, self.input_features)
         init_state = self.init_state(a, x)
         return self.solve_and_decode(weights, init_state)
 
@@ -165,15 +166,17 @@ class H2MGNODE:
 
     def solve_and_decode(self, weights, init_state):
         """Solves the graph dynamics and decodes to produce a meaningful output."""
-        start_and_final_state = odeint(self.dynamics, init_state, jnp.array([0., 1.]), weights)
+        start_and_final_state = odeint(self.dynamics, init_state, jnp.array([0., 1.]), weights,
+                                       rtol=1.4e-4, atol=1.4e-4)
         return self.decode_final_state(start_and_final_state, weights)
 
     def decode_final_state(self, start_and_final_state, weights):
         """Extracts the final state, and decodes it into a meaningful output."""
         fs = self.get_final_state(start_and_final_state)
+        used_output = set(list(self.addresses.keys())) & set(list(fs['a'].keys())) & set(list(self.output_features.keys()))
         nn_input = self.get_nn_input(fs['a'], fs['x'], fs['h_v'], fs['h_e'])
-        return {k: {f: self.output_nn_batch(weights['phi_c_y'][k][f], nn_input[k]) for f in f_k}
-                for k, f_k in self.output_features.items()}
+        return {k: {f: self.output_nn_batch(weights['phi_c_y'][k][f], nn_input[k]) for f in self.output_features[k]}
+                for k in used_output}
 
     def get_final_state(self, start_and_final_state):
         """Splits between the start and final states, and only returns the final one."""
@@ -204,11 +207,26 @@ class H2MGNODE:
 
     def get_n_obj_tot(self, a):
         """Returns the maximal address in the sample or batch."""
-        return np.max([np.max([a_k_f for f, a_k_f in a_k.items()]) for k, a_k in a.items()])
+        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
+        n_obj_tot = 0
+        for k in used_addresses:
+            assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
+            for f in self.addresses[k]:
+                n_obj_tot = np.maximum(n_obj_tot, np.max(a[k][f]))
+        return n_obj_tot + 1
+        #return np.max([np.max([a_k_f for f, a_k_f in a_k.items()]) for k, a_k in a.items()]) + 1
 
     def get_n_obj(self, a):
         """Returns a dict of the amount of objects per class, in the sample or batch."""
-        return {k: np.max([np.shape(a_k_f)[1] for f, a_k_f in a_k.items()]) for k, a_k in a.items()}
+        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
+        n_obj = {}
+        for k in used_addresses:
+            n_obj[k] = 0
+            assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
+            for f in self.addresses[k]:
+                n_obj[k] = np.maximum(n_obj[k], np.shape(a[k][f])[1])
+        return n_obj
+        #return {k: np.max([np.shape(a_k_f)[1] for f, a_k_f in a_k.items()]) for k, a_k in a.items()}
 
     def get_n_batch(self, a_batch):
         """Returns the batch dimension."""
@@ -229,8 +247,10 @@ class H2MGNODE:
     def h_v_dynamics(self, a, x, h_v, h_e, t, weights):
         """Dynamics of the address latent variables."""
         dh_v, n = 0.*h_v, 0.*h_v + EPS
+        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
         nn_input = self.get_nn_input(a, x, h_v, h_e, t)
-        for k in self.addresses.keys():
+        for k in used_addresses:
+            assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
             for f in self.addresses[k]:
                 update = self.latent_nn_batch(weights['phi_c_o'][k][f], nn_input[k])
                 adr = a[k][f][:, 0]
@@ -240,16 +260,22 @@ class H2MGNODE:
     def h_e_dynamics(self, a, x, h_v, h_e, t, weights):
         """Dynamics of the hyper-edge latent variables."""
         nn_input = self.get_nn_input(a, x, h_v, h_e, t)
-        return {k: self.latent_nn_batch(weights['phi_c_h'][k], nn_input[k]) for k in self.addresses.keys()}
+        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
+        return {k: self.latent_nn_batch(weights['phi_c_h'][k], nn_input[k]) for k in used_addresses}
 
     def get_nn_input(self, a, x, h_v, h_e, t=None):
         """Returns a dict of neural network inputs."""
-        nn_input = {k: [] for k in self.addresses.keys()}
-        for k in self.addresses.keys():
+        # TODO ici on ne veut garder que l'intersection de self.addresses.keys() et a.keys()
+        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
+        used_input_features = set(list(self.input_features.keys())) & set(list(x.keys()))
+        nn_input = {k: [] for k in used_addresses}
+        for k in used_addresses:
 
             # Get the input features x for hyper-edges of class k. There may be multiple
             # inputs, or even none.
-            if k in self.input_features.keys():
+
+            if k in used_input_features:
+                assert set(list(self.input_features[k])).issubset(set(list(x[k].keys())))
                 for f_ in self.input_features[k]:
                     nn_input[k].append(x[k][f_])
 
@@ -259,6 +285,8 @@ class H2MGNODE:
             # Get the latent variables of addresses that are used by hyper-edges of class k.
             # There are as many variables to retrieve per hyper-edge, as there are addresses
             # to which it is connected.
+
+            assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
             for f_ in self.addresses[k]:
                 nn_input[k].append(h_v[a[k][f_][:, 0]])
 
@@ -268,5 +296,3 @@ class H2MGNODE:
 
             nn_input[k] = jnp.concatenate(nn_input[k], axis=1)
         return nn_input
-
-

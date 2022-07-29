@@ -66,7 +66,7 @@ class Iterator:
         self.series_length = kwargs.get("series_length", 1)
         self.time_window = kwargs.get("time_window", 1)
         self.batch_size = kwargs.get("batch_size", 10)
-        self.shuffle = kwargs.get("shuffle", False)
+        self.shuffle = kwargs.get("shuffle", True)
 
         self.backend.check_features(self.features)
         self.backend.check_addresses(self.addresses)
@@ -152,6 +152,8 @@ class Iterator:
         net_batch = self.backend.load_network_batch(batch_files)
         a_batch = self.backend.extract_address_batch(net_batch, self.addresses)
         a_concat = self.backend.batch_to_concat(a_batch, address=True)
+        self.backend.clean_dict(a_concat)
         x_batch = self.backend.extract_feature_batch(net_batch, self.features)
         x_concat = self.backend.batch_to_concat(x_batch, address=False)
+        self.backend.clean_dict(x_concat)
         return a_concat, x_concat, net_batch

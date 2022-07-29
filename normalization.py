@@ -69,16 +69,20 @@ class Normalizer:
             for k in self.features.keys():
                 table = self.backend.get_table(net, k)
                 for f in self.features[k]:
-                    values_dict[k][f].append(table[f].to_numpy().flatten().astype(float))
+                    if (f in table.keys()) and (not table.empty):
+                        values_dict[k][f].append(table[f].to_numpy().flatten().astype(float))
         return values_dict
 
     def build_single_function(self, values):
-        v, p = self.get_quantiles(values)
-        v_unique, p_unique = self.merge_equal_quantiles(v, p)
-        if len(v_unique) == 1:
-            return SubtractFunction(v_unique[0])
+        if values:
+            v, p = self.get_quantiles(values)
+            v_unique, p_unique = self.merge_equal_quantiles(v, p)
+            if len(v_unique) == 1:
+                return SubtractFunction(v_unique[0])
+            else:
+                return interpolate.interp1d(v_unique, -1 + 2 * p_unique, fill_value="extrapolate")
         else:
-            return interpolate.interp1d(v_unique, -1 + 2 * p_unique, fill_value="extrapolate")
+            return None
 
     def get_quantiles(self, values):
         p = np.arange(0, 1, 1. / self.break_points)
@@ -108,7 +112,7 @@ class Normalizer:
             if k in self.functions.keys():
                 x_norm[k] = {}
                 for f in x[k].keys():
-                    if f in self.functions[k].keys():
+                    if (f in self.functions[k].keys()) and (self.functions[k][f] is not None):
                         x_norm[k][f] = self.functions[k][f](x[k][f])
                     else:
                         x_norm[k][f] = x[k][f]

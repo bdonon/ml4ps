@@ -5,27 +5,37 @@ from jax import grad, jit, vmap
 from jax import random
 from functools import partial
 import numpy as np
+import pickle
 
-class FC:
+class Dense:
 
-    def __init__(self, options):
+    def __init__(self, file=None, **kwargs):
 
-        self.key = options['key']
-        self.hidden_dimensions = options['hidden_dimensions']
-        self.input_features = options['input_features']
-        self.output_features = options['output_features']
+        if file is not None:
+            self.load(file)
+        else:
+            try:
+                self.input_features = kwargs['input_features']
+                self.output_features = kwargs['output_features']
+                self.n_obj = kwargs['n_obj']
+            except:
+                raise AttributeError("One should provide 'n_obj', 'input_features' and 'output_features'.")
+
+        self.random_key = kwargs.get('random_key', random.PRNGKey(1))
+        self.time_window = kwargs.get('time_window', 1)
+        self.hidden_dimensions = kwargs.get('hidden_dimensions', [8])
 
         self.input_dimension = 0
         for k in self.input_features.keys():
-            for f in self.input_features[k].keys():
-                a, b = self.input_features[k][f]
-                self.input_dimension += a * b
+            n_obj_k = self.n_obj[k]
+            for _ in self.input_features[k]:
+                self.input_dimension += n_obj_k * self.time_window
 
         self.output_dimension = 0
         for k in self.output_features.keys():
-            for f in self.output_features[k].keys():
-                a, b = self.output_features[k][f]
-                self.output_dimension += a * b
+            n_obj_k = self.n_obj[k]
+            for _ in self.output_features[k]:
+                self.output_dimension += n_obj_k * self.time_window
 
         self.dimensions = [self.input_dimension, *self.hidden_dimensions, self.output_dimension]
 
@@ -33,8 +43,30 @@ class FC:
 
         self.batch_forward = vmap(self.forward_pass, in_axes=(None, 0), out_axes=0)
 
+    def save(self, filename):
+        """Saves a FC instance."""
+        file = open(filename, 'wb')
+        pickle.dump(self.weights, file)
+        pickle.dump(self.input_features, file)
+        pickle.dump(self.output_features, file)
+        pickle.dump(self.n_obj, file)
+        pickle.dump(self.time_window, file)
+        pickle.dump(self.hidden_dimensions, file)
+        file.close()
+
+    def load(self, filename):
+        """Reloads a FC instance."""
+        file = open(filename, 'rb')
+        self.weights = pickle.load(file)
+        self.input_features = pickle.load(file)
+        self.output_features = pickle.load(file)
+        self.n_obj = pickle.load(file)
+        self.time_window = pickle.load(file)
+        self.hidden_dimensions = pickle.load(file)
+        file.close()
+
     def initialize_weights(self):
-        keys = random.split(self.key, len(self.dimensions))
+        keys = random.split(self.random_key, len(self.dimensions))
         def initialize_layer(m, n, key, scale=1e-2):
             w_key, b_key = random.split(key)
             return scale * random.normal(w_key, (n, m)), scale * random.normal(b_key, (n,))
@@ -69,8 +101,9 @@ class FC:
         i = 0
         for k in self.output_features.keys():
             out_dict[k] = {}
-            for f in self.output_features[k].keys():
-                a, b = self.output_features[k][f]
+            a = self.n_obj[k]
+            b = self.time_window
+            for f in self.output_features[k]:
                 out_dict[k][f] = jnp.reshape(out[i:i+a*b], [a, b])
                 i += a*b
         return out_dict

@@ -1,0 +1,12 @@
+doc/.ipynb_checkpoints*
+*.egg-info/*
+*__pycache__*
+build/*
+*.p
+*.pkl
+*.DS_Store
+*.synctex.gz
+*.log
+*.aux
+*.bib
+.history/

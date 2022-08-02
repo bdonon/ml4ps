@@ -15,12 +15,13 @@ network for instance), and to perform power flow computations.
     my_interface.run_load_flow_batch(network_batch)
     z = my_interface.get_features_dict(network_batch, features)
 """
-from backend.pypowsybl import PyPowSyblBackend
-from backend.pandapower import PandaPowerBackend
-from iterator import Iterator
+from ML4PS.back_end.pypowsybl import PyPowSyblBackend
+from ML4PS.back_end.pandapower import PandaPowerBackend
+from ML4PS.iterator import Iterator
 
 import math
 import os
+from tqdm import tqdm
 
 
 class Interface:
@@ -111,3 +112,12 @@ class Interface:
         """Gets features defined in features from a batch of power networks"""
         y_batch = self.backend.extract_feature_batch(network_batch, features)
         return self.backend.batch_to_concat(y_batch)
+
+    def get_train_batch(self):
+        return tqdm(self.train)
+
+    def get_val_batch(self):
+        return tqdm(self.val)
+
+    def get_test_batch(self):
+        return tqdm(self.test)

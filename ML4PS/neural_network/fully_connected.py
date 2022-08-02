@@ -7,7 +7,7 @@ from functools import partial
 import numpy as np
 import pickle
 
-class FC:
+class Dense:
 
     def __init__(self, file=None, **kwargs):
 

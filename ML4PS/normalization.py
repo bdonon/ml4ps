@@ -6,8 +6,8 @@ from scipy import interpolate
 import numpy as np
 from tqdm import tqdm
 
-from backend.pypowsybl import PyPowSyblBackend
-from backend.pandapower import PandaPowerBackend
+from ML4PS.back_end.pypowsybl import PyPowSyblBackend
+from ML4PS.back_end.pandapower import PandaPowerBackend
 
 
 class Normalizer:
@@ -42,12 +42,13 @@ class Normalizer:
 
     def get_data_files(self):
         all_data_files = []
-        for f in sorted(os.listdir(self.data_dir)):
+        train_dir = os.path.join(self.data_dir, 'train')
+        for f in sorted(os.listdir(train_dir)):
             if f.endswith(self.backend.valid_extensions):
-                all_data_files.append(os.path.join(self.data_dir, f))
+                all_data_files.append(os.path.join(train_dir, f))
 
         if not all_data_files:
-            raise FileNotFoundError("There is no valid file in {}".format(self.data_dir))
+            raise FileNotFoundError("There is no valid file in {}".format(train_dir))
 
         if self.shuffle:
             np.random.shuffle(all_data_files)

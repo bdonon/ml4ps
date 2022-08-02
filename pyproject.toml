@@ -1,0 +1,29 @@
+[project]
+name = "ML4PS"
+version = "0.0.1"
+authors = [
+    {name = "Balthazar Donon", email = "balthazar.donon@gmail.com"},
+    {name = "Laurent Pagnier", email = "laurentpagnier@math.arizona.edu"},
+]
+description = "A toolkit to facilitate the application of Machine Learning techniques for Power Systems applications"
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.7"
+classifiers = []
+
+dependencies = [
+    "jax>=0.3.13",
+    "jaxlib>=0.3.13",
+    "numpy>=1.21.1",
+    "scipy>=1.4.1",
+    "pandapower>=2.9.0",
+    "pypowsybl>=0.16.0",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+"Homepage" = "https://github.com/bdonon/MachineLearning4PowerSystems"
+"Bug Tracker" = "https://github.com/bdonon/MachineLearning4PowerSystems/issues"

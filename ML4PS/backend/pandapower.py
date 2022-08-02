@@ -1,4 +1,4 @@
-from backend.abstractbackend import AbstractBackend
+from ML4PS.backend.abstractbackend import AbstractBackend
 import pandapower as pp
 import pandas as pd
 import numpy as np

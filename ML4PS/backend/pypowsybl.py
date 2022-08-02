@@ -1,4 +1,4 @@
-from backend.abstractbackend import AbstractBackend
+from ML4PS.backend.abstractbackend import AbstractBackend
 import pypowsybl.loadflow as pl
 import pypowsybl.network as pn
 import pandas as pd

@@ -15,8 +15,8 @@ network for instance), and to perform power flow computations.
     my_interface.run_load_flow_batch(network_batch)
     z = my_interface.get_features_dict(network_batch, features)
 """
-from ML4PS.back_end.pypowsybl import PyPowSyblBackend
-from ML4PS.back_end.pandapower import PandaPowerBackend
+from ML4PS.backend.pypowsybl import PyPowSyblBackend
+from ML4PS.backend.pandapower import PandaPowerBackend
 from ML4PS.iterator import Iterator
 
 import math

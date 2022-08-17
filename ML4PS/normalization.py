@@ -6,8 +6,8 @@ from scipy import interpolate
 import numpy as np
 from tqdm import tqdm
 
-from ML4PS.back_end.pypowsybl import PyPowSyblBackend
-from ML4PS.back_end.pandapower import PandaPowerBackend
+from ML4PS.backend.pypowsybl import PyPowSyblBackend
+from ML4PS.backend.pandapower import PandaPowerBackend
 
 
 class Normalizer:

@@ -24,6 +24,9 @@ dependencies = [
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+package-dir = {"" = "ML4PS"}
+
 [project.urls]
 "Homepage" = "https://github.com/bdonon/MachineLearning4PowerSystems"
 "Bug Tracker" = "https://github.com/bdonon/MachineLearning4PowerSystems/issues"

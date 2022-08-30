@@ -104,8 +104,9 @@ class AbstractBackend(ABC):
         return v_concat
 
     def concat_to_batch(self, v_concat):
-        batch_size = np.shape(v_concat.items()[0].items()[0])[0]
-        window_size = np.shape(v_concat.items()[0].items()[0])[2]
+        elem = list(list(v_concat.values())[0].values())[0]
+        batch_size = np.shape(elem)[0]
+        window_size = np.shape(elem)[2]
         v_batch = []
         for i in range(batch_size):
             v_window = []

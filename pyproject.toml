@@ -2,7 +2,7 @@
 name = "ML4PS"
 version = "0.0.1"
 authors = [
-    {name = "Balthazar Donon", email = "balthazar.donon@gmail.com"},
+    {name = "Balthazar Donon", email = "balthazar.donon@uliege.be"},
     {name = "Laurent Pagnier", email = "laurentpagnier@math.arizona.edu"},
 ]
 description = "A toolkit to facilitate the application of Machine Learning techniques for Power Systems applications"
@@ -24,8 +24,10 @@ dependencies = [
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-package-dir = {"" = "ML4PS"}
+[tool.setuptools.packages.find]
+where = [""]
+exclude = ["ENV", "doc"]
+namespaces = false
 
 [project.urls]
 "Homepage" = "https://github.com/bdonon/MachineLearning4PowerSystems"

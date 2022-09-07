@@ -10,19 +10,18 @@ network for instance), and to perform power flow computations.
 
   my_interface = Interface()
   for a, x, net_batch in my_interface.train:
-    y_dict = my_neural_network(a, x)
-    my_interface.update_network_batch(network_batch, y_dict)
-    my_interface.run_load_flow_batch(network_batch)
-    z = my_interface.get_features_dict(network_batch, features)
+  y_dict = my_neural_network(a, x)
+  my_interface.update_network_batch(network_batch, y_dict)
+  my_interface.run_load_flow_batch(network_batch)
+  z = my_interface.get_features_dict(network_batch, features)
+
 """
 from ML4PS.backend.pypowsybl import PyPowSyblBackend
 from ML4PS.backend.pandapower import PandaPowerBackend
 from ML4PS.iterator import Iterator
-
 import math
 import os
 from tqdm import tqdm
-
 
 class Interface:
     """Interfaces allow to interact with a dataset of power grids.
@@ -53,6 +52,7 @@ class Interface:
         train: An iterator to iterate through the train set.
         val: An iterator to iterate through the val set.
         test: An iterator to iterate through the test set.
+
     """
 
     def __init__(self, **kwargs):

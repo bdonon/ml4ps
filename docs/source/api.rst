@@ -1,7 +1,4 @@
 API
 ===
 
-.. autosummary::
-   :toctree: generated
-
-   ML4PS
+.. module:: ML4PS.interface

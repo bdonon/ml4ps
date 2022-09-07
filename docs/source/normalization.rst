@@ -49,7 +49,7 @@ certain class, we may observe some atypical and multimodal distribution.
 In this case, standardization is not enough, and we are looking for another
 way of sending this odd distribution to a more appropriate one.
 
-.. image:: docs/source/figures/distribution.png
+.. image:: /docs/source/figures/distribution.png
   :width: 400
 
 Fortunately, the CDF (Cumulative Derivative Function) provides by definition
@@ -57,7 +57,7 @@ an efficient way of converting our data to a uniform law over the interval
 [0, 1].
 
 
-.. image:: docs/source/figures/cdf.png
+.. image:: /docs/source/figures/cdf.png
   :width: 400
 
 Approximating the CDF
@@ -65,7 +65,7 @@ _____________________
 
 First of all, we need to approximate the cumulative derivative function.
 
-.. image:: docs/source/figures/approximation.png
+.. image:: /docs/source/figures/approximation.png
   :width: 400
 
 Resolving conflicts
@@ -73,7 +73,7 @@ ___________________
 
 First of all, we need to approximate the cumulative derivative function.
 
-.. image:: docs/source/figures/conflicts.png
+.. image:: /docs/source/figures/conflicts.png
   :width: 400
 
 Out of distribution extrapolation
@@ -88,7 +88,7 @@ make a distinction between values that are out of range.
 
 Thus, we propose to extrapolate by extending the first and last slopes.
 
-.. image:: docs/source/figures/extrapolation.png
+.. image:: /docs/source/figures/extrapolation.png
   :width: 400
 
 Usage

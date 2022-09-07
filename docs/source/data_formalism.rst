@@ -1,4 +1,4 @@
-.. _data_formalism:
+.. _data-formalism:
 
 Data Formalism
 ==============

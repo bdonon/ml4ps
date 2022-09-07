@@ -14,4 +14,7 @@ Contents
 
 .. toctree::
 
-   api
+    data_formalism
+    basic_usage
+    normalization
+    postprocessing

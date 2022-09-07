@@ -11,7 +11,7 @@ to display multimodal distributions.
 
 Moreover, we wish to have a normalization process that does not alter the
 permutation-equivariance of the data. For more details about some properties
-of our data, please refer to :ref:'data-formalism'.
+of our data, please refer to :ref:`Data Formalism <data-formalism>`.
 
 Explanation
 -----------

@@ -4,55 +4,53 @@ import math
 class Iterator:
     """Iterates through a dataset of power grids.
 
-    An iterator allows to iteratively retrieve batches of power networks,
-    as well as their addresses and features. It returns a tuple
-    (a_concat, x_concat, net_batch), where:
+        An iterator allows to iteratively retrieve batches of power networks,
+        as well as their addresses and features. It returns a tuple
+        (a_concat, x_concat, net_batch), where:
 
-    -   net_batch is a list of list of power network instances related to
-        the iterator backend. Returning this part is useful if the training
-        loop also requires modifies the network batch to perform some
-        electrotechnical computation.
+        -   net_batch is a list of list of power network instances related to
+            the iterator backend. Returning this part is useful if the training
+            loop also requires modifies the network batch to perform some
+            electrotechnical computation.
+        -   x_concat is a nested dictionary that has a structure defined by
+            the features attribute of the iterator. For a given pair of
+            electrotechnical object class (e.g. 'gen') and attribute (e.g.
+            'p_min') specified in the features attribute of the iterator, it
+            gives a tensor of shape [n_batch, n_obj, n_window], where n_batch
+            is the batch size, n_obj is the amount of such object in the
+            power network instance (e.g. amount of 'gen'), and n_window is
+            the time window size. This tensor contains the corresponding
+            values extracted from net_batch
+        -   a_concat is a nested dictionary that has a structure defined by
+            the features attribute of the iterator. For a given pair of
+            electrotechnical object class (e.g. 'gen') and address (e.g.
+            'bus_id') specified in the addresses attribute of the iterator, it
+            gives a tensor of shape [n_batch, n_obj, 1], where n_batch
+            is the batch size, n_obj is the amount of such object in the
+            power network instance (e.g. amount of 'gen'), and n_window is
+            the time window size. This tensor an integer representation of
+            the addresses.
 
-    -   x_concat is a nested dictionary that has a structure defined by
-        the features attribute of the iterator. For a given pair of
-        electrotechnical object class (e.g. 'gen') and attribute (e.g.
-        'p_min') specified in the features attribute of the iterator, it
-        gives a tensor of shape [n_batch, n_obj, n_window], where n_batch
-        is the batch size, n_obj is the amount of such object in the
-        power network instance (e.g. amount of 'gen'), and n_window is
-        the time window size. This tensor contains the corresponding
-        values extracted from net_batch.
-
-    -   a_concat is a nested dictionary that has a structure defined by
-        the features attribute of the iterator. For a given pair of
-        electrotechnical object class (e.g. 'gen') and address (e.g.
-        'bus_id') specified in the addresses attribute of the iterator, it
-        gives a tensor of shape [n_batch, n_obj, 1], where n_batch
-        is the batch size, n_obj is the amount of such object in the
-        power network instance (e.g. amount of 'gen'), and n_window is
-        the time window size. This tensor an integer representation of
-        the addresses.
-
-    Attributes:
-        files: A list of string specifying valid file names.
-        backend: A backend implementation that inherits from AbstractBackend.
-        features: A dict of list of strings specifying the features that
-            should be retrieved in the output x of the iterator.
-        addresses: A dict of list of strings specifying the features that
-            should be retrieved in the output x of the iterator.
-        series_length: An integer that defines the coherence length of
-            time series.
-        time_window: An integer that defines the length of time windows.
-        batch_size: An integer that defines the size of each batch that should
-            be output by the iterator.
-        shuffle: A boolean that specifies if the dataset should be shuffled.
-        keys: A list containing all the keys used in either features or
-            addresses.
-        window_files: A list of list of file names of exactly time_window
-            size.
-        batch_files: A list of list of list of file names, that break
-            window_files into batches of batch_size size.
-        length: An integer defining the length of the list of batches.
+        Attributes:
+            files: A list of string specifying valid file names.
+            backend: A backend implementation that inherits from AbstractBackend.
+            features: A dict of list of strings specifying the features that
+                should be retrieved in the output x of the iterator.
+            addresses: A dict of list of strings specifying the features that
+                should be retrieved in the output x of the iterator.
+            series_length: An integer that defines the coherence length of
+                time series.
+            time_window: An integer that defines the length of time windows.
+            batch_size: An integer that defines the size of each batch that should
+                be output by the iterator.
+            shuffle: A boolean that specifies if the dataset should be shuffled.
+            keys: A list containing all the keys used in either features or
+                addresses.
+            window_files: A list of list of file names of exactly time_window
+                size.
+            batch_files: A list of list of list of file names, that break
+                window_files into batches of batch_size size.
+            length: An integer defining the length of the list of batches.
     """
 
     def __init__(self, file_list, backend, **kwargs):

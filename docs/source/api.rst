@@ -1,4 +1,6 @@
 API
 ===
 
-.. module:: ML4PS.interface
+.. module:: ML4PS.iterator
+
+.. autoclass:: Iterator

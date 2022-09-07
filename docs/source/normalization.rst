@@ -22,5 +22,5 @@ If you want to do some fancy stuff, you can do this and this.
 
 Contents
 --------
-.. module:: ML4PS.iterator
-.. autoclass:: Iterator
+.. module:: ML4PS.normalization
+.. autoclass:: Normalizer

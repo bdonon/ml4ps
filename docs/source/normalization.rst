@@ -1,7 +1,16 @@
+.. _normalization:
 Normalization
 =============
 
-Properly normalizing data is crucial.
+Neural networks can only work properly if your data is properly normalized.
+In most cases, a simple standardization (subtracting the mean and dividing
+by the standard deviation) is enough.
+However, data encountered in power grids is quite atypical and is very likely
+to display multimodal distributions.
+
+Moreover, we wish to have a normalization process that does not alter the
+permutation-equivariance of the data. For more details about some properties
+of our data, please refer to :ref:'data_formalism'.
 
 Explanation
 -----------

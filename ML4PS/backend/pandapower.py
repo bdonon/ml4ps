@@ -1,4 +1,4 @@
-from ML4PS.backend.abstractbackend import AbstractBackend
+from ML4PS.backend.interface import AbstractBackend
 import pandapower as pp
 import pandas as pd
 import numpy as np
@@ -38,7 +38,7 @@ VALID_ADDRESSES = {
     'poly_cost': ['element'],
 }
 
-class PandaPowerBackend(AbstractBackend):
+class Backend(AbstractBackend):
 
     valid_extensions = (".json", ".pkl")
     valid_features = VALID_FEATURES

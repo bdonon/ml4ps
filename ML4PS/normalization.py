@@ -5,8 +5,9 @@ from scipy import interpolate
 import numpy as np
 from tqdm import tqdm
 
-from ML4PS.backend.pypowsybl import PyPowSyblBackend
-from ML4PS.backend.pandapower import PandaPowerBackend
+from ML4PS.backend.interface import get_backend
+from ML4PS.backend.pypowsybl import Backend
+from ML4PS.backend.pandapower import Backend
 
 
 class Normalizer:
@@ -36,7 +37,8 @@ class Normalizer:
             break_points (:obj:`int`): Amount of breakpoints that the piecewise linear functions should have. Indeed,
                 in the case of multiple data quantiles being equal, the actual amount of breakpoints will be lower.
             features (:obj:`dict` of :obj:`list` of :obj:`str`): Dict of list of feature names. Keys correspond to
-                objects (e.g. 'load'), and values are lists of features that should be normalized (e.g. ['p_mw', 'q_mvar']).
+                objects (e.g. 'load'), and values are lists of features that should be normalized (e.g. ['p_mw',
+                'q_mvar']).
         """
         self.functions = {}
 
@@ -44,25 +46,36 @@ class Normalizer:
             self.load(filename)
         else:
             self.backend_name = kwargs.get("backend_name", 'pypowsybl')
+            self.backend = get_backend(self.backend_name)
             self.data_dir = kwargs.get("data_dir", None)
             self.amount_of_samples = kwargs.get('amount_of_samples', 100)
             self.shuffle = kwargs.get("shuffle", False)
             self.break_points = kwargs.get('break_points', 200)
-
-            if self.backend_name == 'pypowsybl':
-                self.backend = PyPowSyblBackend()
-            elif self.backend_name == 'pandapower':
-                self.backend = PandaPowerBackend()
-            else:
-                raise ValueError('Not a valid backend !')
-
             self.features = kwargs.get("features", self.backend.valid_features)
-
-            # Make sure that features are valid
             self.backend.check_features(self.features)
 
-            self.data_files = self.get_data_files()
             self.build_functions()
+
+    def build_functions(self):
+        """"""
+        dict_of_all_values = self.get_all_values()
+        self.functions = {}
+        for k in self.features.keys():
+            self.functions[k] = {}
+            for f in self.features[k]:
+                self.functions[k][f] = self.build_single_function(dict_of_all_values[k][f])
+
+    def get_all_values(self):
+        data_files = self.get_data_files()
+        values_dict = {k: {f: [] for f in f_list} for k, f_list in self.features.items()}
+        for file in tqdm(data_files, desc='Loading all the dataset'):
+            net = self.backend.load_network(file)
+            for k in self.features.keys():
+                table = self.backend.get_table(net, k)
+                for f in self.features[k]:
+                    if (f in table.keys()) and (not table.empty):
+                        values_dict[k][f].append(table[f].to_numpy().flatten().astype(float))
+        return values_dict
 
     def get_data_files(self):
         all_data_files = []
@@ -79,24 +92,6 @@ class Normalizer:
 
         return all_data_files[:self.amount_of_samples]
 
-    def build_functions(self):
-        dict_of_all_values = self.get_all_values()
-        self.functions = {}
-        for k in self.features.keys():
-            self.functions[k] = {}
-            for f in self.features[k]:
-                self.functions[k][f] = self.build_single_function(dict_of_all_values[k][f])
-
-    def get_all_values(self):
-        values_dict = {k: {f: [] for f in f_list} for k, f_list in self.features.items()}
-        for file in tqdm(self.data_files, desc='Loading all the dataset'):
-            net = self.backend.load_network(file)
-            for k in self.features.keys():
-                table = self.backend.get_table(net, k)
-                for f in self.features[k]:
-                    if (f in table.keys()) and (not table.empty):
-                        values_dict[k][f].append(table[f].to_numpy().flatten().astype(float))
-        return values_dict
 
     def build_single_function(self, values):
         if values:

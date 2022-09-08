@@ -2,6 +2,11 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 
+def get_backend(backend_name):
+    module = __import__('ML4PS.backend.{}'.format(backend_name))
+    return module.Backend()
+
+
 class AbstractBackend(ABC):
 
     def __init__(self):
@@ -69,7 +74,7 @@ class AbstractBackend(ABC):
                 if f in table_dict[k].keys():
                     r[k][f] = table_dict[k][f].astype(float).to_numpy()
         return r
-        #return {k: {f: table_dict[k][f].astype(float).to_numpy() for f in v} for k, v in features.items()}
+        # return {k: {f: table_dict[k][f].astype(float).to_numpy() for f in v} for k, v in features.items()}
 
     def extract_address_batch(self, network_batch, addresses):
         table_dict_batch = self.get_table_dict_batch(network_batch, addresses)
@@ -100,7 +105,7 @@ class AbstractBackend(ABC):
                     temp = np.array(temp)
                     v_concat[k][f].append(temp)
                 v_concat[k][f] = np.array(v_concat[k][f])
-                v_concat[k][f] = np.transpose(v_concat[k][f], [0,2,1])
+                v_concat[k][f] = np.transpose(v_concat[k][f], [0, 2, 1])
         return v_concat
 
     def concat_to_batch(self, v_concat):
@@ -111,7 +116,7 @@ class AbstractBackend(ABC):
         for i in range(batch_size):
             v_window = []
             for j in range(window_size):
-                v_sample = {k: {f: v_concat[k][f][i,:,j] for f in v_concat[k].keys()} for k in v_concat.keys()}
+                v_sample = {k: {f: v_concat[k][f][i, :, j] for f in v_concat[k].keys()} for k in v_concat.keys()}
                 v_window.append(v_sample)
             v_batch.append(v_window)
         return v_batch

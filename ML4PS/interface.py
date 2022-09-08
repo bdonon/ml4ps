@@ -16,8 +16,9 @@ network for instance), and to perform power flow computations.
   z = my_interface.get_features_dict(network_batch, features)
 
 """
-from ML4PS.backend.pypowsybl import PyPowSyblBackend
-from ML4PS.backend.pandapower import PandaPowerBackend
+from ML4PS.backend.pypowsybl import Backend
+from ML4PS.backend.pandapower import Backend
+from ML4PS.backend.interface import get_backend
 from ML4PS.iterator import Iterator
 import math
 import os
@@ -63,12 +64,13 @@ class Interface:
         self.validation_portion = kwargs.get("validation_portion", [0.9, 1.0])
         self.data_dir = kwargs.get("data_dir", None)
 
-        if self.backend_name == 'pypowsybl':
-            self.backend = PyPowSyblBackend()
-        elif self.backend_name == 'pandapower':
-            self.backend = PandaPowerBackend()
-        else:
-            raise ValueError('Not a valid backend !')
+        self.backend = get_backend(self.backend_name)
+        # if self.backend_name == 'pypowsybl':
+        #    self.backend = PyPowSyblBackend()
+        # elif self.backend_name == 'pandapower':
+        #    self.backend = PandaPowerBackend()
+        # else:
+        #    raise ValueError('Not a valid backend !')
 
         # Build train, val and test lists of valid files
         self.all_train_files = self.get_files(os.path.join(self.data_dir, 'train'))

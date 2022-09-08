@@ -1,4 +1,4 @@
-from ML4PS.backend.abstractbackend import AbstractBackend
+from ML4PS.backend.interface import AbstractBackend
 import pypowsybl.loadflow as pl
 import pypowsybl.network as pn
 import pandas as pd
@@ -25,7 +25,7 @@ VALID_ADDRESSES = {
     'twt': ['id', 'bus1_id', 'bus2_id']
 }
 
-class PyPowSyblBackend(AbstractBackend):
+class Backend(AbstractBackend):
 
     valid_extensions = (".xiidm", ".mat")
     valid_features = VALID_FEATURES

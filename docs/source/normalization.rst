@@ -154,5 +154,5 @@ Contents
 --------
 .. module:: ML4PS.normalization
 .. autoclass:: Normalizer
-    :members:
+    :members: load, save
     :special-members: __init__, __call__

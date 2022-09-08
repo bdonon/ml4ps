@@ -13,25 +13,40 @@ class Normalizer:
     """Normalizes power grid features while respecting the permutation equivariance of the data.
 
     Attributes:
-        features (dict): Dict of list of features. Keys correspond to objects (e.g. 'load'), and values are lists of
-            features that should be normalized (e.g. ['p_mw', 'q_mvar']).
-        functions (dict): Dict of dict of normalizing functions. Upper level keys correspond to objects (e.g. 'load'),
-            lower level keys correspond to features (e.g. 'p_mw') and the value corresponds to a normalizing function.
-            Normalizing functions take scalar inputs and return scalar inputs.
-
+        functions (:obj:`dict` of :obj:`dict` of :obj:`normalizing_function`): Dict of dict of normalizing functions.
+            Upper level keys correspond to objects (e.g. 'load'), lower level keys correspond to features (e.g. 'p_mw')
+            and the value corresponds to a normalizing function. Normalizing functions take scalar inputs and return
+            scalar inputs.
     """
 
-    def __init__(self, file=None, **kwargs):
-        self.features = {}
+    def __init__(self, filename=None, **kwargs):
+        """Inits Normalizer.
+
+        Args:
+            filename (str): Path to a normalizer that should be loaded. If not specified, a new normalizer is created
+                based on the other arguments
+            backend_name (str): Name of the backend to use to extract features. For now, it can be either `pandapower`
+                or `pypowsybl`. Changing the backend will affect the objects and features names.
+            data_dir (str): Path to the dataset that will serve to fit the normalizing functions.
+            amount_of_samples (int): Amount of samples that should be imported from the dataset to fit the normalizing
+                functions. As a matter of fact, fitting normalizing functions on a small subset of the dataset is faster,
+                and usually provides a relevant normalization.
+            shuffle (bool): If true, samples used to fit the normalizing functions are drawn randomly from the dataset. If
+                false, only the first samples in alphabetical order are used.
+            break_points (int): Amount of breakpoints that the piecewise linear functions should have. Indeed, in the case
+                of multiple data quantiles being equal, the actual amount of breakpoints will be lower.
+            features (dict): Dict of list of features. Keys correspond to objects (e.g. 'load'), and values are lists of
+                features that should be normalized (e.g. ['p_mw', 'q_mvar']).
+        """
         self.functions = {}
 
-        if file is not None:
-            self.load(file)
+        if filename is not None:
+            self.load(filename)
         else:
-            self.data_dir = kwargs.get("data_dir", None)
             self.backend_name = kwargs.get("backend_name", 'pypowsybl')
-            self.shuffle = kwargs.get("shuffle", False)
+            self.data_dir = kwargs.get("data_dir", None)
             self.amount_of_samples = kwargs.get('amount_of_samples', 100)
+            self.shuffle = kwargs.get("shuffle", False)
             self.break_points = kwargs.get('break_points', 200)
 
             if self.backend_name == 'pypowsybl':

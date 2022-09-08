@@ -1,7 +1,6 @@
 import os
 import pickle
 
-import pypowsybl.network as pn
 from scipy import interpolate
 import numpy as np
 from tqdm import tqdm
@@ -11,6 +10,16 @@ from ML4PS.backend.pandapower import PandaPowerBackend
 
 
 class Normalizer:
+    """Normalizes power grid features while respecting the permutation equivariance of the data.
+
+    Attributes:
+        features (dict): Dict of list of features. Keys correspond to objects (e.g. 'load'), and values are lists of
+            features that should be normalized (e.g. ['p_mw', 'q_mvar']).
+        functions (dict): Dict of dict of normalizing functions. Upper level keys correspond to objects (e.g. 'load'),
+            lower level keys correspond to features (e.g. 'p_mw') and the value corresponds to a normalizing function.
+            Normalizing functions take scalar inputs and return scalar inputs.
+
+    """
 
     def __init__(self, file=None, **kwargs):
         self.features = {}
@@ -36,11 +45,10 @@ class Normalizer:
 
             self.backend.check_features(self.features)
 
+            self.data_files = self._get_data_files()
+            self._build_functions()
 
-            self.data_files = self.get_data_files()
-            self.build_functions()
-
-    def get_data_files(self):
+    def _get_data_files(self):
         all_data_files = []
         train_dir = os.path.join(self.data_dir, 'train')
         for f in sorted(os.listdir(train_dir)):
@@ -55,15 +63,15 @@ class Normalizer:
 
         return all_data_files[:self.amount_of_samples]
 
-    def build_functions(self):
-        dict_of_all_values = self.get_all_values()
+    def _build_functions(self):
+        dict_of_all_values = self._get_all_values()
         self.functions = {}
         for k in self.features.keys():
             self.functions[k] = {}
             for f in self.features[k]:
-                self.functions[k][f] = self.build_single_function(dict_of_all_values[k][f])
+                self.functions[k][f] = self._build_single_function(dict_of_all_values[k][f])
 
-    def get_all_values(self):
+    def _get_all_values(self):
         values_dict = {k: {f: [] for f in f_list} for k, f_list in self.features.items()}
         for file in tqdm(self.data_files, desc='Loading all the dataset'):
             net = self.backend.load_network(file)
@@ -74,10 +82,10 @@ class Normalizer:
                         values_dict[k][f].append(table[f].to_numpy().flatten().astype(float))
         return values_dict
 
-    def build_single_function(self, values):
+    def _build_single_function(self, values):
         if values:
-            v, p = self.get_quantiles(values)
-            v_unique, p_unique = self.merge_equal_quantiles(v, p)
+            v, p = self._get_quantiles(values)
+            v_unique, p_unique = self._merge_equal_quantiles(v, p)
             if len(v_unique) == 1:
                 return SubtractFunction(v_unique[0])
             else:
@@ -85,12 +93,13 @@ class Normalizer:
         else:
             return None
 
-    def get_quantiles(self, values):
+    def _get_quantiles(self, values):
+        """"""
         p = np.arange(0, 1, 1. / self.break_points)
         v = np.quantile(values, p)
         return v, p
 
-    def merge_equal_quantiles(self, v, p):
+    def _merge_equal_quantiles(self, v, p):
         v_unique, inverse, counts = np.unique(v, return_inverse=True, return_counts=True)
         p_unique = 0. * v_unique
         np.add.at(p_unique, inverse, p)
@@ -98,13 +107,13 @@ class Normalizer:
         return v_unique, p_unique
 
     def save(self, filename):
-        """Saves a normalizer to ``filename``."""
+        """Saves a normalizer."""
         file = open(filename, 'wb')
         file.write(pickle.dumps(self.functions))
         file.close()
 
     def load(self, filename):
-        """Loads a normalizer from ``filename``."""
+        """Loads a normalizer."""
         file = open(filename, 'rb')
         self.functions = pickle.loads(file.read())
         file.close()
@@ -125,6 +134,7 @@ class Normalizer:
 
 
 class SubtractFunction:
+    """Class of savable functions that subtract a constant value."""
 
     def __init__(self, v):
         self.v = v

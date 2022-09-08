@@ -23,20 +23,20 @@ class Normalizer:
         """Inits Normalizer.
 
         Args:
-            filename (str): Path to a normalizer that should be loaded. If not specified, a new normalizer is created
-                based on the other arguments
-            backend_name (str): Name of the backend to use to extract features. For now, it can be either `pandapower`
-                or `pypowsybl`. Changing the backend will affect the objects and features names.
-            data_dir (str): Path to the dataset that will serve to fit the normalizing functions.
-            amount_of_samples (int): Amount of samples that should be imported from the dataset to fit the normalizing
-                functions. As a matter of fact, fitting normalizing functions on a small subset of the dataset is faster,
-                and usually provides a relevant normalization.
-            shuffle (bool): If true, samples used to fit the normalizing functions are drawn randomly from the dataset. If
-                false, only the first samples in alphabetical order are used.
-            break_points (int): Amount of breakpoints that the piecewise linear functions should have. Indeed, in the case
-                of multiple data quantiles being equal, the actual amount of breakpoints will be lower.
-            features (dict): Dict of list of features. Keys correspond to objects (e.g. 'load'), and values are lists of
-                features that should be normalized (e.g. ['p_mw', 'q_mvar']).
+            filename (:obj:`str`): Path to a normalizer that should be loaded. If not specified, a new normalizer is
+                created based on the other arguments
+            backend_name (:obj:`str`): Name of the backend to use to extract features. For now, it can be either
+                `pandapower` or `pypowsybl`. Changing the backend will affect the objects and features names.
+            data_dir (:obj:`str`): Path to the dataset that will serve to fit the normalizing functions.
+            amount_of_samples (:obj:`int`): Amount of samples that should be imported from the dataset to fit the
+                normalizing functions. As a matter of fact, fitting normalizing functions on a small subset of the
+                dataset is faster, and usually provides a relevant normalization.
+            shuffle (:obj:`bool`): If true, samples used to fit the normalizing functions are drawn randomly from the
+                dataset. If false, only the first samples in alphabetical order are used.
+            break_points (:obj:`int`): Amount of breakpoints that the piecewise linear functions should have. Indeed,
+                in the case of multiple data quantiles being equal, the actual amount of breakpoints will be lower.
+            features (:obj:`dict` of :obj:`list` of :obj:`str`): Dict of list of feature names. Keys correspond to
+                objects (e.g. 'load'), and values are lists of features that should be normalized (e.g. ['p_mw', 'q_mvar']).
         """
         self.functions = {}
 
@@ -58,12 +58,13 @@ class Normalizer:
 
             self.features = kwargs.get("features", self.backend.valid_features)
 
+            # Make sure that features are valid
             self.backend.check_features(self.features)
 
-            self.data_files = self._get_data_files()
-            self._build_functions()
+            self.data_files = self.get_data_files()
+            self.build_functions()
 
-    def _get_data_files(self):
+    def get_data_files(self):
         all_data_files = []
         train_dir = os.path.join(self.data_dir, 'train')
         for f in sorted(os.listdir(train_dir)):
@@ -78,15 +79,15 @@ class Normalizer:
 
         return all_data_files[:self.amount_of_samples]
 
-    def _build_functions(self):
-        dict_of_all_values = self._get_all_values()
+    def build_functions(self):
+        dict_of_all_values = self.get_all_values()
         self.functions = {}
         for k in self.features.keys():
             self.functions[k] = {}
             for f in self.features[k]:
-                self.functions[k][f] = self._build_single_function(dict_of_all_values[k][f])
+                self.functions[k][f] = self.build_single_function(dict_of_all_values[k][f])
 
-    def _get_all_values(self):
+    def get_all_values(self):
         values_dict = {k: {f: [] for f in f_list} for k, f_list in self.features.items()}
         for file in tqdm(self.data_files, desc='Loading all the dataset'):
             net = self.backend.load_network(file)
@@ -97,10 +98,10 @@ class Normalizer:
                         values_dict[k][f].append(table[f].to_numpy().flatten().astype(float))
         return values_dict
 
-    def _build_single_function(self, values):
+    def build_single_function(self, values):
         if values:
-            v, p = self._get_quantiles(values)
-            v_unique, p_unique = self._merge_equal_quantiles(v, p)
+            v, p = self.get_quantiles(values)
+            v_unique, p_unique = self.merge_equal_quantiles(v, p)
             if len(v_unique) == 1:
                 return SubtractFunction(v_unique[0])
             else:
@@ -108,13 +109,13 @@ class Normalizer:
         else:
             return None
 
-    def _get_quantiles(self, values):
+    def get_quantiles(self, values):
         """"""
         p = np.arange(0, 1, 1. / self.break_points)
         v = np.quantile(values, p)
         return v, p
 
-    def _merge_equal_quantiles(self, v, p):
+    def merge_equal_quantiles(self, v, p):
         v_unique, inverse, counts = np.unique(v, return_inverse=True, return_counts=True)
         p_unique = 0. * v_unique
         np.add.at(p_unique, inverse, p)
@@ -134,6 +135,7 @@ class Normalizer:
         file.close()
 
     def __call__(self, x):
+        """Normalizes input data."""
         x_norm = {}
         for k in x.keys():
             if k in self.functions.keys():

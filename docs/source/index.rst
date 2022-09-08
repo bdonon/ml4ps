@@ -16,5 +16,6 @@ Contents
 
     data_formalism
     basic_usage
+    interface
     normalization
     postprocessing

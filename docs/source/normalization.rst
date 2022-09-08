@@ -73,13 +73,8 @@ parameter).
 Approximating the CDF
 ^^^^^^^^^^^^^^^^^^^^^
 
-The empirical CDF has two major drawbacks :
-
-    - It is made of discrete increments.
-    - Even when considering a small subset of the data, it may be a bit too
-large to store.
-
-To solve both issues, we propose to build a piecewise linear approximation of
+The empirical CDF has one major drawback, as it is made of discrete increments.
+To solve this issue, we propose to build a piecewise linear approximation of
 this function. To do so, we introduce a parameter `break_points` which define
 the amount of breakpoints we want to have in our normalizing function.
 We split the interval [0,1] into `break_points` equal chunks, and look at

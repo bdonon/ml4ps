@@ -38,9 +38,10 @@ normalized using the exact same mapping.
     By doing so, we would actually break the permutation-equivariance of
     the data. If the neural network used is a simple fully connected
     architecture, then this may not have that much of an impact. But
-    if we were to use a permutation-equivariant neural network architecture,
-    then this would introduce a detrimental noise, which could prevent
-    the neural network from learning anything meaningful.
+    if we were to use a permutation-equivariant neural network architecture
+    (such as a Graph Neural Network), then this would introduce a detrimental
+    noise, which could prevent the neural network from learning anything
+    meaningful.
 
 Fitting normalizing functions
 -----------------------------

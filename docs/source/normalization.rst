@@ -42,7 +42,7 @@ of each class.
     the neural network from learning anything meaningful.
 
 ??
---------------------------------------------------
+--
 
 If we take a look at the marginal distribution of a certain feature of a
 certain class, we may observe some atypical and multimodal distribution.
@@ -61,7 +61,7 @@ an efficient way of converting our data to a uniform law over the interval
   :width: 400
 
 Approximating the CDF
-^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 First of all, we need to approximate the cumulative derivative function.
 
@@ -69,7 +69,7 @@ First of all, we need to approximate the cumulative derivative function.
   :width: 400
 
 Resolving conflicts
-^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 First of all, we need to approximate the cumulative derivative function.
 
@@ -77,7 +77,7 @@ First of all, we need to approximate the cumulative derivative function.
   :width: 400
 
 Out of distribution extrapolation
-^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Since we only have access to a partial empirical distribution, it is very
 likely that some values in the train and/or test sets will be out of the

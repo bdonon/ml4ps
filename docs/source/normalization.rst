@@ -108,3 +108,4 @@ Contents
 .. module:: ML4PS.normalization
 .. autoclass:: Normalizer
     :members:
+    :special-members:

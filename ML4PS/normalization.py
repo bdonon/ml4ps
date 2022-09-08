@@ -104,6 +104,7 @@ class Normalizer:
         file.close()
 
     def load(self, filename):
+        """Loads a normalizer from ``filename``."""
         file = open(filename, 'rb')
         self.functions = pickle.loads(file.read())
         file.close()

@@ -61,7 +61,7 @@ an efficient way of converting our data to a uniform law over the interval
   :width: 400
 
 Approximating the CDF
-_____________________
+^^^^^^^^^^
 
 First of all, we need to approximate the cumulative derivative function.
 
@@ -69,7 +69,7 @@ First of all, we need to approximate the cumulative derivative function.
   :width: 400
 
 Resolving conflicts
-___________________
+^^^^^^^^^^
 
 First of all, we need to approximate the cumulative derivative function.
 
@@ -77,7 +77,7 @@ First of all, we need to approximate the cumulative derivative function.
   :width: 400
 
 Out of distribution extrapolation
-_________________________________
+^^^^^^^^^^
 
 Since we only have access to a partial empirical distribution, it is very
 likely that some values in the train and/or test sets will be out of the
@@ -107,3 +107,4 @@ Contents
 --------
 .. module:: ML4PS.normalization
 .. autoclass:: Normalizer
+    :members:

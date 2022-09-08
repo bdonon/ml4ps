@@ -98,6 +98,7 @@ class Normalizer:
         return v_unique, p_unique
 
     def save(self, filename):
+        """Saves a normalizer to ``filename``."""
         file = open(filename, 'wb')
         file.write(pickle.dumps(self.functions))
         file.close()

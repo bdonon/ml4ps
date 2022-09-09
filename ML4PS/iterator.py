@@ -145,13 +145,3 @@ class Iterator:
             raise StopIteration
         return a_concat, x_concat, net_batch
 
-    def get_batch(self, batch_files):
-        """Gets network batch and concatenates addresses and features"""
-        net_batch = self.backend.load_network_batch(batch_files)
-        a_batch = self.backend.extract_address_batch(net_batch, self.addresses)
-        a_concat = self.backend.batch_to_concat(a_batch, address=True)
-        self.backend.clean_dict(a_concat)
-        x_batch = self.backend.extract_feature_batch(net_batch, self.features)
-        x_concat = self.backend.batch_to_concat(x_batch, address=False)
-        self.backend.clean_dict(x_concat)
-        return a_concat, x_concat, net_batch

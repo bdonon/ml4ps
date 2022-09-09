@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
+import tqdm
+import os
 
 
 def get_backend(backend_name):
@@ -37,8 +39,14 @@ class AbstractBackend(ABC):
     def get_table(self, net, key):
         pass
 
-    def load_network_batch(self, batch_files):
-        return [[self.load_network(file) for file in window_files] for window_files in batch_files]
+    def load_network_batch(self, batch_files, verbose=False):
+        if verbose:
+            r = []
+            for window_files in tqdm.tqdm(batch_files, desc="Importing power grid instances"):
+                r.append([self.load_network(file) for file in window_files])
+            return r
+        else:
+            return [[self.load_network(file) for file in window_files] for window_files in batch_files]
 
     @abstractmethod
     def load_network(self, file_path):
@@ -158,3 +166,32 @@ class AbstractBackend(ABC):
                 keys_to_erase.append(k)
         for k in keys_to_erase:
             del v[k]
+
+    def get_batch(self, batch_files, addresses=None, features=None, **kwargs):
+        """Gets network batch and concatenates addresses and features."""
+        net_batch = self.load_network_batch(batch_files, **kwargs)
+        a_concat, x_concat = None, None
+        if addresses is not None:
+            a_batch = self.extract_address_batch(net_batch, addresses)
+            a_concat = self.batch_to_concat(a_batch, address=True)
+            self.clean_dict(a_concat)
+        if features is not None:
+            x_batch = self.extract_feature_batch(net_batch, features)
+            x_concat = self.batch_to_concat(x_batch, address=False)
+            self.clean_dict(x_concat)
+        return a_concat, x_concat, net_batch
+
+    def get_files(self, path, shuffle=False, n_samples=None):
+        """Gets file that have a valid extension w.r.t. the backend, from path."""
+        files = []
+        for f in sorted(os.listdir(path)):
+            if f.endswith(self.valid_extensions):
+                files.append([os.path.join(path, f)])
+        if not files:
+            raise FileNotFoundError("There is no valid file in {}".format(path))
+        if shuffle:
+            np.random.shuffle(files)
+        if n_samples is not None:
+            return files[:n_samples]
+        else:
+            return files

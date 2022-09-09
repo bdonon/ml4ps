@@ -85,14 +85,6 @@ class Interface:
         self.val = Iterator(self.val_files, self.backend, **kwargs)
         self.test = Iterator(self.test_files, self.backend, **kwargs)
 
-    def get_files(self, path):
-        """Gets file that have a valid extension w.r.t. the backend, from path."""
-        files = []
-        for f in sorted(os.listdir(path)):
-            if f.endswith(self.backend.valid_extensions):
-                files.append(os.path.join(path, f))
-        return files
-
     def split_train_val(self, files):
         """Split train and validation sets, while respecting time windows."""
         val_start_id = math.floor(self.validation_portion[0] * len(files) / self.series_length) * self.series_length

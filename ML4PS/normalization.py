@@ -90,10 +90,10 @@ class Normalizer:
 
 
 class NormalizationFunction:
-    """Normalization function.
+    """Normalization function that applies an approximation of the Cumulative Distribution Function.
 
         Attributes:
-            interp_func : Piecewise linear function
+            interp_func : Piecewise linear function that will serve to normalize data.
     """
 
     def __init__(self, x, n_breakpoints):
@@ -120,9 +120,7 @@ class NormalizationFunction:
             self.interp_func = interpolate.interp1d(self.q_merged, -1 + 2 * self.p_merged, fill_value="extrapolate")
 
     def __call__(self, x):
-        """Normalizes input by applying an approximation of the CDF of values provided at initialization.
-
-            Input values that are out of the distribution of """
+        """Normalizes input by applying an approximation of the CDF of values provided at initialization."""
         if self.interp_func is None:
             return x - self.q_merged
         else:

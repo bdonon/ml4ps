@@ -156,3 +156,6 @@ Contents
 .. autoclass:: Normalizer
     :members: load, save
     :special-members: __init__, __call__
+
+.. autoclass:: NormalizationFunction
+    :special-members: __init__, __call__

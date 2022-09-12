@@ -18,7 +18,9 @@ dependencies = [
     "scipy>=1.4.1",
     "pandapower>=2.9.0",
     "pypowsybl>=0.16.0",
-    "torch>=1.12.1"
+    "torch>=1.12.1",
+    "nbsphinx>=0.8.9",
+    "ipykernel>=6.15.1"
 ]
 
 [build-system]

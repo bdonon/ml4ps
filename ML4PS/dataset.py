@@ -23,10 +23,10 @@ class PowerGridDataset(Dataset):
 
     It returns a tuple `(a, x, net)` where :
 
-    1. `a` describes the addresses of the different objects that are present in the power grid ;
-    2. `x` describes the numerical features of the different ovjects that are present in the power grid ;
-    3. `net` is a power grid instance based on the backend. This part of the data will serve if one needs
-    to interact with the said power grid, by performing AC Power Flow simulations for instance.
+        1. `a` describes the addresses of the different objects that are present in the power grid ;
+        2. `x` describes the numerical features of the different ovjects that are present in the power grid ;
+        3. `net` is a power grid instance based on the backend. This part of the data will serve if one needs
+            to interact with the said power grid, by performing AC Power Flow simulations for instance.
 
     """
 

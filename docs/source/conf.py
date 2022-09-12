@@ -18,7 +18,8 @@ extensions = [
     'sphinx.ext.doctest',
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
-    'sphinx.ext.intersphinx'
+    'sphinx.ext.intersphinx',
+    'nbsphinx'
 ]
 
 intersphinx_mapping = {

@@ -6,8 +6,9 @@ from torch.utils.data import Dataset
 def power_grid_collate(data):
     """Collate function to pass to a torch.utils.data.DataLoader.
 
-        It collates addresses `a` and features `x` using the default collate function of torch,
-        but keeps the network list untouched.
+    It collates addresses `a` and features `x` using the default collate function of torch,
+    but keeps the network list untouched.
+
     """
     a, x, network = zip(*data)
     a = torch.utils.data.default_collate(a)
@@ -20,12 +21,13 @@ def power_grid_collate(data):
 class PowerGridDataset(Dataset):
     """Subclass of torch.utils.data.Dataset that supports our data formalism.
 
-        It returns a tuple `(a, x, net)` where :
+    It returns a tuple `(a, x, net)` where :
 
-        - `a` describes the addresses of the different objects that are present in the power grid ;
-        - `x` describes the numerical features of the different ovjects that are present in the power grid ;
-        - `net` is a power grid instance based on the backend. This part of the data will serve if one needs
-        to interact with the said power grid, by performing AC Power Flow simulations for instance.
+    - `a` describes the addresses of the different objects that are present in the power grid ;
+    - `x` describes the numerical features of the different ovjects that are present in the power grid ;
+    - `net` is a power grid instance based on the backend. This part of the data will serve if one needs
+    to interact with the said power grid, by performing AC Power Flow simulations for instance.
+
     """
 
     def __init__(self, data_dir=None, backend=None, **kwargs):
@@ -47,6 +49,7 @@ class PowerGridDataset(Dataset):
                 should return. The object names and feature names should be compatible with the provided backend.
                 If no addresses is provided, then the Dataset simply uses the default objects and features
                 provided by the ``backend.
+
         """
         self.backend = backend
         self.files = self.backend.get_files(data_dir)

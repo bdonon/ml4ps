@@ -1,9 +1,10 @@
 import numpy as np
 import pickle
+import tqdm
 
 from scipy import interpolate
 
-from ML4PS.backend.interface import get_backend
+from ML4PS.backend.interface import collate
 
 
 class Normalizer:
@@ -20,18 +21,19 @@ class Normalizer:
         """Initializes a Normalizer.
 
         Args:
-            filename (:obj:`str`): Path to a normalizer that should be loaded. If not specified, a new normalizer is
+            filename (:obj:`str`, optional): Path to a normalizer that should be loaded. If not specified, a new normalizer is
                 created based on the other arguments.
-            backend_name (:obj:`str`): Name of the backend to use to extract features. For now, it can be either
-                `pandapower` or `pypowsybl`. Changing the backend will affect the objects and features names.
+            backend (:obj:`ML4PS.backend.interface.Backend`): Backend to use to extract features.
+                Changing the backend will affect the objects and features names.
             data_dir (:obj:`str`): Path to the dataset that will serve to fit the normalizing functions.
-            n_samples (:obj:`int`): Amount of samples that should be imported from the dataset to fit the
+            n_samples (:obj:`int`, optional): Amount of samples that should be imported from the dataset to fit the
                 normalizing functions. As a matter of fact, fitting normalizing functions on a small subset of the
                 dataset is faster, and usually provides a relevant normalization.
-            shuffle (:obj:`bool`): If true, samples used to fit the normalizing functions are drawn randomly from the
-                dataset. If false, only the first samples in alphabetical order are used.
-            n_breakpoints (:obj:`int`): Amount of breakpoints that the piecewise linear functions should have. Indeed,
-                in the case of multiple data quantiles being equal, the actual amount of breakpoints will be lower.
+            shuffle (:obj:`bool`, optional): If true, samples used to fit the normalizing functions are drawn
+                randomly from the dataset. If false, only the first samples in alphabetical order are used.
+            n_breakpoints (:obj:`int`, optional): Amount of breakpoints that the piecewise linear functions should
+                have. Indeed, in the case of multiple data quantiles being equal, the actual amount of breakpoints
+                will be lower.
             features (:obj:`dict` of :obj:`list` of :obj:`str`): Dict of list of feature names. Keys correspond to
                 objects (e.g. 'load'), and values are lists of features that should be normalized (e.g. ['p_mw',
                 'q_mvar']).
@@ -41,9 +43,8 @@ class Normalizer:
         if filename is not None:
             self.load(filename)
         else:
-            self.backend_name = kwargs.get("backend_name", 'pypowsybl')
-            self.backend = get_backend(self.backend_name)
-            self.data_dir = kwargs.get("data_dir", None)
+            self.backend = kwargs.get("backend")
+            self.data_dir = kwargs.get("data_dir")
             self.n_samples = kwargs.get('n_samples', 100)
             self.shuffle = kwargs.get("shuffle", False)
             self.n_breakpoints = kwargs.get('n_breakpoints', 200)
@@ -59,9 +60,15 @@ class Normalizer:
             exactly `n_samples` of them. Then, those files are imported, and their features are extracted. Then,
             based on the obtained data, a separate normalizing function is built for each feature of each object.
         """
+        print("Building a Normalizer.")
         data_files = self.backend.get_files(self.data_dir, n_samples=self.n_samples)
-        _, x, _ = self.backend.get_batch(data_files, features=self.features, verbose=True)
-        self.functions = {k: {f: NormalizationFunction(x[k][f], self.n_breakpoints) for f in v} for k, v in x.items()}
+        network_batch = [self.backend.load_network(file) for file in tqdm.tqdm(data_files, desc='Loading power grids.')]
+        values = [self.backend.extract_features(net, self.features) for net in tqdm.tqdm(network_batch,
+                                                                                         desc='Extracting features.')]
+        values = collate(values)
+        self.functions = {k: {f: NormalizationFunction(values[k][f], self.n_breakpoints) for f in v}
+                          for k, v in tqdm.tqdm(values.items(), desc='Building normalizing functions.')}
+        print("Normalizer ready to normalize !")
 
     def save(self, filename):
         """Saves a normalizer."""
@@ -105,7 +112,7 @@ class NormalizationFunction:
 
             **Note**
             The piecewise linear approximation of the Cumulative Distribution Function is extended for larger (resp.
-            smaller) values by extending the last (first) slope.
+            smaller) values by extending the last (resp. first) slope.
 
             Args:
                 x (:obj:`dict` of :obj:`dict` of :obj:`np.array`): Batch of input data which will serve to fit

@@ -18,7 +18,7 @@ network for instance), and to perform power flow computations.
 """
 from ML4PS.backend.pypowsybl import Backend
 from ML4PS.backend.pandapower import Backend
-from ML4PS.backend.interface import get_backend
+#from ML4PS.backend.interface import get_backend
 from ML4PS.iterator import Iterator
 import math
 import os
@@ -73,9 +73,9 @@ class Interface:
         #    raise ValueError('Not a valid backend !')
 
         # Build train, val and test lists of valid files
-        self.all_train_files = self.get_files(os.path.join(self.data_dir, 'train'))
+        self.all_train_files = self.backend.get_files(os.path.join(self.data_dir, 'train'))
         self.train_files, self.val_files = self.split_train_val(self.all_train_files)
-        self.test_files = self.get_files(os.path.join(self.data_dir, 'test'))
+        self.test_files = self.backend.get_files(os.path.join(self.data_dir, 'test'))
 
         # Make sure that there is at least one valid file in all sets
         if (not self.train_files) or (not self.val_files) or (not self.test_files):

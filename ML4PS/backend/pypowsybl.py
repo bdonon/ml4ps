@@ -25,7 +25,7 @@ VALID_ADDRESSES = {
     'twt': ['id', 'bus1_id', 'bus2_id']
 }
 
-class Backend(AbstractBackend):
+class PyPowSyblBackend(AbstractBackend):
 
     valid_extensions = (".xiidm", ".mat")
     valid_features = VALID_FEATURES
@@ -86,4 +86,3 @@ class Backend(AbstractBackend):
     def run_load_flow(self, net, load_flow_options=None):
         # TODO : connect options
         pl.run_ac(net)
-

@@ -124,7 +124,7 @@ Usage
 
 A normalizer can be built using a dataset :
 
-.. code-block:: console
+.. code-block:: pycon
 
     import ml4ps as mp
     normalizer = mp.Normalizer(data_dir = data_dir, backend_name = 'pandapower')
@@ -134,21 +134,21 @@ See :ref:`Interface <interface>` for more information on how to get power system
 data, and :ref:`Data Formalism <data-formalism>` for an explanation of the data
 formalism.
 
-.. code-block:: console
+.. code-block:: pycon
 
     x_norm = normalizer(x)
 
 A normalizer can be saved into a `.pkl` file.
 
-.. code-block:: console
+.. code-block:: pycon
 
     normalizer.save('my_normalizer.pkl')
 
 It can then be loaded from the said `.pkl` file.
 
-.. code-block:: console
+.. code-block:: pycon
 
-    normalizer = mp.Normalizer('my_normalizer.pkl')
+    normalizer = mp.Normalizer(filename='my_normalizer.pkl')
 
 Contents
 --------

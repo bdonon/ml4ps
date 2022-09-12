@@ -38,7 +38,7 @@ VALID_ADDRESSES = {
     'poly_cost': ['element'],
 }
 
-class Backend(AbstractBackend):
+class PandaPowerBackend(AbstractBackend):
 
     valid_extensions = (".json", ".pkl")
     valid_features = VALID_FEATURES
@@ -47,7 +47,8 @@ class Backend(AbstractBackend):
     def __init__(self):
         super().__init__()
 
-    def get_table(self, net, key):
+    def get_table(self, net, key, feature_list):
+        """Gets a pandas dataframe describing the features of a specific object in a power grid instance."""
         if key == 'bus':
             table = net.bus.copy(deep=True)
             table = table.join(net.res_bus.add_prefix('res_'))
@@ -90,9 +91,11 @@ class Backend(AbstractBackend):
         table.replace([np.inf], 99999, inplace=True)
         table.replace([-np.inf], -99999, inplace=True)
         table = table.fillna(0.)
-        return table
+        features_to_keep = list(set(list(table)) & set(feature_list))
+        return table[features_to_keep]
 
     def load_network(self, file_path):
+        """Loads a power grid instance, either from a `.pkl` or from a `.json` file."""
         if file_path.endswith('.json'):
             net = pp.from_json(file_path)
         elif file_path.endswith('.pkl'):
@@ -102,6 +105,7 @@ class Backend(AbstractBackend):
         return net
 
     def update_network(self, net, y):
+        """Updates a power grid by setting features according to `y`."""
         for k in y.keys():
             for f in y[k].keys():
                 try:
@@ -110,5 +114,6 @@ class Backend(AbstractBackend):
                     print('Object {} and key {} are not available with PandaPower'.format(k, f))
 
     def run_load_flow(self, net, load_flow_options=None):
+        """Runs a power flow simulation."""
         # TODO : connect options
         pp.runpp(net)

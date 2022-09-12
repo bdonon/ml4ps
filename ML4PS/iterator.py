@@ -80,10 +80,12 @@ class Iterator:
 
     def initialize_batch_order(self):
         """Initializes the batch list of time windows."""
-        self.window_files = self.split_window(self.file_list)
+        #self.window_files = self.split_window(self.file_list)
         if self.shuffle:
-            np.random.shuffle(self.window_files)
-        self.batch_files = self.split_batch(self.window_files)
+            #np.random.shuffle(self.window_files)
+            np.random.shuffle(self.file_list)
+        #self.batch_files = self.split_batch(self.window_files)
+        self.batch_files = self.split_batch(self.file_list)
         self.length = len(self.batch_files)
 
     def split_window(self, file_list):
@@ -139,7 +141,9 @@ class Iterator:
         """Gets current batch, and increments current_batch_id."""
         if self.current_batch_id < len(self.batch_files):
             current_batch_files = self.batch_files[self.current_batch_id]
-            a_concat, x_concat, net_batch = self.get_batch(current_batch_files)
+            print(current_batch_files)
+            a_concat, x_concat, net_batch = self.backend.get_batch(current_batch_files, addresses=self.addresses,
+                                                                   features=self.features)
             self.current_batch_id += 1
         else:
             raise StopIteration

@@ -129,10 +129,9 @@ A normalizer can be built using a dataset :
     import ml4ps as mp
     normalizer = mp.Normalizer(data_dir = data_dir, backend_name = 'pandapower')
 
-Once built, it can normalize feature data provided by an interface.
-See :ref:`Interface <interface>` for more information on how to get power system
-data, and :ref:`Data Formalism <data-formalism>` for an explanation of the data
-formalism.
+Once built, it can normalize feature data.
+We recommend to pass it directly into a :ref:`Dataset <dataset>`, so that your pipeline directly
+returns normalized data.
 
 .. code-block:: pycon
 

@@ -49,9 +49,6 @@ of the initial output distribution in blue in the figure below.
 .. image:: figures/postprocessing.png
   :width: 800
 
-Choosing the right mapping
---------------------------
-
 Still, one has to rely on its own understanding of the problem at hand to provide a post-processing
 layer that provides a better initial guess.
 
@@ -77,14 +74,14 @@ At first, one has to declare the different post-processing functions to be appli
 
 .. code-block:: pycon
 
-    from ml4ps import AffineTransform, TanhTransform, PostProcessor
+    import ml4ps as mp
 
     functions = {
-        'gen': {'p_mw': [TanhTransform(), AffineTransform(slope=1e3)]}
-        'load': {'q_mvar': [AffineTransform(slope=1e2)]}
+        'gen': {'p_mw': [mp.TanhTransform(), mp.AffineTransform(slope=1e3)]}
+        'load': {'q_mvar': [mp.AffineTransform(slope=1e2)]}
     }
 
-    postprocessor = PostProcessor(functions)
+    postprocessor = mp.PostProcessor(functions)
 
 In the example above, two transforms are applied sequentially to the feature `p_mw` of the objects
 `gen` : the `tanh` first, and the `affine` second.

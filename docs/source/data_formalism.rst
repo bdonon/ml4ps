@@ -1,6 +1,6 @@
 .. _data-formalism:
 
-Data Formalism
-==============
+Structure of Power Grid Data
+============================
 
 We are working with a quite atypical kind of data.

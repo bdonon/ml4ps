@@ -45,7 +45,7 @@ class PostProcessor:
 
 
 class AffineTransform:
-    """Affine transformation, defined by its offset and slope."""
+    """Class of functions that apply an affine transform, defined by its offset and slope."""
 
     def __init__(self, offset=0., slope=1.):
         """Initializes an affine transform (x -> offset + slope * x)."""
@@ -66,7 +66,7 @@ class AbsValTransform:
 
 
 class TanhTransform:
-    """Returns the hyperbolic tangent of the input."""
+    """Class of functions that return the hyperbolic tangent of the input."""
 
     def __init__(self):
         pass

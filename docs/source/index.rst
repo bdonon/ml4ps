@@ -17,8 +17,12 @@ Contents
 .. toctree::
     :maxdepth: 1
 
+    purpose
     data_formalism
-    basic_usage
-    interface
+    usecase
+    backend
+    dataset
     normalization
+    neural_networks
     postprocessing
+    interaction

@@ -1,3 +1,5 @@
+.. _dataset:
+
 Power Grid Dataset
 ==================
 

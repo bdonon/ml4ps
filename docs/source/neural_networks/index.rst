@@ -8,5 +8,5 @@ Contents
 .. toctree::
     :maxdepth: 1
 
-    powerflow
-    control
+    fully_connected
+    gnn

@@ -26,7 +26,6 @@ class PowerGridDataset(Dataset):
         - `x` describes the numerical features of the different ovjects that are present in the power grid ;
         - `net` is a power grid instance based on the backend. This part of the data will serve if one needs
         to interact with the said power grid, by performing AC Power Flow simulations for instance.
-
     """
 
     def __init__(self, data_dir=None, backend=None, **kwargs):

@@ -19,10 +19,10 @@ Contents
 
     purpose
     data_formalism
-    usecase
+    usecase/index
     backend
     dataset
     normalization
-    neural_networks
+    neural_networks/index
     postprocessing
     interaction

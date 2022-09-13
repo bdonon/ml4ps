@@ -2,7 +2,7 @@
 
 # -- Project information
 
-project = 'ml4ps_'
+project = 'ml4ps'
 copyright = '2022, Donon & Pagnier'
 author = 'Donon & Pagnier'
 

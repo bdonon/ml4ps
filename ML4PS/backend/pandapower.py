@@ -1,6 +1,5 @@
 from ML4PS.backend.interface import AbstractBackend
 import pandapower as pp
-import pandas as pd
 import numpy as np
 
 VALID_FEATURES = {
@@ -39,12 +38,14 @@ VALID_ADDRESSES = {
 }
 
 class PandaPowerBackend(AbstractBackend):
+    """Backend implementation that uses :ref:`PandaPower <http://www.pandapower.org>`_."""
 
     valid_extensions = (".json", ".pkl")
     valid_features = VALID_FEATURES
     valid_addresses = VALID_ADDRESSES
 
     def __init__(self):
+        """Initializes a PandaPowerBackend."""
         super().__init__()
 
     def get_table(self, net, key, feature_list):
@@ -116,4 +117,5 @@ class PandaPowerBackend(AbstractBackend):
     def run_load_flow(self, net, load_flow_options=None):
         """Runs a power flow simulation."""
         # TODO : connect options
+        # TODO : what if power flow diverges
         pp.runpp(net)

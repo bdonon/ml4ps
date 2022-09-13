@@ -2,7 +2,7 @@
 
 # -- Project information
 
-project = 'MachineLearning4PowerSystems'
+project = 'ml4ps'
 copyright = '2022, Donon & Pagnier'
 author = 'Donon & Pagnier'
 

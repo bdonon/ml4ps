@@ -1,4 +1,4 @@
-from ML4PS.backend.abstractbackend import AbstractBackend
+from ML4PS.backend.interface import AbstractBackend
 import pypowsybl.loadflow as pl
 import pypowsybl.network as pn
 import pandas as pd
@@ -86,4 +86,3 @@ class PyPowSyblBackend(AbstractBackend):
     def run_load_flow(self, net, load_flow_options=None):
         # TODO : connect options
         pl.run_ac(net)
-

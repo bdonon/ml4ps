@@ -111,7 +111,7 @@ class H2MGNODE:
                 order = len(self.addresses[k])
                 in_dim = len(self.input_features[k]) if k in self.input_features.keys() else 0
                 #nn_input_dim = (order + 1) * self.latent_dimension + in_dim * self.time_window + 1
-                nn_input_dim = (order + 2) * self.latent_dimension + in_dim * self.time_window + 1
+                nn_input_dim = (order + 2) * self.latent_dimension + in_dim +1 #* self.time_window + 1
                 nn_output_dim = self.latent_dimension
                 wd = [nn_input_dim, *self.hidden_dimensions, nn_output_dim]
                 self.weights['phi_c_o'][k][f] = initialize_nn_weights(wd, rk_o_k_f)
@@ -125,7 +125,7 @@ class H2MGNODE:
             order = len(self.addresses[k])
             in_dim = len(self.input_features[k]) if k in self.input_features.keys() else 0
             #nn_input_dim = (order + 1) * self.latent_dimension + in_dim * self.time_window + 1
-            nn_input_dim = (order + 2) * self.latent_dimension + in_dim * self.time_window + 1
+            nn_input_dim = (order + 2) * self.latent_dimension + in_dim +1 #* self.time_window + 1
             nn_output_dim = self.latent_dimension
             wd = [nn_input_dim, *self.hidden_dimensions, nn_output_dim]
             self.weights['phi_c_h'][k] = initialize_nn_weights(wd, rk_h_k)
@@ -138,7 +138,7 @@ class H2MGNODE:
             order = len(self.addresses[k])
             in_dim = len(self.input_features[k]) if k in self.input_features.keys() else 0
             #nn_input_dim = (order + 1) * self.latent_dimension + in_dim * self.time_window + 1
-            nn_input_dim = (order + 2) * self.latent_dimension + in_dim * self.time_window + 1
+            nn_input_dim = (order + 2) * self.latent_dimension + in_dim +1 #* self.time_window + 1
             nn_output_dim = self.latent_dimension
             wd = [nn_input_dim, *self.hidden_dimensions, nn_output_dim]
             self.weights['phi_c_g'][k] = initialize_nn_weights(wd, rk_g_k)
@@ -154,8 +154,8 @@ class H2MGNODE:
                 order = len(self.addresses[k])
                 in_dim = len(self.input_features[k]) if k in self.input_features.keys() else 0
                 #nn_input_dim = (order + 1) * self.latent_dimension + in_dim * self.time_window
-                nn_input_dim = (order + 2) * self.latent_dimension + in_dim * self.time_window
-                nn_output_dim = self.time_window
+                nn_input_dim = (order + 2) * self.latent_dimension + in_dim #* self.time_window
+                nn_output_dim = 1#self.time_window
                 wd = [nn_input_dim, *self.hidden_dimensions, nn_output_dim]
                 self.weights['phi_c_y'][k][f] = initialize_nn_weights(wd, rk_y_k_f)
 
@@ -194,7 +194,7 @@ class H2MGNODE:
         fs = self.get_final_state(start_and_final_state)
         used_output = set(list(self.addresses.keys())) & set(list(fs['a'].keys())) & set(list(self.output_features.keys()))
         nn_input = self.get_nn_input(fs['a'], fs['x'], fs['h_v'], fs['h_e'], fs['h_g'])
-        r = {k: {f: self.output_nn_batch(weights['phi_c_y'][k][f], nn_input[k]) for f in self.output_features[k]}
+        r = {k: {f: self.output_nn_batch(weights['phi_c_y'][k][f], nn_input[k])[0] for f in self.output_features[k]}
                 for k in used_output}
         return r
 
@@ -283,7 +283,7 @@ class H2MGNODE:
             assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
             for f in self.addresses[k]:
                 update = self.latent_nn_batch(weights['phi_c_o'][k][f], nn_input[k])
-                adr = a[k][f][:, 0]
+                adr = a[k][f]
                 dh_v, n = dh_v.at[adr].add(update), n.at[adr].add(1+0.*update)
         return dh_v / n
 
@@ -317,7 +317,7 @@ class H2MGNODE:
             if k in used_input_features:
                 assert set(list(self.input_features[k])).issubset(set(list(x[k].keys())))
                 for f_ in self.input_features[k]:
-                    nn_input[k].append(x[k][f_])
+                    nn_input[k].append(jnp.reshape(x[k][f_], [-1, 1]))
 
             # Get the hyper-edge latent variables for hyper-edges of class k.
             nn_input[k].append(h_e[k])
@@ -331,7 +331,7 @@ class H2MGNODE:
 
             assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
             for f_ in self.addresses[k]:
-                nn_input[k].append(h_v[a[k][f_][:, 0]])
+                nn_input[k].append(h_v[a[k][f_]])
 
             # Get also the time variable if it is given
             if t is not None:

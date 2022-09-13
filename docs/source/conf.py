@@ -2,7 +2,7 @@
 
 # -- Project information
 
-project = 'MachineLearning4PowerSystems'
+project = 'ml4ps'
 copyright = '2022, Donon & Pagnier'
 author = 'Donon & Pagnier'
 
@@ -18,7 +18,8 @@ extensions = [
     'sphinx.ext.doctest',
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
-    'sphinx.ext.intersphinx'
+    'sphinx.ext.intersphinx',
+    'nbsphinx'
 ]
 
 intersphinx_mapping = {

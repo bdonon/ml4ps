@@ -1,41 +1,35 @@
 import jax.numpy as jnp
-from jax.experimental.ode import odeint
 import jax.nn as jnn
-from jax import grad, jit, vmap
+from jax import vmap
 from jax import random
-from functools import partial
-import numpy as np
 import pickle
 
-class Dense:
+
+class FullyConnected:
+    """Implementation of a fully connected neural network, compatible with the data"""
 
     def __init__(self, file=None, **kwargs):
 
         if file is not None:
             self.load(file)
         else:
-            try:
-                self.input_features = kwargs['input_features']
-                self.output_features = kwargs['output_features']
-                self.n_obj = kwargs['n_obj']
-            except:
-                raise AttributeError("One should provide 'n_obj', 'input_features' and 'output_features'.")
-
-        self.random_key = kwargs.get('random_key', random.PRNGKey(1))
-        self.time_window = kwargs.get('time_window', 1)
-        self.hidden_dimensions = kwargs.get('hidden_dimensions', [8])
+            self.input_features = kwargs.get('input_features')
+            self.output_features = kwargs.get('output_features')
+            self.n_obj = kwargs.get('n_obj')
+            self.random_key = kwargs.get('random_key', random.PRNGKey(1))
+            self.hidden_dimensions = kwargs.get('hidden_dimensions', [8])
 
         self.input_dimension = 0
         for k in self.input_features.keys():
             n_obj_k = self.n_obj[k]
             for _ in self.input_features[k]:
-                self.input_dimension += n_obj_k * self.time_window
+                self.input_dimension += n_obj_k
 
         self.output_dimension = 0
         for k in self.output_features.keys():
             n_obj_k = self.n_obj[k]
             for _ in self.output_features[k]:
-                self.output_dimension += n_obj_k * self.time_window
+                self.output_dimension += n_obj_k # * self.time_window
 
         self.dimensions = [self.input_dimension, *self.hidden_dimensions, self.output_dimension]
 
@@ -50,7 +44,7 @@ class Dense:
         pickle.dump(self.input_features, file)
         pickle.dump(self.output_features, file)
         pickle.dump(self.n_obj, file)
-        pickle.dump(self.time_window, file)
+        #pickle.dump(self.time_window, file)
         pickle.dump(self.hidden_dimensions, file)
         file.close()
 
@@ -61,7 +55,7 @@ class Dense:
         self.input_features = pickle.load(file)
         self.output_features = pickle.load(file)
         self.n_obj = pickle.load(file)
-        self.time_window = pickle.load(file)
+        #self.time_window = pickle.load(file)
         self.hidden_dimensions = pickle.load(file)
         file.close()
 
@@ -72,11 +66,11 @@ class Dense:
             return scale * random.normal(w_key, (n, m)), scale * random.normal(b_key, (n,))
         self.weights = [initialize_layer(m, n, k) for m, n, k in zip(self.dimensions[:-1], self.dimensions[1:], keys)]
 
-    def leaky_relu(self, x):
-        return jnp.maximum(0.2 * x, x)
+    #def leaky_relu(self, x):
+    #    return jnp.maximum(0.2 * x, x)
 
     def leaky_relu_layer(self, weights, x):
-        return self.leaky_relu(jnp.dot(weights[0], x) + weights[1])
+        return jnn.leaky_relu(jnp.dot(weights[0], x) + weights[1])
 
     def forward_pass(self, weights, x):
         h = self.flatten_input(x)

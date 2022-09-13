@@ -13,7 +13,6 @@ from jax.experimental.ode import odeint
 
 from ML4PS.backend import *
 from ML4PS.neural_network import *
-from ML4PS.interface import *
-from ML4PS.iterator import *
+from ML4PS.dataset import *
 from ML4PS.normalization import *
 from ML4PS.postprocessing import *

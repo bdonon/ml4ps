@@ -1,131 +1,150 @@
-import os
-import pickle
-
-import pypowsybl.network as pn
-from scipy import interpolate
 import numpy as np
-from tqdm import tqdm
+import pickle
+import tqdm
 
-from ML4PS.backend.pypowsybl import PyPowSyblBackend
-from ML4PS.backend.pandapower import PandaPowerBackend
+from scipy import interpolate
+
+from ML4PS.backend.interface import collate
 
 
 class Normalizer:
+    """Normalizes power grid features while respecting the permutation equivariance of the data.
 
-    def __init__(self, file=None, **kwargs):
-        self.features = {}
+    Attributes:
+        functions (:obj:`dict` of :obj:`dict` of :obj:`ML4PS.normalization.NormalizationFunction`): Dict of dict of
+            single normalizing functions. Upper level keys correspond to objects (e.g. 'load'), lower level keys
+            correspond to features (e.g. 'p_mw') and the value corresponds to a normalizing function.
+            Normalizing functions take scalar inputs and return scalar inputs.
+    """
+
+    def __init__(self, filename=None, **kwargs):
+        """Initializes a Normalizer.
+
+        Args:
+            filename (:obj:`str`, optional): Path to a normalizer that should be loaded. If not specified, a new normalizer is
+                created based on the other arguments.
+            backend (:obj:`ML4PS.backend.interface.Backend`): Backend to use to extract features.
+                Changing the backend will affect the objects and features names.
+            data_dir (:obj:`str`): Path to the dataset that will serve to fit the normalizing functions.
+            n_samples (:obj:`int`, optional): Amount of samples that should be imported from the dataset to fit the
+                normalizing functions. As a matter of fact, fitting normalizing functions on a small subset of the
+                dataset is faster, and usually provides a relevant normalization.
+            shuffle (:obj:`bool`, optional): If true, samples used to fit the normalizing functions are drawn
+                randomly from the dataset. If false, only the first samples in alphabetical order are used.
+            n_breakpoints (:obj:`int`, optional): Amount of breakpoints that the piecewise linear functions should
+                have. Indeed, in the case of multiple data quantiles being equal, the actual amount of breakpoints
+                will be lower.
+            features (:obj:`dict` of :obj:`list` of :obj:`str`): Dict of list of feature names. Keys correspond to
+                objects (e.g. 'load'), and values are lists of features that should be normalized (e.g. ['p_mw',
+                'q_mvar']).
+        """
         self.functions = {}
 
-        if file is not None:
-            self.load(file)
+        if filename is not None:
+            self.load(filename)
         else:
-            self.data_dir = kwargs.get("data_dir", None)
-            self.backend_name = kwargs.get("backend_name", 'pypowsybl')
+            self.backend = kwargs.get("backend")
+            self.data_dir = kwargs.get("data_dir")
+            self.n_samples = kwargs.get('n_samples', 100)
             self.shuffle = kwargs.get("shuffle", False)
-            self.amount_of_samples = kwargs.get('amount_of_samples', 100)
-            self.break_points = kwargs.get('break_points', 200)
-
-            if self.backend_name == 'pypowsybl':
-                self.backend = PyPowSyblBackend()
-            elif self.backend_name == 'pandapower':
-                self.backend = PandaPowerBackend()
-            else:
-                raise ValueError('Not a valid backend !')
-
+            self.n_breakpoints = kwargs.get('n_breakpoints', 200)
             self.features = kwargs.get("features", self.backend.valid_features)
-
             self.backend.check_features(self.features)
 
-
-            self.data_files = self.get_data_files()
             self.build_functions()
 
-    def get_data_files(self):
-        all_data_files = []
-        train_dir = os.path.join(self.data_dir, 'train')
-        for f in sorted(os.listdir(train_dir)):
-            if f.endswith(self.backend.valid_extensions):
-                all_data_files.append(os.path.join(train_dir, f))
-
-        if not all_data_files:
-            raise FileNotFoundError("There is no valid file in {}".format(train_dir))
-
-        if self.shuffle:
-            np.random.shuffle(all_data_files)
-
-        return all_data_files[:self.amount_of_samples]
-
     def build_functions(self):
-        dict_of_all_values = self.get_all_values()
-        self.functions = {}
-        for k in self.features.keys():
-            self.functions[k] = {}
-            for f in self.features[k]:
-                self.functions[k][f] = self.build_single_function(dict_of_all_values[k][f])
+        """Builds normalization functions.
 
-    def get_all_values(self):
-        values_dict = {k: {f: [] for f in f_list} for k, f_list in self.features.items()}
-        for file in tqdm(self.data_files, desc='Loading all the dataset'):
-            net = self.backend.load_network(file)
-            for k in self.features.keys():
-                table = self.backend.get_table(net, k)
-                for f in self.features[k]:
-                    if (f in table.keys()) and (not table.empty):
-                        values_dict[k][f].append(table[f].to_numpy().flatten().astype(float))
-        return values_dict
-
-    def build_single_function(self, values):
-        if values:
-            v, p = self.get_quantiles(values)
-            v_unique, p_unique = self.merge_equal_quantiles(v, p)
-            if len(v_unique) == 1:
-                return SubtractFunction(v_unique[0])
-            else:
-                return interpolate.interp1d(v_unique, -1 + 2 * p_unique, fill_value="extrapolate")
-        else:
-            return None
-
-    def get_quantiles(self, values):
-        p = np.arange(0, 1, 1. / self.break_points)
-        v = np.quantile(values, p)
-        return v, p
-
-    def merge_equal_quantiles(self, v, p):
-        v_unique, inverse, counts = np.unique(v, return_inverse=True, return_counts=True)
-        p_unique = 0. * v_unique
-        np.add.at(p_unique, inverse, p)
-        p_unique = p_unique / counts
-        return v_unique, p_unique
+            At first, it fetches filenames that have a valid extension, shuffling them if desired, and returning
+            exactly `n_samples` of them. Then, those files are imported, and their features are extracted. Then,
+            based on the obtained data, a separate normalizing function is built for each feature of each object.
+        """
+        print("Building a Normalizer.")
+        data_files = self.backend.get_files(self.data_dir, n_samples=self.n_samples)
+        network_batch = [self.backend.load_network(file) for file in tqdm.tqdm(data_files, desc='Loading power grids.')]
+        values = [self.backend.extract_features(net, self.features) for net in tqdm.tqdm(network_batch,
+                                                                                         desc='Extracting features.')]
+        values = collate(values)
+        self.functions = {k: {f: NormalizationFunction(values[k][f], self.n_breakpoints) for f in v}
+                          for k, v in tqdm.tqdm(values.items(), desc='Building normalizing functions.')}
+        print("Normalizer ready to normalize !")
 
     def save(self, filename):
+        """Saves a normalizer."""
         file = open(filename, 'wb')
         file.write(pickle.dumps(self.functions))
         file.close()
 
     def load(self, filename):
+        """Loads a normalizer."""
         file = open(filename, 'rb')
         self.functions = pickle.loads(file.read())
         file.close()
 
     def __call__(self, x):
-        x_norm = {}
-        for k in x.keys():
-            if k in self.functions.keys():
-                x_norm[k] = {}
-                for f in x[k].keys():
-                    if (f in self.functions[k].keys()) and (self.functions[k][f] is not None):
-                        x_norm[k][f] = self.functions[k][f](x[k][f])
-                    else:
-                        x_norm[k][f] = x[k][f]
-            else:
-                x_norm[k] = x[k]
+        """Normalizes input data by applying .
+
+            **Note**
+            If one feature and/or one object present in the input has no corresponding normalization function,
+            then it is returned as is.
+        """
+        x_norm = {k: {f: x[k][f] for f in x[k].keys()} for k in x.keys()}
+        for k in list(set(x.keys()) & set(self.functions.keys())):
+            for f in list(set(x[k].keys()) & set(self.functions[k].keys())):
+                x_norm[k][f] = self.functions[k][f](x[k][f])
         return x_norm
 
 
-class SubtractFunction:
+class NormalizationFunction:
+    """Normalization function that applies an approximation of the Cumulative Distribution Function.
 
-    def __init__(self, v):
-        self.v = v
+        Attributes:
+            interp_func : Piecewise linear function that will serve to normalize data.
+    """
+
+    def __init__(self, x, n_breakpoints):
+        """Initializes a normalization function.
+
+            **Note**
+            In the case where all provided values are equal, there is no interpolation possible.
+            Instead, the normalization function will simply subtract this unique value to its input.
+
+            **Note**
+            The piecewise linear approximation of the Cumulative Distribution Function is extended for larger (resp.
+            smaller) values by extending the last (resp. first) slope.
+
+            Args:
+                x (:obj:`dict` of :obj:`dict` of :obj:`np.array`): Batch of input data which will serve to fit
+                    a piecewise linear approximation of the Cumulative Distribution Function.
+                n_breakpoints (:obj:`int`): Amount of breakpoints that should be present in the piecewise linear
+                    approximation of the Cumulative Distribution Function.
+        """
+        self.p, self.q = get_proba_quantiles(x, n_breakpoints)
+        self.p_merged, self.q_merged = merge_equal_quantiles(self.p, self.q)
+        self.interp_func = None
+        if len(self.q_merged) > 1:
+            self.interp_func = interpolate.interp1d(self.q_merged, -1 + 2 * self.p_merged, fill_value="extrapolate")
 
     def __call__(self, x):
-        return x - self.v
+        """Normalizes input by applying an approximation of the CDF of values provided at initialization."""
+        if self.interp_func is None:
+            return x - self.q_merged
+        else:
+            return self.interp_func(x)
+
+
+def get_proba_quantiles(x, n_breakpoints):
+    """Get pairs (probability, quantile) for `n_breakpoints` equally distributed probabilities."""
+    p = np.arange(0, 1, 1. / n_breakpoints)
+    q = np.quantile(np.reshape(x, [-1]), p)
+    return p, q
+
+
+def merge_equal_quantiles(p, q):
+    """Merges points that have the same value, by taking the mean probability."""
+    q_merged, inverse, counts = np.unique(q, return_inverse=True, return_counts=True)
+    p_unique = 0. * q_merged
+    np.add.at(p_unique, inverse, p)
+    p_merged = p_unique / counts
+    return p_merged, q_merged

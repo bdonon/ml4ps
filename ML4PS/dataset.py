@@ -35,9 +35,9 @@ class PowerGridDataset(Dataset):
 
         Args:
             data_dir (:obj:`str`): Directory where the dataset is stored.
-            backend (:obj:`ML4PS.backend.interface.Backend`): Power Systems backend that can load power grid
+            backend (:obj:`ml4ps.backend.interface.Backend`): Power Systems backend that can load power grid
                 instances, get and set power grid features, and perform Power Flow simulations.
-            normalizer (:obj:`ML4PS.normalization.Normalizer`, optional): Feature normalizer that can transform
+            normalizer (:obj:`ml4ps.normalization.Normalizer`, optional): Feature normalizer that can transform
                 raw data (that is very likely to follow a multimodal distribution) into a distribution that is
                 more suitable for the training of neural networks. If not provided, no normalization is applied
                 to the features.

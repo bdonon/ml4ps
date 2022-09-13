@@ -3,6 +3,7 @@ import jax.nn as jnn
 from jax import vmap
 from jax import random
 import pickle
+import jax
 
 
 class FullyConnected:
@@ -74,6 +75,7 @@ class FullyConnected:
 
     def forward_pass(self, weights, x):
         h = self.flatten_input(x)
+        #h = jax.tree_util.tree_flatten(x)
         for w, b in weights[:-1]:
             h = self.leaky_relu_layer([w, b], h)
         final_w, final_b = weights[-1]
@@ -85,9 +87,10 @@ class FullyConnected:
         x_flat = []
         for k in self.input_features:
             for f in self.input_features[k]:
-                n_obj = jnp.shape(x[k][f])[0]
-                ws = jnp.shape(x[k][f])[1]
-                x_flat.append(jnp.reshape(x[k][f], [n_obj * ws]))
+                #n_obj = jnp.shape(x[k][f])[0]
+                #ws = jnp.shape(x[k][f])[1]
+                #x_flat.append(jnp.reshape(x[k][f], [n_obj * ws]))
+                x_flat.append(x[k][f])
         return jnp.concatenate(x_flat)
 
     def build_out_dict(self, out):
@@ -96,8 +99,10 @@ class FullyConnected:
         for k in self.output_features.keys():
             out_dict[k] = {}
             a = self.n_obj[k]
-            b = self.time_window
+            #b = self.time_window
             for f in self.output_features[k]:
-                out_dict[k][f] = jnp.reshape(out[i:i+a*b], [a, b])
-                i += a*b
+                #out_dict[k][f] = jnp.reshape(out[i:i+a*b], [a, b])
+                out_dict[k][f] = out[i:i+a]
+                #i += a*b
+                i += a
         return out_dict

@@ -81,7 +81,7 @@ At first, one has to declare the different post-processing functions to be appli
         'load': {'q_mvar': [mp.AffineTransform(slope=1e2)]}
     }
 
-    postprocessor = mp.PostProcessor(functions)
+    postprocessor = mp.PostProcessor(functions=functions)
 
 In the example above, two transforms are applied sequentially to the feature `p_mw` of the objects
 `gen` : the `tanh` first, and the `affine` second.

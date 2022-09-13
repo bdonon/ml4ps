@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
+import jax.numpy as jnp
 import torch
 import os
 
@@ -23,7 +24,8 @@ def clean_dict(v):
 
 def collate(data):
     """Transforms a list of dictionaries into a dictionary whose values are tensors with an additional dimension."""
-    return torch.utils.data.default_collate(data)
+    data = torch.utils.data.default_collate(data)
+    return {k: {f: jnp.array(data[k][f]) for f in data[k].keys()} for k in data.keys()}
 
 
 def separate(data):
@@ -90,15 +92,18 @@ class AbstractBackend(ABC):
         """Loads a single power grid instance."""
         pass
 
-    def update_run_extract(self, network_batch, y_batch, features, load_flow_options=None):
+    def update_run_extract(self, network_batch, y_batch=None, features=None, load_flow=False, **kwargs):
         """Modifies a batch of power grids with features contained in y_batch."""
         # TODO rajouter du multiprocessing pour le load flow ?
         # TODO que faire en cas de divergence du load flow ?
-        y_batch = separate(y_batch)
-        [self.update_network(net, y) for net, y in zip(network_batch, y_batch)]
-        [self.run_load_flow(net, load_flow_options=load_flow_options) for net in network_batch]
-        r = [self.extract_features(net, features) for net in network_batch]
-        return collate(r)
+        if y_batch is not None:
+            y_batch = separate(y_batch)
+            [self.update_network(net, y) for net, y in zip(network_batch, y_batch)]
+        if load_flow:
+            [self.run_load_flow(net, **kwargs) for net in network_batch]
+        if features is not None:
+            r = [self.extract_features(net, features) for net in network_batch]
+            return collate(r)
 
     @abstractmethod
     def update_network(self, net, y):
@@ -106,7 +111,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def run_load_flow(self, net, load_flow_options=None):
+    def run_load_flow(self, net, **kwargs):
         """Performs a single power flow computation."""
         pass
 

@@ -1,3 +1,3 @@
-from ML4PS.backend.interface import *
-from ML4PS.backend.pandapower import *
-from ML4PS.backend.pypowsybl import *
+from ml4ps.backend.interface import *
+from ml4ps.backend.pandapower import *
+#from ml4ps.backend.pypowsybl import *

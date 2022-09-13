@@ -1,4 +1,4 @@
-from ML4PS.backend.interface import AbstractBackend
+from ml4ps.backend.interface import AbstractBackend
 import pandapower as pp
 import numpy as np
 
@@ -114,8 +114,7 @@ class PandaPowerBackend(AbstractBackend):
                 except ValueError:
                     print('Object {} and key {} are not available with PandaPower'.format(k, f))
 
-    def run_load_flow(self, net, load_flow_options=None):
+    def run_load_flow(self, net, **kwargs):
         """Runs a power flow simulation."""
-        # TODO : connect options
         # TODO : what if power flow diverges
-        pp.runpp(net)
+        pp.runpp(net, **kwargs)

@@ -1,5 +1,5 @@
 """
-ML4PS
+ml4ps
 """
 
 __version__ = '0.0.1'
@@ -11,8 +11,8 @@ from jax.example_libraries import optimizers
 from jax.experimental.ode import odeint
 
 
-from ML4PS.backend import *
-from ML4PS.neural_network import *
-from ML4PS.dataset import *
-from ML4PS.normalization import *
-from ML4PS.postprocessing import *
+from ml4ps.backend import *
+from ml4ps.neural_network import *
+from ml4ps.dataset import *
+from ml4ps.normalization import *
+from ml4ps.postprocessing import *

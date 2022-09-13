@@ -4,14 +4,14 @@ import tqdm
 
 from scipy import interpolate
 
-from ML4PS.backend.interface import collate
+from ml4ps.backend.interface import collate
 
 
 class Normalizer:
     """Normalizes power grid features while respecting the permutation equivariance of the data.
 
     Attributes:
-        functions (:obj:`dict` of :obj:`dict` of :obj:`ML4PS.normalization.NormalizationFunction`): Dict of dict of
+        functions (:obj:`dict` of :obj:`dict` of :obj:`ml4ps.normalization.NormalizationFunction`): Dict of dict of
             single normalizing functions. Upper level keys correspond to objects (e.g. 'load'), lower level keys
             correspond to features (e.g. 'p_mw') and the value corresponds to a normalizing function.
             Normalizing functions take scalar inputs and return scalar inputs.
@@ -23,7 +23,7 @@ class Normalizer:
         Args:
             filename (:obj:`str`, optional): Path to a normalizer that should be loaded. If not specified, a new normalizer is
                 created based on the other arguments.
-            backend (:obj:`ML4PS.backend.interface.Backend`): Backend to use to extract features.
+            backend (:obj:`ml4ps.backend.interface.Backend`): Backend to use to extract features.
                 Changing the backend will affect the objects and features names.
             data_dir (:obj:`str`): Path to the dataset that will serve to fit the normalizing functions.
             n_samples (:obj:`int`, optional): Amount of samples that should be imported from the dataset to fit the

@@ -1,5 +1,5 @@
 [project]
-name = "ML4PS"
+name = "ml4ps"
 version = "0.0.1"
 authors = [
     {name = "Balthazar Donon", email = "balthazar.donon@uliege.be"},
@@ -31,9 +31,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = [""]
-exclude = ["ENV", "doc"]
+exclude = ["venv", "doc"]
 namespaces = false
 
 [project.urls]
-"Homepage" = "https://github.com/bdonon/MachineLearning4PowerSystems"
-"Bug Tracker" = "https://github.com/bdonon/MachineLearning4PowerSystems/issues"
+"Homepage" = "https://github.com/bdonon/ml4ps"
+"Bug Tracker" = "https://github.com/bdonon/ml4ps/issues"

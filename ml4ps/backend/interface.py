@@ -22,10 +22,15 @@ def clean_dict(v):
     return v
 
 
-def collate(data):
+def collate_dict(data):
     """Transforms a list of dictionaries into a dictionary whose values are tensors with an additional dimension."""
-    data = torch.utils.data.default_collate(data)
-    return {k: {f: jnp.array(data[k][f]) for f in data[k].keys()} for k in data.keys()}
+    return {k: {f: jnp.array([d[k][f] for d in data]) for f in data[k].keys()} for k in data.keys()}
+
+
+def collate_power_grid(data):
+    """Collates tuples `(a, x, nets)`, by only collating `a` and `x` and leaving `nets` untouched."""
+    a, x, network = zip(*data)
+    return collate_dict(a), collate_dict(x), network
 
 
 def separate(data):
@@ -103,7 +108,7 @@ class AbstractBackend(ABC):
             [self.run_load_flow(net, **kwargs) for net in network_batch]
         if features is not None:
             r = [self.extract_features(net, features) for net in network_batch]
-            return collate(r)
+            return collate_dict(r)
 
     @abstractmethod
     def update_network(self, net, y):

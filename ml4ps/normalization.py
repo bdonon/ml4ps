@@ -50,6 +50,7 @@ class Normalizer:
             self.n_breakpoints = kwargs.get('n_breakpoints', 200)
             self.features = kwargs.get("features", self.backend.valid_features)
             self.backend.check_features(self.features)
+            self.tqdm = kwargs.get('tqdm', tqdm.tqdm)
 
             self.build_functions()
 
@@ -62,12 +63,12 @@ class Normalizer:
         """
         print("Building a Normalizer.")
         data_files = self.backend.get_files(self.data_dir, n_samples=self.n_samples)
-        network_batch = [self.backend.load_network(file) for file in tqdm.tqdm(data_files, desc='Loading power grids.')]
-        values = [self.backend.extract_features(net, self.features) for net in tqdm.tqdm(network_batch,
-                                                                                         desc='Extracting features.')]
+        network_batch = [self.backend.load_network(file) for file in self.tqdm(data_files, desc='Loading power grids ')]
+        values = [self.backend.extract_features(net, self.features) for net in self.tqdm(network_batch,
+                                                                                         desc='Extracting features ')]
         values = collate(values)
         self.functions = {k: {f: NormalizationFunction(values[k][f], self.n_breakpoints) for f in v}
-                          for k, v in tqdm.tqdm(values.items(), desc='Building normalizing functions.')}
+                          for k, v in self.tqdm(values.items(), desc='Building normalizing functions ')}
         print("Normalizer ready to normalize !")
 
     def save(self, filename):

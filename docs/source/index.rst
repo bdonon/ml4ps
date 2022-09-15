@@ -15,12 +15,12 @@ real-life data.
 We thus provide a series of tools that were built with this concern in mind :
 
     - a data formalism that properly describes the actual structure of the data ;
-    - a dataset class derived from the :ref:`PyTorch <https://pytorch.org/docs/stable/data.html#
+    - a dataset class derived from the `PyTorch <https://pytorch.org/docs/stable/data.html#
       single-and-multi-process-data-loading>`_ data loading utility, which returns objects
       that exhaustively describe power grid instances ;
     - a normalizer class that maps ill-distributed features into a more appropriate range of values ;
     - an implementation of a graph neural ordinary differential equation model in
-      :ref:`JAX <https://jax.readthedocs.io/en/latest/>`_ that structurally
+      `JAX <https://jax.readthedocs.io/en/latest/>`_ that structurally
       respects the data structure ;
     - a post-processing class that sends the neural network output into physically meaningful orders
       of magnitudes ;

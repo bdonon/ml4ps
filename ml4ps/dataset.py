@@ -3,21 +3,6 @@ import numpy as np
 from torch.utils.data import Dataset
 
 
-def power_grid_collate(data):
-    """Collate function to pass to a torch.utils.data.DataLoader.
-
-    It collates addresses `a` and features `x` using the default collate function of torch,
-    but keeps the network list untouched.
-
-    """
-    a, x, network = zip(*data)
-    a = torch.utils.data.default_collate(a)
-    a = {k: {f: np.array(a[k][f]) for f in a[k].keys()} for k in a.keys()}
-    x = torch.utils.data.default_collate(x)
-    x = {k: {f: np.array(x[k][f]) for f in x[k].keys()} for k in x.keys()}
-    return a, x, network
-
-
 class PowerGridDataset(Dataset):
     """Subclass of torch.utils.data.Dataset that supports our data formalism.
 

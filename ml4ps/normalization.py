@@ -4,7 +4,7 @@ import tqdm
 
 from scipy import interpolate
 
-from ml4ps.backend.interface import collate
+from ml4ps.backend.interface import collate_dict
 
 
 class Normalizer:
@@ -66,7 +66,7 @@ class Normalizer:
         network_batch = [self.backend.load_network(file) for file in self.tqdm(data_files, desc='Loading power grids ')]
         values = [self.backend.extract_features(net, self.features) for net in self.tqdm(network_batch,
                                                                                          desc='Extracting features ')]
-        values = collate(values)
+        values = collate_dict(values)
         self.functions = {k: {f: NormalizationFunction(values[k][f], self.n_breakpoints) for f in v}
                           for k, v in self.tqdm(values.items(), desc='Building normalizing functions ')}
         print("Normalizer ready to normalize !")

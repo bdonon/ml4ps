@@ -22,13 +22,18 @@ def clean_dict(v):
     return v
 
 
-def collate(data):
+def collate_dict(data):
     """Transforms a list of dictionaries into a dictionary whose values are tensors with an additional dimension."""
-    data = torch.utils.data.default_collate(data)
-    return {k: {f: jnp.array(data[k][f]) for f in data[k].keys()} for k in data.keys()}
+    return {k: {f: jnp.array([d[k][f] for d in data]) for f in data[k].keys()} for k in data.keys()}
 
 
-def separate(data):
+def collate_power_grid(data):
+    """Collates tuples `(a, x, nets)`, by only collating `a` and `x` and leaving `nets` untouched."""
+    a, x, network = zip(*data)
+    return collate_dict(a), collate_dict(x), network
+
+
+def separate_dict(data):
     """Transforms a dict of batched tensors into a list of dicts that have single tensors as values."""
     elem = list(list(data.values())[0].values())[0]
     batch_size = np.shape(elem)[0]
@@ -97,13 +102,13 @@ class AbstractBackend(ABC):
         # TODO rajouter du multiprocessing pour le load flow ?
         # TODO que faire en cas de divergence du load flow ?
         if y_batch is not None:
-            y_batch = separate(y_batch)
+            y_batch = separate_dict(y_batch)
             [self.update_network(net, y) for net, y in zip(network_batch, y_batch)]
         if load_flow:
             [self.run_load_flow(net, **kwargs) for net in network_batch]
         if features is not None:
             r = [self.extract_features(net, features) for net in network_batch]
-            return collate(r)
+            return collate_dict(r)
 
     @abstractmethod
     def update_network(self, net, y):

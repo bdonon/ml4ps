@@ -24,7 +24,7 @@ def clean_dict(v):
 
 def collate_dict(data):
     """Transforms a list of dictionaries into a dictionary whose values are tensors with an additional dimension."""
-    return {k: {f: jnp.array([d[k][f] for d in data]) for f in data[k].keys()} for k in data.keys()}
+    return {k: {f: np.array([d[k][f] for d in data]) for f in data[k].keys()} for k in data.keys()}
 
 
 def collate_power_grid(data):

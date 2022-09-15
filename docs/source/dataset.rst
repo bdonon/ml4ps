@@ -79,5 +79,5 @@ adjusted manually.
 
 Contents
 --------
-.. module:: ML4PS.dataset
+.. module:: ml4ps.dataset
 .. autoclass:: PowerGridDataset

@@ -35,7 +35,7 @@ Once defined, we can sample from our dataset using a torch DataLoader.
     loader = DataLoader(train_set,
                         batch_size=64,
                         shuffle=True,
-                        collate_fn=mp.power_grid_collate)
+                        collate_fn=mp.collate_power_grid)
 
 .. note::
 

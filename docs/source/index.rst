@@ -2,44 +2,43 @@ ml4ps
 =====
 
 **ml4ps** (Machine Learning for Power Systems) is a Python library to facilitate the application of
-Machine Learning techniques to Power Systems.
+Machine Learning to Power Systems, with a strong emphasis on respecting the data structure.
 
-Nous souhaitons ainsi permettre aux gens d'entraîner facilement des modèles de réseaux de neurones
-pour différentes tâches :
-    - approximation de simulateur ;
-    - approximation de solveur AC OPF ;
-    - contrôle de certaines variables,
-    - etc.
+We provide building blocks that allow to plug deep learning models to power grid data, and to interact
+with various power systems backends (pandapower and pypowsybl).
+At the core of this package is the idea that
+real-life power systems have a structure that varies through time (because of line disconnections,
+unforeseen incidents, the building of new facilities). For this reason, we believe that developing
+AI models that respect the graph structure of power grid data is critical to their application to
+real-life data.
 
-Nous fournissons les briques permettant d'atteindre ces buts, mais c'est à vous de définir
-proprement les données et le problème que vous souhaitez résoudre. Des exemples d'applications
-de nos outils sont disponibles dans la section usecase.
+We thus provide a series of tools that were built with this concern in mind :
 
-    - un formalisme de données qui respecte la structure de graph des données
-    - un outil pour se brancher sur des bases de données de réseaux électriques, et itérer dessus
-(basé sur torch)
-    - un outil pour normaliser les données en respectant la structure ;
-    - des implémentations de réseaux de neurones : un fully connected tout simple, et un h2mgnn
-qui permet de respecter la structure des données;
-    - des fonctions élémentaires pour postprocess
-    - une interface pour possiblement brancher d'autres packages qui permettent de travailler sur
-des réseaux, et qui peut permettre d'aller interagir avec les modèles de réseau.
+    - a data formalism that properly describes the actual structure of the data ;
+    - a dataset class derived from the :ref:`PyTorch <https://pytorch.org/docs/stable/data.html#
+      single-and-multi-process-data-loading>`_ data loading utility, which returns objects
+      that exhaustively describe power grid instances ;
+    - a normalizer class that maps ill-distributed features into a more appropriate range of values ;
+    - an implementation of a graph neural ordinary differential equation model in
+      :ref:`JAX <https://jax.readthedocs.io/en/latest/>`_ that structurally
+      respects the data structure ;
+    - a post-processing class that sends the neural network output into physically meaningful orders
+      of magnitudes ;
+    - an interface that allows to read data using different backend implementations (for now only
+      pandapower and pypowsybl are available), setting power grid features using neural network outputs,
+      running power flow simulations and getting features from the simulation results.
 
-Nous souhaitons ainsi faciliter l'application de méthodes avancées de machine learning pour l'opération
-des réseaux électriques.
+These tools were built with several key applications in mind, among which are :
 
-Nous proposons ainsi des outils pour apprendre depuis des données power systems sans aucun travail
-lourd et sujet à erreur.
+    - the imitation of an AC power flow simulator using neural networks ;
+    - the imitation of an AC optimal power flow solver using neural networks.
 
-
-that want to apply Machine Leaning methods to Power Systems data.
-
-It provides a way of iterating over power grid datasets, normalizing them,
-feeding them into neural network architectures.
+If you have in mind a use-case that would require some adjustments of the present package,
+feel free to contact us at laurentpagnier@math.arizona.edu or balthazar.donon@uliege.be.
 
 .. note::
 
-    This project is under active development.
+    This project is currently under active development.
 
 Contents
 --------
@@ -48,10 +47,10 @@ Contents
     :maxdepth: 1
 
     data_formalism
-    usecase/index
     backend
     dataset
     normalization
     neural_networks/index
     postprocessing
     interaction
+    usecase/index

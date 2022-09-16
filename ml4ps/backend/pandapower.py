@@ -39,7 +39,7 @@ VALID_ADDRESSES = {
 
 
 class PandaPowerBackend(AbstractBackend):
-    """Backend implementation that uses :ref:`PandaPower <http://www.pandapower.org>`_."""
+    """Backend implementation that uses `PandaPower <http://www.pandapower.org>`_."""
 
     valid_extensions = (".json", ".pkl")
     valid_feature_names = VALID_FEATURES
@@ -97,8 +97,9 @@ class PandaPowerBackend(AbstractBackend):
         """Gets a pandas dataframe describing the features of a specific object in a power grid instance.
 
             .. note:: Pandapower puts the results of power flow simulations into a separate table. For instance,
-            results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res_
+            results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res
             for the considered features.
+
         """
         if key == 'bus':
             table = net.bus.copy(deep=True)

@@ -33,7 +33,7 @@ class AbstractBackend(ABC):
                 backend.
             valid_address_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
                 object names as keys and valid address names for each of these keys.
-            valid_featur_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
+            valid_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
                 object names as keys and valid feature names for each of these keys.
     """
 
@@ -44,19 +44,16 @@ class AbstractBackend(ABC):
     @property
     @abstractmethod
     def valid_extensions(self):
-        """List of valid file extensions that can be read by the backend."""
         pass
 
     @property
     @abstractmethod
     def valid_address_names(self):
-        """Dictionary of keys that constitute valid address names w.r.t. the backend."""
         pass
 
     @property
     @abstractmethod
     def valid_feature_names(self):
-        """Dictionary of keys that constitute valid feature names w.r.t. the backend."""
         pass
 
     @abstractmethod

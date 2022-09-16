@@ -53,8 +53,8 @@ appel .....
 En gros on a 3 méthodes principales qui permettent d'interagir avec le backend :
 
     - set : applique les valeurs fournies aux instances de réseau.
-    - run : fait tourner une simulation ac power flow
-    - get : récupère des grandeurs issues du calcul de power flow
+    - run : fait tourner une simulation ac power flow.
+    - get : récupère des grandeurs issues du calcul de power flow.
 
 Bien entendu, cette dernière fonction ne permet que de récupérer des grandeurs qu'il
 faudra ensuite combiner pour obtenir par exemple une fonction de coût.

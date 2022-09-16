@@ -36,7 +36,7 @@ class AbstractBackend(ABC):
                 proper backend implementation.
             valid_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
                 object names as keys and valid feature names for each of these keys. Should be overridden in a
-                 proper backend implementation.
+                proper backend implementation.
     """
 
     def __init__(self):

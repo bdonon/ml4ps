@@ -1,6 +1,7 @@
 Power Systems Backend
 =====================
 
+.. module:: ml4ps
 .. module:: ml4ps.backend.interface
 .. module:: ml4ps.backend.pandapower
 .. module:: ml4ps.backend.pypowsybl
@@ -14,10 +15,15 @@ Backend interface
 
 
 We have defined a common backend interface through the abstract base class
-:class:`AbstractBackend`.
-:class:`test`
+:py:class:`ml4ps.backend.interface.AbstractBackend`.
+
+.. class:: ml4ps.backend.interface.AbstractBackend
+
 It requires to override the following attributes (see :class:`PandaPowerBackend`
 for a concrete example) :
+
+.. autoclass:: ml4ps.backend.interface.AbstractBackend
+    :members: valid_extensions, valid_feature_names, valid_address_names
 
     - :attr:`AbstractBackend.valid_extensions` : a tuple of strings of all extensions
       that can be read by the package.

@@ -43,46 +43,51 @@ On peut trouver dans les attributs
     que l'on souhaite résoudre.
 
 
-Interacting with power systems simulators
------------------------------------------
 
-Ces grandeurs devront ensuite pouvoir être utilisées pour remplacer les champs
-correspondant dans les instances de réseau électrique, de sorte à pouvoir ensuite faire
-appel .....
 
-En gros on a 3 méthodes principales qui permettent d'interagir avec le backend :
-
-    - set : applique les valeurs fournies aux instances de réseau.
-    - run : fait tourner une simulation ac power flow.
-    - get : récupère des grandeurs issues du calcul de power flow.
-
-Bien entendu, cette dernière fonction ne permet que de récupérer des grandeurs qu'il
-faudra ensuite combiner pour obtenir par exemple une fonction de coût.
-
-Petit exemple d'interaction avec le backend
-
-En fonction du problème, on utilisera l'une ou l'autre de ces méthodes. Dans le cas
-où on cherche à apprendre la sortie du power flow, on pourra simplement utiliser run
-et get.
-Dans le cas où on cherche à entraîner un réseau de neurones à résoudre un opf de façon
-non supervisée, on pourra utiliser set run et get.
-C'est à l'utilisateur de définir de quelles méthodes il a besoin de la façon dont il
-combine ensuite les grandeurs obtenues.
-
-Changer le backend
-------------------
+Defining a new backend
+----------------------
 
 We have defined a common backend interface through the abstract base class
-:py:class:`~ml4ps.backend.interface.AbstractBackend`.
+:py:class:`ml4ps.backend.interface.AbstractBackend`.
 It requires a certain amount of elementary attributes and methods, and provides higher level methods based
 upon the latter.
-It is required to define the following attributes (see :py:class:`~ml4ps.backend.pandapower.PandaPowerBackend`
-for a concrete example).
 
-    - `valid_extensions`, a tuple of strings of all extensions that can be read by the package ;
-    - `valid_features`, a dictionary of lists of strings, whose keys correspond to the object classes,
-      and where values are the lists of feature names for each class ;
-    - `valid_addresses`, a dictionary of lists of strings, whose keys correspond to the object classes,
-      and where values are the lists of address names for each class ;
+It is required to define the following attributes (see :py:class:`ml4ps.backend.pandapower.PandaPowerBackend`
+for a concrete example) :
 
+    - :py:attribute:`ml4ps.backend.interface.valid_extensions`, a tuple of strings of all extensions
+      that can be read by the package ;
+    - :py:attribute:`ml4ps.backend.interface.valid_features`, a dictionary of lists of strings,
+      whose keys correspond to the object classes, and where values are the lists of feature names for each class ;
+    - :py:attribute:`ml4ps.backend.interface.valid_addresses`, a dictionary of lists of strings,
+      whose keys correspond to the object classes, and where values are the lists of address names for each class ;
 
+It is also required to override the following methods :
+
+    - :py:method:`ml4ps.backend.interface.load_network`, which loads a single instance of power grid ;
+    - :py:method:`ml4ps.backend.interface.set_feature_network`, which sets values of a single network according
+      to values provided in a dictiona. This is useful when one wants to apply the output of a neural network
+      to actual power instances ;
+    - :py:method:`ml4ps.backend.interface.run_network`, which runs a power flow simulation using the solver
+      implemented in the backend ;
+    - :py:method:`ml4ps.backend.interface.get_feature_network`, which extracts features from a single power grid ;
+    - :py:method:`ml4ps.backend.interface.get_address_network`, which extracts addresses from a single power grid.
+
+Interacting with power grids
+----------------------------
+
+The elementary operations that are required by the interface should only operate on single instances of power
+grids. Then, those methods are converted into batch operations as follows :
+
+    - :py:method:`ml4ps.backend.interface.set_feature_batch`, which sets values of a batch of power grids.
+      network according
+      to values provided in a dictiona. This is useful when one wants to apply the output of a neural network
+      to actual power instances ;
+    - :py:method:`ml4ps.backend.interface.run_batch`, which runs a power flow simulation using the solver
+      implemented in the backend ;
+    - :py:method:`ml4ps.backend.interface.get_feature_batch`, which extracts features from a single power grid ;
+
+Those three basic methods will serve to interact with batches of power grids, allowing to replace values by
+the batch output of a neural network (for instance), then performing power flow simulations over the batch of
+power grid instances, and finally retrieving some relevant features that result from these computations.

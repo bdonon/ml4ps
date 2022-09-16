@@ -93,7 +93,7 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def get_address_network(self, network, addresses):
-        """Extracts a nested dict of address ids from a power grid instance."""
+        """Extracts a nested dict of address ids from a power grid instance. Should return integers."""
         pass
 
     def check_features(self, features):

@@ -15,6 +15,7 @@ Backend interface
 
 We have defined a common backend interface through the abstract base class
 :class:`AbstractBackend`.
+:class:`test`
 It requires to override the following attributes (see :class:`PandaPowerBackend`
 for a concrete example) :
 

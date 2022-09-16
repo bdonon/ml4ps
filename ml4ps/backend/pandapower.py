@@ -9,7 +9,7 @@ VALID_FEATURES = {
     'sgen': ['controllable', 'in_service', 'p_mw', 'q_mvar', 'scaling', 'sn_mva', 'current_source', 'res_p_mw',
              'res_q_mvar'],
     'gen': ['controllable', 'in_service', 'p_mw', 'scaling', 'sn_mva', 'vm_pu', 'slack', 'max_p_mw', 'min_p_mw',
-            'max_q_mvar', 'min_q_mvar', 'slack_weight', 'res_p_mw', 'res_q_mvar','res_va_degree', 'res_vm_pu'],
+            'max_q_mvar', 'min_q_mvar', 'slack_weight', 'res_p_mw', 'res_q_mvar', 'res_va_degree', 'res_vm_pu'],
     'shunt': ['q_mvar', 'p_mw', 'vn_kv', 'step', 'max_step', 'in_service', 'res_p_mw', 'res_q_mvar', 'res_vm_pu'],
     'ext_grid': ['in_service', 'va_degree', 'vm_pu', 'max_p_mw', 'min_p_mw', 'max_q_mvar', 'min_q_mvar',
                  'slack_weight', 'res_p_mw', 'res_q_mvar'],
@@ -37,6 +37,7 @@ VALID_ADDRESSES = {
     'poly_cost': ['element'],
 }
 
+
 class PandaPowerBackend(AbstractBackend):
     """Backend implementation that uses :ref:`PandaPower <http://www.pandapower.org>`_."""
 
@@ -48,8 +49,57 @@ class PandaPowerBackend(AbstractBackend):
         """Initializes a PandaPowerBackend."""
         super().__init__()
 
+    def load_network(self, file_path):
+        """Loads a power grid instance, either from a `.pkl` or from a `.json` file."""
+        if file_path.endswith('.json'):
+            net = pp.from_json(file_path)
+        elif file_path.endswith('.pkl'):
+            net = pp.from_pickle(file_path)
+        else:
+            raise NotImplementedError('No support for file {}'.format(file_path))
+        return net
+
+    def set_feature_network(self, net, y):
+        """Updates a power grid by setting features according to `y`."""
+        for k in y.keys():
+            for f in y[k].keys():
+                try:
+                    net[k][f] = y[k][f]
+                except ValueError:
+                    print('Object {} and key {} are not available with PandaPower'.format(k, f))
+
+    def run_network(self, net, **kwargs):
+        """Runs a power flow simulation."""
+        try:
+            pp.runpp(net, **kwargs)
+        except pp.powerflow.LoadflowNotConverged:
+            pass
+
+    def get_feature_network(self, network, features):
+        """Returns features from a single power grid instance."""
+        table_dict = self.get_table_dict(network, features)
+        x = {k: {f: np.array(xkf, dtype=np.float32) for f, xkf in xk.items()} for k, xk in table_dict.items()}
+        return clean_dict(x)
+
+    def get_address_network(self, network, addresses):
+        """Extracts a nested dict of address ids from a power grid instance."""
+        table_dict = self.get_table_dict(network, addresses)
+        id_dict = build_unique_id_dict(table_dict, addresses)
+        a = {k: {f: np.array(xkf.astype(str).map(id_dict), dtype=np.int32) for f, xkf in xk.items()}
+             for k, xk in table_dict.items()}
+        return clean_dict(a)
+
+    def get_table_dict(self, network, features):
+        """Gets a dict of pandas tables for all the objects in features, from the input network."""
+        return {k: self.get_table(network, k, f) for k, f in features.items()}
+
     def get_table(self, net, key, feature_list):
-        """Gets a pandas dataframe describing the features of a specific object in a power grid instance."""
+        """Gets a pandas dataframe describing the features of a specific object in a power grid instance.
+
+            .. note:: Pandapower puts the results of power flow simulations into a separate table. For instance,
+            results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res_
+            for the considered features.
+        """
         if key == 'bus':
             table = net.bus.copy(deep=True)
             table = table.join(net.res_bus.add_prefix('res_'))
@@ -95,26 +145,26 @@ class PandaPowerBackend(AbstractBackend):
         features_to_keep = list(set(list(table)) & set(feature_list))
         return table[features_to_keep]
 
-    def load_network(self, file_path):
-        """Loads a power grid instance, either from a `.pkl` or from a `.json` file."""
-        if file_path.endswith('.json'):
-            net = pp.from_json(file_path)
-        elif file_path.endswith('.pkl'):
-            net = pp.from_pickle(file_path)
-        else:
-            raise NotImplementedError('No support for file {}'.format(file_path))
-        return net
 
-    def update_network(self, net, y):
-        """Updates a power grid by setting features according to `y`."""
-        for k in y.keys():
-            for f in y[k].keys():
-                try:
-                    net[k][f] = y[k][f]
-                except ValueError:
-                    print('Object {} and key {} are not available with PandaPower'.format(k, f))
+def clean_dict(v):
+    """Cleans a dictionary of tensors by deleting keys whose values are empty."""
+    keys_to_erase = []
+    for k, v_k in v.items():
+        keys_to_erase_k = []
+        for f, v_k_f in v_k.items():
+            if np.shape(v_k_f)[0] == 0:
+                keys_to_erase_k.append(f)
+        for f in keys_to_erase_k:
+            del v_k[f]
+        if not v_k:
+            keys_to_erase.append(k)
+    for k in keys_to_erase:
+        del v[k]
+    return v
 
-    def run_load_flow(self, net, **kwargs):
-        """Runs a power flow simulation."""
-        # TODO : what if power flow diverges
-        pp.runpp(net, **kwargs)
+
+def build_unique_id_dict(table_dict, addresses):
+    """Builds a dictionary to convert `str` indices into unique `int`."""
+    all_addresses = [list(table_dict[k][f].values.astype(str)) for k, v in addresses.items() for f in v]
+    unique_addresses = list(np.unique(np.concatenate(all_addresses)))
+    return {address: i for i, address in enumerate(unique_addresses)}

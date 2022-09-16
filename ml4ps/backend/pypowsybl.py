@@ -61,7 +61,7 @@ class PyPowSyblBackend(AbstractBackend):
     def load_network(self, file_path):
         return pn.load(file_path)
 
-    def update_network(self, net, y):
+    def set_network(self, net, y):
         for k in y.keys():
             for f in y[k].keys():
                 if k == 'bus':
@@ -83,6 +83,6 @@ class PyPowSyblBackend(AbstractBackend):
                     raise ValueError('Object {} is not a valid object name. ' +
                                      'Please pick from this list : {}'.format(k, VALID_FEATURES))
 
-    def run_load_flow(self, net, load_flow_options=None):
+    def run_network(self, net, **kwargs):
         # TODO : connect options
         pl.run_ac(net)

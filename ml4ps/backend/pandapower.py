@@ -42,8 +42,8 @@ class PandaPowerBackend(AbstractBackend):
     """Backend implementation that uses :ref:`PandaPower <http://www.pandapower.org>`_."""
 
     valid_extensions = (".json", ".pkl")
-    valid_features = VALID_FEATURES
-    valid_addresses = VALID_ADDRESSES
+    valid_feature_names = VALID_FEATURES
+    valid_address_names = VALID_ADDRESSES
 
     def __init__(self):
         """Initializes a PandaPowerBackend."""
@@ -137,7 +137,7 @@ class PandaPowerBackend(AbstractBackend):
             table['element'] = table.et.astype(str) + '_' + table.element.astype(str)
         else:
             raise ValueError('Object {} is not a valid object name. ' +
-                             'Please pick from this list : {}'.format(key, VALID_FEATURES))
+                             'Please pick from : {}'.format(key, self.valid_feature_names))
         table['id'] = table.index
         table.replace([np.inf], 99999, inplace=True)
         table.replace([-np.inf], -99999, inplace=True)

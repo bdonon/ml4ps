@@ -48,7 +48,7 @@ class Normalizer:
             self.n_samples = kwargs.get('n_samples', 100)
             self.shuffle = kwargs.get("shuffle", False)
             self.n_breakpoints = kwargs.get('n_breakpoints', 200)
-            self.features = kwargs.get("features", self.backend.valid_features)
+            self.features = kwargs.get("features", self.backend.valid_feature_names)
             self.backend.check_features(self.features)
             self.tqdm = kwargs.get('tqdm', tqdm.tqdm)
 
@@ -62,10 +62,10 @@ class Normalizer:
             based on the obtained data, a separate normalizing function is built for each feature of each object.
         """
         print("Building a Normalizer.")
-        data_files = self.backend.get_files(self.data_dir, n_samples=self.n_samples)
+        data_files = self.backend.get_valid_files(self.data_dir, n_samples=self.n_samples)
         network_batch = [self.backend.load_network(file) for file in self.tqdm(data_files, desc='Loading power grids ')]
-        values = [self.backend.extract_features(net, self.features) for net in self.tqdm(network_batch,
-                                                                                         desc='Extracting features ')]
+        values = [self.backend.get_feature_network(net, self.features)
+                  for net in self.tqdm(network_batch, desc='Extracting features ')]
         values = collate_dict(values)
         self.functions = {k: {f: NormalizationFunction(values[k][f], self.n_breakpoints) for f in v}
                           for k, v in self.tqdm(values.items(), desc='Building normalizing functions ')}

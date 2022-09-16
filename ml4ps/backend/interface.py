@@ -31,9 +31,9 @@ class AbstractBackend(ABC):
         Attributes:
             valid_extensions (:obj:`list` of :obj:`str`): List of valid file extensions that can be read by the
                 backend.
-            valid_addresses (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
+            valid_address_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
                 object names as keys and valid address names for each of these keys.
-            valid_features (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
+            valid_featur_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
                 object names as keys and valid feature names for each of these keys.
     """
 
@@ -49,14 +49,14 @@ class AbstractBackend(ABC):
 
     @property
     @abstractmethod
-    def valid_addresses(self):
-        """Dictionary of keys that constitute valid addresses w.r.t. the backend."""
+    def valid_address_names(self):
+        """Dictionary of keys that constitute valid address names w.r.t. the backend."""
         pass
 
     @property
     @abstractmethod
-    def valid_features(self):
-        """Dictionary of keys that constitute valid features w.r.t. the backend."""
+    def valid_feature_names(self):
+        """Dictionary of keys that constitute valid feature names w.r.t. the backend."""
         pass
 
     @abstractmethod
@@ -99,28 +99,28 @@ class AbstractBackend(ABC):
     def check_features(self, features):
         """Checks that features are valid w.r.t. the current backend."""
         for k in features.keys():
-            if k in self.valid_features.keys():
+            if k in self.valid_feature_names.keys():
                 for f in features[k]:
-                    if f in self.valid_features[k]:
+                    if f in self.valid_feature_names[k]:
                         continue
                     else:
                         raise Warning('{} is not a valid feature for {}. '.format(f, k) +
-                                      'Please pick from this list : {}'.format(self.valid_features[k]))
+                                      'Please pick from this list : {}'.format(self.valid_feature_names[k]))
             else:
-                raise Warning('{} is not a valid name. Please pick from this list : {}'.format(k, self.valid_features))
+                raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_feature_names))
 
     def check_addresses(self, addresses):
         """Checks that addresses are valid w.r.t. the current backend."""
         for k in addresses.keys():
-            if k in self.valid_addresses.keys():
+            if k in self.valid_address_names.keys():
                 for f in addresses[k]:
-                    if f in self.valid_addresses[k]:
+                    if f in self.valid_address_names[k]:
                         continue
                     else:
                         raise Warning('{} is not a valid feature for {}. '.format(f, k) +
-                                      'Please pick from this list : {}'.format(self.valid_addresses[k]))
+                                      'Please pick from this list : {}'.format(self.valid_address_names[k]))
             else:
-                raise Warning('{} is not a valid name. Please pick from this list : {}'.format(k, self.valid_addresses))
+                raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_address_names))
 
     def get_valid_files(self, path, shuffle=False, n_samples=None):
         """Gets file that have a valid extension w.r.t. the backend, from path."""

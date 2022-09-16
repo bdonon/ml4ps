@@ -87,8 +87,6 @@ backends in the implementation of **ml4ps**. They can be accessed as follows :
 Contents
 --------
 
-.. autoclass:: ml4ps.backend.interface.AbstractBackend
-    :members:
 
 .. autoclass:: ml4ps.backend.pandapower.PandaPowerBackend
     :members:

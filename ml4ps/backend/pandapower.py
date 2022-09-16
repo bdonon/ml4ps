@@ -96,9 +96,9 @@ class PandaPowerBackend(AbstractBackend):
     def get_table(self, net, key, feature_list):
         """Gets a pandas dataframe describing the features of a specific object in a power grid instance.
 
-            .. note:: Pandapower puts the results of power flow simulations into a separate table. For instance,
-            results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res
-            for the considered features.
+        Pandapower puts the results of power flow simulations into a separate table. For instance,
+        results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res
+        for the considered features.
 
         """
         if key == 'bus':

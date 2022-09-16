@@ -1,6 +1,10 @@
 Power Systems Backend
 =====================
 
+.. module:: ml4ps.backend.interface
+.. module:: ml4ps.backend.pandapower
+.. module:: ml4ps.backend.pypowsybl
+
 The power system backend is an essential part of this library. It allows to rely on power system packages (such as
 `pandapower <http://www.pandapower.org>`_ and `pypowsybl <https://www.powsybl.org>`_) for the loading of power grid
 files, the updating of power grid features, the power flow simulations, and the extraction of power grid features.
@@ -8,24 +12,25 @@ files, the updating of power grid features, the power flow simulations, and the 
 Backend interface
 -----------------
 
+
 We have defined a common backend interface through the abstract base class
-:class:`ml4ps.backend.interface.AbstractBackend`.
-It requires to override the following attributes (see :class:`ml4ps.backend.pandapower.PandaPowerBackend`
+:class:`AbstractBackend`.
+It requires to override the following attributes (see :class:`PandaPowerBackend`
 for a concrete example) :
 
-    - :attr:`ml4ps.backend.interface.valid_extensions` : a tuple of strings of all extensions
+    - :attr:`AbstractBackend.valid_extensions` : a tuple of strings of all extensions
       that can be read by the package.
-    - :attr:`ml4ps.backend.interface.valid_feature_names` : a dictionary of lists of strings,
+    - :attr:`AbstractBackend.valid_feature_names` : a dictionary of lists of strings,
       whose keys correspond to the object classes, and where values are the lists of feature names for each class.
-    - :attr:`ml4ps.backend.interface.valid_address_names` : a dictionary of lists of strings,
+    - :attr:`AbstractBackend.valid_address_names` : a dictionary of lists of strings,
       whose keys correspond to the object classes, and where values are the lists of address names for each class.
 
 It also requires to override the following methods :
 
-    - :meth:`ml4ps.backend.interface.load_network` : loads a single instance of power grid. The
+    - :meth:`AbstractBackend.load_network` : loads a single instance of power grid. The
       implementation should be consistent with the valid extensions defined in
-      :attr:`ml4ps.backend.interface.valid_extensions`.
-    - :meth:`ml4ps.backend.interface.set_feature_network` : sets features of a power grid instance according
+      :attr:`AbstractBackend.valid_extensions`.
+    - :meth:`AbstractBackend.set_feature_network` : sets features of a power grid instance according
       to nested dictionary. This is useful when one wants to apply the output of a neural network
       to actual power instances. The provided features should match :attr:`ml4ps.backend.interface.valid_feature_names`.
     - :meth:`ml4ps.backend.interface.run_network` : runs a power flow simulation using the backend's solver.
@@ -78,5 +83,5 @@ Contents
 .. autoclass:: ml4ps.backend.interface.AbstractBackend
     :members:
 
-.. autoclass:: ml4ps.backend.interface.PandaPowerBackend
+.. autoclass:: ml4ps.backend.pandapower.PandaPowerBackend
     :members:

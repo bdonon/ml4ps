@@ -71,3 +71,12 @@ backends in the implementation of **ml4ps**. They can be accessed as follows :
     import ml4ps as mp
     pandapowerbackend = mp.PandaPowerBackend()
     pypowsyblbackend = mp.PyPowSyblBackend()
+
+Contents
+--------
+
+.. autoclass:: ml4ps.backend.interface.AbstractBackend
+    :members:
+
+.. autoclass:: ml4ps.backend.interface.PandaPowerBackend
+    :members:

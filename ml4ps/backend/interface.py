@@ -30,11 +30,13 @@ class AbstractBackend(ABC):
 
         Attributes:
             valid_extensions (:obj:`list` of :obj:`str`): List of valid file extensions that can be read by the
-                backend.
+                backend. Should be overridden in a proper backend implementation.
             valid_address_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
-                object names as keys and valid address names for each of these keys.
+                object names as keys and valid address names for each of these keys. Should be overridden in a
+                proper backend implementation.
             valid_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
-                object names as keys and valid feature names for each of these keys.
+                object names as keys and valid feature names for each of these keys. Should be overridden in a
+                 proper backend implementation.
     """
 
     def __init__(self):
@@ -58,7 +60,10 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def load_network(self, file_path):
-        """Loads a single power grid instance."""
+        """Loads a single power grid instance.
+
+        Should be overridden in a proper backend implementation.
+        Should be consistent with `valid_extensions`."""
         pass
 
     def set_feature_batch(self, network_batch, y_batch):
@@ -67,7 +72,11 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def set_feature_network(self, net, y):
-        """Modifies a power grid with the feature values contained in y."""
+        """Modifies a power grid with the feature values contained in y.
+
+        Should be overridden in a proper backend implementation.
+        Should be consistent with `valid_feature_names`.
+        """
         pass
 
     def run_batch(self, network_batch, **kwargs):
@@ -76,28 +85,40 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def run_network(self, net, **kwargs):
-        """Performs a single power flow computation."""
+        """Performs a single power flow computation.
+
+        Should be overridden in a proper backend implementation.
+        """
         pass
 
-    def get_feature_batch(self, network_batch, features):
-        """Returns features from a batch of power grids."""
-        return collate_dict([self.get_feature_network(network, features) for network in network_batch])
+    def get_feature_batch(self, network_batch, feature_names):
+        """Returns features from a batch of power grids.
+
+        Should be overridden in a proper backend implementation.
+        Should be consistent with `valid_feature_names`.
+        """
+        return collate_dict([self.get_feature_network(network, feature_names) for network in network_batch])
 
     @abstractmethod
-    def get_feature_network(self, network, features):
-        """Returns features from a single power grid instance."""
+    def get_feature_network(self, network, feature_names):
+        """Returns feature values from a single power grid instance."""
         pass
 
     @abstractmethod
-    def get_address_network(self, network, addresses):
-        """Extracts a nested dict of address ids from a power grid instance. Should return integers."""
+    def get_address_network(self, network, address_names):
+        """Extracts a nested dict of address values from a power grid instance.
+
+        Should return nested dict of integers.
+        Should be overridden in a proper backend implementation.
+        Should be consistent with `valid_address_names`.
+        """
         pass
 
-    def check_features(self, features):
-        """Checks that features are valid w.r.t. the current backend."""
-        for k in features.keys():
+    def check_feature_names(self, feature_names):
+        """Checks that feature names are valid w.r.t. the current backend."""
+        for k in feature_names.keys():
             if k in self.valid_feature_names.keys():
-                for f in features[k]:
+                for f in feature_names[k]:
                     if f in self.valid_feature_names[k]:
                         continue
                     else:
@@ -106,11 +127,11 @@ class AbstractBackend(ABC):
             else:
                 raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_feature_names))
 
-    def check_addresses(self, addresses):
+    def check_addresses(self, address_names):
         """Checks that addresses are valid w.r.t. the current backend."""
-        for k in addresses.keys():
+        for k in address_names.keys():
             if k in self.valid_address_names.keys():
-                for f in addresses[k]:
+                for f in address_names[k]:
                     if f in self.valid_address_names[k]:
                         continue
                     else:

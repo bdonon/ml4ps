@@ -45,3 +45,6 @@ exclude_patterns = [
     'usecase/2\ Training\ a\ graphical\ neural\ network-Copy1',
     'usecase/3\ Loading\ a\ trained\ method'
 ]
+
+# Display to do items
+todo_include_todos = True

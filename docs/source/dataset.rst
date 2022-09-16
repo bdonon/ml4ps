@@ -8,10 +8,13 @@ which provides many great features.
 We refer users to `data API <https://pytorch.org/docs/stable/data.html#
 single-and-multi-process-data-loading>`_ of pytorch for more information.
 
+.. todo::
+
+    Définir à quoi doit ressembler une base de données.
+
+
 Usage
 -----
-
-
 
 .. note::
 
@@ -26,6 +29,9 @@ Usage
     train_dir = 'data/case14/train'
     normalizer = mp.Normalizer(data_dir=train_dir, backend=backend)
     train_set = mp.PowerGridDataset(data_dir=train_dir, backend=backend, normalizer=normalizer)
+
+.. todo::
+    définir la façon dont on peut splitter train et test sets.
 
 Once defined, we can sample from our dataset using a torch DataLoader.
 

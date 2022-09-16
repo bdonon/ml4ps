@@ -49,30 +49,30 @@ Defining a new backend
 ----------------------
 
 We have defined a common backend interface through the abstract base class
-:py:class:`ml4ps.backend.interface.AbstractBackend`.
+:class:`ml4ps.backend.interface.AbstractBackend`.
 It requires a certain amount of elementary attributes and methods, and provides higher level methods based
 upon the latter.
 
-It is required to define the following attributes (see :py:class:`ml4ps.backend.pandapower.PandaPowerBackend`
+It is required to define the following attributes (see :class:`ml4ps.backend.pandapower.PandaPowerBackend`
 for a concrete example) :
 
-    - :py:attribute:`ml4ps.backend.interface.valid_extensions`, a tuple of strings of all extensions
+    - :attribute:`ml4ps.backend.interface.valid_extensions`, a tuple of strings of all extensions
       that can be read by the package ;
-    - :py:attribute:`ml4ps.backend.interface.valid_features`, a dictionary of lists of strings,
+    - :attribute:`ml4ps.backend.interface.valid_features`, a dictionary of lists of strings,
       whose keys correspond to the object classes, and where values are the lists of feature names for each class ;
-    - :py:attribute:`ml4ps.backend.interface.valid_addresses`, a dictionary of lists of strings,
+    - :attribute:`ml4ps.backend.interface.valid_addresses`, a dictionary of lists of strings,
       whose keys correspond to the object classes, and where values are the lists of address names for each class ;
 
 It is also required to override the following methods :
 
-    - :py:method:`ml4ps.backend.interface.load_network`, which loads a single instance of power grid ;
-    - :py:method:`ml4ps.backend.interface.set_feature_network`, which sets values of a single network according
+    - :method:`ml4ps.backend.interface.load_network`, which loads a single instance of power grid ;
+    - :method:`ml4ps.backend.interface.set_feature_network`, which sets values of a single network according
       to values provided in a dictiona. This is useful when one wants to apply the output of a neural network
       to actual power instances ;
-    - :py:method:`ml4ps.backend.interface.run_network`, which runs a power flow simulation using the solver
+    - :method:`ml4ps.backend.interface.run_network`, which runs a power flow simulation using the solver
       implemented in the backend ;
-    - :py:method:`ml4ps.backend.interface.get_feature_network`, which extracts features from a single power grid ;
-    - :py:method:`ml4ps.backend.interface.get_address_network`, which extracts addresses from a single power grid.
+    - :method:`ml4ps.backend.interface.get_feature_network`, which extracts features from a single power grid ;
+    - :method:`ml4ps.backend.interface.get_address_network`, which extracts addresses from a single power grid.
 
 Interacting with power grids
 ----------------------------
@@ -80,13 +80,13 @@ Interacting with power grids
 The elementary operations that are required by the interface should only operate on single instances of power
 grids. Then, those methods are converted into batch operations as follows :
 
-    - :py:method:`ml4ps.backend.interface.set_feature_batch`, which sets values of a batch of power grids.
+    - :method:`ml4ps.backend.interface.set_feature_batch`, which sets values of a batch of power grids.
       network according
       to values provided in a dictiona. This is useful when one wants to apply the output of a neural network
       to actual power instances ;
-    - :py:method:`ml4ps.backend.interface.run_batch`, which runs a power flow simulation using the solver
+    - :method:`ml4ps.backend.interface.run_batch`, which runs a power flow simulation using the solver
       implemented in the backend ;
-    - :py:method:`ml4ps.backend.interface.get_feature_batch`, which extracts features from a single power grid ;
+    - :method:`ml4ps.backend.interface.get_feature_batch`, which extracts features from a single power grid ;
 
 Those three basic methods will serve to interact with batches of power grids, allowing to replace values by
 the batch output of a neural network (for instance), then performing power flow simulations over the batch of

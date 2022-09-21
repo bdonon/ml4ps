@@ -51,4 +51,4 @@ Contents
     neural_networks/index
     postprocessing
     interaction
-    usecase/index
+    usecase

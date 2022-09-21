@@ -1,3 +1,5 @@
+.. _backend:
+
 Power Systems Backend
 =====================
 

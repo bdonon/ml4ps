@@ -1,8 +1,9 @@
 from ml4ps.backend.interface import AbstractBackend
+from ml4ps.utils import clean_dict, build_unique_id_dict
 import pandapower as pp
 import numpy as np
 
-VALID_FEATURES = {
+VALID_FEATURE_NAMES = {
     'bus': ['in_service', 'max_vm_pu', 'min_vm_pu', 'vn_kv', 'res_vm_pu', 'res_va_degree', 'res_p_mw', 'res_q_mvar'],
     'load': ['const_i_percent', 'const_z_percent', 'controllable', 'in_service', 'p_mw', 'q_mvar', 'scaling',
              'sn_mva', 'res_p_mw', 'res_q_mvar'],
@@ -25,7 +26,7 @@ VALID_FEATURES = {
               'res_loading_percent'],
     'poly_cost': ['cp0_eur', 'cp1_eur_per_mw', 'cp2_eur_per_mw2', 'cq0_eur', 'cq1_eur_per_mvar', 'cq2_eur_per_mvar2'],
 }
-VALID_ADDRESSES = {
+VALID_ADDRESS_NAMES = {
     'bus': ['id'],
     'load': ['bus', 'name'],
     'sgen': ['bus', 'name'],
@@ -42,8 +43,8 @@ class PandaPowerBackend(AbstractBackend):
     """Backend implementation that uses `PandaPower <http://www.pandapower.org>`_."""
 
     valid_extensions = (".json", ".pkl")
-    valid_feature_names = VALID_FEATURES
-    valid_address_names = VALID_ADDRESSES
+    valid_feature_names = VALID_FEATURE_NAMES
+    valid_address_names = VALID_ADDRESS_NAMES
 
     def __init__(self):
         """Initializes a PandaPowerBackend."""
@@ -75,23 +76,23 @@ class PandaPowerBackend(AbstractBackend):
         except pp.powerflow.LoadflowNotConverged:
             pass
 
-    def get_feature_network(self, network, features):
+    def get_feature_network(self, network, feature_names):
         """Returns features from a single power grid instance."""
-        table_dict = self.get_table_dict(network, features)
+        table_dict = self.get_table_dict(network, feature_names)
         x = {k: {f: np.array(xkf, dtype=np.float32) for f, xkf in xk.items()} for k, xk in table_dict.items()}
         return clean_dict(x)
 
-    def get_address_network(self, network, addresses):
+    def get_address_network(self, network, address_names):
         """Extracts a nested dict of address ids from a power grid instance."""
-        table_dict = self.get_table_dict(network, addresses)
-        id_dict = build_unique_id_dict(table_dict, addresses)
+        table_dict = self.get_table_dict(network, address_names)
+        id_dict = build_unique_id_dict(table_dict, address_names)
         a = {k: {f: np.array(xkf.astype(str).map(id_dict), dtype=np.int32) for f, xkf in xk.items()}
              for k, xk in table_dict.items()}
         return clean_dict(a)
 
-    def get_table_dict(self, network, features):
-        """Gets a dict of pandas tables for all the objects in features, from the input network."""
-        return {k: self.get_table(network, k, f) for k, f in features.items()}
+    def get_table_dict(self, network, feature_names):
+        """Gets a dict of pandas tables for all the objects in feature_names, from the input network."""
+        return {k: self.get_table(network, k, f) for k, f in feature_names.items()}
 
     def get_table(self, net, key, feature_list):
         """Gets a pandas dataframe describing the features of a specific object in a power grid instance.
@@ -145,27 +146,3 @@ class PandaPowerBackend(AbstractBackend):
         table = table.fillna(0.)
         features_to_keep = list(set(list(table)) & set(feature_list))
         return table[features_to_keep]
-
-
-def clean_dict(v):
-    """Cleans a dictionary of tensors by deleting keys whose values are empty."""
-    keys_to_erase = []
-    for k, v_k in v.items():
-        keys_to_erase_k = []
-        for f, v_k_f in v_k.items():
-            if np.shape(v_k_f)[0] == 0:
-                keys_to_erase_k.append(f)
-        for f in keys_to_erase_k:
-            del v_k[f]
-        if not v_k:
-            keys_to_erase.append(k)
-    for k in keys_to_erase:
-        del v[k]
-    return v
-
-
-def build_unique_id_dict(table_dict, addresses):
-    """Builds a dictionary to convert `str` indices into unique `int`."""
-    all_addresses = [list(table_dict[k][f].values.astype(str)) for k, v in addresses.items() for f in v]
-    unique_addresses = list(np.unique(np.concatenate(all_addresses)))
-    return {address: i for i, address in enumerate(unique_addresses)}

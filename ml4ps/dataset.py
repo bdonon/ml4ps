@@ -39,17 +39,17 @@ class PowerGridDataset(Dataset):
         self.backend = backend
         self.files = self.backend.get_valid_files(data_dir)
         self.normalizer = kwargs.get('normalizer', None)
-        self.addresses = kwargs.get('addresses', self.backend.valid_address_names)
-        self.backend.check_addresses(self.addresses)
-        self.features = kwargs.get('features', self.backend.valid_feature_names)
-        self.backend.check_features(self.features)
+        self.address_names = kwargs.get('address_names', self.backend.valid_address_names)
+        self.backend.check_address_names(self.address_names)
+        self.feature_names = kwargs.get('feature_names', self.backend.valid_feature_names)
+        self.backend.check_feature_names(self.feature_names)
 
     def __getitem__(self, index):
         """Returns a tuple `(a, x, net)`."""
         filename = self.files[index]
         net = self.backend.load_network(filename)
-        a = self.backend.get_address_network(net, self.addresses)
-        x = self.backend.get_feature_network(net, self.features)
+        a = self.backend.get_address_network(net, self.address_names)
+        x = self.backend.get_feature_network(net, self.feature_names)
         if self.normalizer is not None:
             x = self.normalizer(x)
         return a, x, net

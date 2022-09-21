@@ -1,26 +1,7 @@
+from ml4ps.utils import collate_dict, separate_dict
 from abc import ABC, abstractmethod
 import numpy as np
 import os
-
-
-def collate_dict(data):
-    """Transforms a list of dictionaries into a dictionary whose values are tensors with an additional dimension."""
-    return {k: {f: np.array([d[k][f] for d in data]) for f in data[0][k].keys()} for k in data[0].keys()}
-
-
-def collate_power_grid(data):
-    """Collates tuples `(a, x, nets)`, by only collating `a` and `x` and leaving `nets` untouched."""
-    a, x, network = zip(*data)
-    return collate_dict(a), collate_dict(x), network
-
-
-def separate_dict(data):
-    """Transforms a dict of batched tensors into a list of dicts that have single tensors as values."""
-    elem = list(list(data.values())[0].values())[0]
-    batch_size = np.shape(elem)[0]
-    return [{k: {f: data[k][f][i] for f in v} for k, v in data.items()} for i in range(batch_size)]
-
-
 
 
 class AbstractBackend(ABC):
@@ -93,15 +74,16 @@ class AbstractBackend(ABC):
 
     def get_feature_batch(self, network_batch, feature_names):
         """Returns features from a batch of power grids.
-
-        Should be overridden in a proper backend implementation.
-        Should be consistent with `valid_feature_names`.
         """
         return collate_dict([self.get_feature_network(network, feature_names) for network in network_batch])
 
     @abstractmethod
     def get_feature_network(self, network, feature_names):
-        """Returns feature values from a single power grid instance."""
+        """Returns feature values from a single power grid instance.
+
+        Should be overridden in a proper backend implementation.
+        Should be consistent with `valid_feature_names`.
+        """
         pass
 
     @abstractmethod
@@ -127,7 +109,7 @@ class AbstractBackend(ABC):
             else:
                 raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_feature_names))
 
-    def check_addresses(self, address_names):
+    def check_address_names(self, address_names):
         """Checks that addresses are valid w.r.t. the current backend."""
         for k in address_names.keys():
             if k in self.valid_address_names.keys():

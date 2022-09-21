@@ -21,8 +21,8 @@ class Normalizer:
         """Initializes a Normalizer.
 
         Args:
-            filename (:obj:`str`, optional): Path to a normalizer that should be loaded. If not specified, a new normalizer is
-                created based on the other arguments.
+            filename (:obj:`str`, optional): Path to a normalizer that should be loaded. If not specified,
+                a new normalizer is created based on the other arguments.
             backend (:obj:`ml4ps.backend.interface.Backend`): Backend to use to extract features.
                 Changing the backend will affect the objects and features names.
             data_dir (:obj:`str`): Path to the dataset that will serve to fit the normalizing functions.
@@ -49,7 +49,7 @@ class Normalizer:
             self.shuffle = kwargs.get("shuffle", False)
             self.n_breakpoints = kwargs.get('n_breakpoints', 200)
             self.features = kwargs.get("features", self.backend.valid_feature_names)
-            self.backend.check_features(self.features)
+            self.backend.check_feature_names(self.features)
             self.tqdm = kwargs.get('tqdm', tqdm.tqdm)
 
             self.build_functions()

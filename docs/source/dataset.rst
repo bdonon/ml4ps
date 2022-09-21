@@ -35,6 +35,9 @@ See `this dataset example <https://doi.org/10.5281/zenodo.7077699>`_ for instanc
 Usage
 -----
 
+Backend definition
+__________________
+
 In order to create a power grid dataset from which we will iteratively draw samples, you first need to
 define a backend. As explained in :ref:`Backend <backend>`, it is in charge of reading power grid files,
 extracting features, modifying them and running power flow simulations.
@@ -43,6 +46,9 @@ extracting features, modifying them and running power flow simulations.
 
     import ml4ps as mp
     backend = mp.PandaPowerBackend()
+
+Instantiating a dataset
+_______________________
 
 You may now instantiate a power grid dataset (which is a subclass of `torch.utils.data.Dataset`). Note that
 you need to define two distinct datasets for the train and test sets.
@@ -62,6 +68,21 @@ you need to define two distinct datasets for the train and test sets.
 
         normalizer = mp.Normalizer(data_dir=train_dir, backend=backend)
         train_set = mp.PowerGridDataset(data_dir=train_dir, backend=backend, normalizer=normalizer)
+
+Splitting train and validation sets
+___________________________________
+
+It is possible to split a train set into a validation and a training ones, as follows :
+
+.. code-block:: pycon
+
+    train_set, val_set = torch.utils.data.random_split(train_set, [900, 100])
+
+Note that the code above only works if the train_set is initially of size 1000. Lengths should be
+adjusted manually.
+
+Iterating over a dataset
+________________________
 
 Once defined, we can sample from our dataset using a torch DataLoader.
 
@@ -104,18 +125,6 @@ the DataLoader to a non-zero integer.
                         shuffle=True,
                         num_workers=4,
                         collate_fn=mp.power_grid_collate)
-
-Splitting train and validation sets
-___________________________________
-
-It is possible to split a train set into a validation and a training ones, as follows :
-
-.. code-block:: pycon
-
-    train_set, val_set = torch.utils.data.random_split(train_set, [900, 100])
-
-Note that the code above only works if the train_set is initially of size 1000. Lengths should be
-adjusted manually.
 
 Contents
 --------

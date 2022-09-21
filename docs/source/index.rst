@@ -46,7 +46,6 @@ Contents
     :maxdepth: 1
 
     data_formalism
-    backend
     dataset
     normalization
     neural_networks/index

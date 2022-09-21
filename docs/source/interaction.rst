@@ -31,7 +31,7 @@ Current implementations
 -----------------------
 
 For now, only `pandapower <http://www.pandapower.org>`_ and `pypowsybl <https://www.powsybl.org>`_ have compatible
-backends in the implementation of **ml4ps**. They can be accessed as follows :
+backend implementations in **ml4ps**. They can be accessed as follows :
 
 .. code-block:: pycon
 

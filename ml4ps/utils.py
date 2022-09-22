@@ -41,3 +41,8 @@ def build_unique_id_dict(table_dict, addresses):
     all_addresses = [list(table_dict[k][f].values.astype(str)) for k, v in addresses.items() for f in v]
     unique_addresses = list(np.unique(np.concatenate(all_addresses)))
     return {address: i for i, address in enumerate(unique_addresses)}
+
+
+def get_n_obj(x):
+    """Returns a dictionary that counts the amount of objects of each class."""
+    return {k: np.max([np.shape(x_k_f)[1] for f, x_k_f in x_k.items()]) for k, x_k in x.items()}

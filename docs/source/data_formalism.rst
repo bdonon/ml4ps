@@ -137,13 +137,8 @@ is the input and :math:`y` the output.
     Standard graphs require to aggregate together vertex-like objects on the one hand
     and edge-like objects on the other hand.
     Meanwhile, H2MG allow to seamlessly represent power grids, without any information loss.
-    In this example :math:`\mathcal{C} = \{\text{generator}, \text{load}, \text{line}, \text{transformer}\}`.
-    Input features are in the following dimensions:
-    :math:`d^{\text{gen},x} = 1`, :math:`d^{\text{load},x} = 2`,
-    :math:`d^{\text{line},x} = 2`, :math:`d^{\text{transfo},x} = 3`.
-    Lines and transformers are of order 2, while generators and loads are of order 1.
-    For the sake of readability, only input features are considered.
-
+    In this example, there are five classes of objects : generators, loads, buses, lines and
+    transformers. The first three are of order 1, and the last two are of order 2.
 
 Compatible neural network architecture
 ______________________________________

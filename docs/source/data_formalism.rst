@@ -130,7 +130,7 @@ is the input and :math:`y` the output.
     x = (x_{e,m}^c)_{(c,e,m) \in \mathcal{G}_x} \\
     y = (y_{e,m}^c)_{(c,e,m) \in \mathcal{G}_x}
 
-.. image:: figures/h2mg.png
+.. figure:: figures/h2mg.png
     :width: 800
 
     Power grid instance and its conversions into a standard graph, and into a H2MG.
@@ -153,7 +153,7 @@ Now that the mathematical definition of H2MGs has been introduced, we may now pr
 they are implemented in our library.
 Let us consider the power grid shown in the figure below.
 
-.. image:: figures/simple_power_grid.png
+.. figure:: figures/simple_power_grid.png
     :width: 800
 
 It is composed of multiple classes of hyper-edges : `bus`, `gen`, `load`, `line`

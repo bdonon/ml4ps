@@ -24,11 +24,6 @@ We provide a series of tools that were built with this concern in mind :
     - an **interface** that allows to plug various power grid packages to our library, which are used
       to read power grid data, modify them and perform simulations.
 
-These tools were built with several key applications in mind, among which are :
-
-    - the imitation of an AC power flow simulator using neural networks ;
-    - the unsupervised training of a neural network to control a power grid.
-
 Contacts
 --------
 

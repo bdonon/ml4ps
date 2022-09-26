@@ -151,7 +151,7 @@ It can then be loaded from the said `.pkl` file.
 
 Contents
 --------
-.. module:: ML4PS.normalization
+.. module:: ml4ps.normalization
 .. autoclass:: Normalizer
     :members: load, save
     :special-members: __init__, __call__

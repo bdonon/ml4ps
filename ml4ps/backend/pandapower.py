@@ -1,15 +1,16 @@
 from ml4ps.backend.interface import AbstractBackend
+from ml4ps.utils import clean_dict, build_unique_id_dict
 import pandapower as pp
 import numpy as np
 
-VALID_FEATURES = {
+VALID_FEATURE_NAMES = {
     'bus': ['in_service', 'max_vm_pu', 'min_vm_pu', 'vn_kv', 'res_vm_pu', 'res_va_degree', 'res_p_mw', 'res_q_mvar'],
     'load': ['const_i_percent', 'const_z_percent', 'controllable', 'in_service', 'p_mw', 'q_mvar', 'scaling',
              'sn_mva', 'res_p_mw', 'res_q_mvar'],
     'sgen': ['controllable', 'in_service', 'p_mw', 'q_mvar', 'scaling', 'sn_mva', 'current_source', 'res_p_mw',
              'res_q_mvar'],
     'gen': ['controllable', 'in_service', 'p_mw', 'scaling', 'sn_mva', 'vm_pu', 'slack', 'max_p_mw', 'min_p_mw',
-            'max_q_mvar', 'min_q_mvar', 'slack_weight', 'res_p_mw', 'res_q_mvar','res_va_degree', 'res_vm_pu'],
+            'max_q_mvar', 'min_q_mvar', 'slack_weight', 'res_p_mw', 'res_q_mvar', 'res_va_degree', 'res_vm_pu'],
     'shunt': ['q_mvar', 'p_mw', 'vn_kv', 'step', 'max_step', 'in_service', 'res_p_mw', 'res_q_mvar', 'res_vm_pu'],
     'ext_grid': ['in_service', 'va_degree', 'vm_pu', 'max_p_mw', 'min_p_mw', 'max_q_mvar', 'min_q_mvar',
                  'slack_weight', 'res_p_mw', 'res_q_mvar'],
@@ -25,7 +26,7 @@ VALID_FEATURES = {
               'res_loading_percent'],
     'poly_cost': ['cp0_eur', 'cp1_eur_per_mw', 'cp2_eur_per_mw2', 'cq0_eur', 'cq1_eur_per_mvar', 'cq2_eur_per_mvar2'],
 }
-VALID_ADDRESSES = {
+VALID_ADDRESS_NAMES = {
     'bus': ['id'],
     'load': ['bus', 'name'],
     'sgen': ['bus', 'name'],
@@ -37,19 +38,70 @@ VALID_ADDRESSES = {
     'poly_cost': ['element'],
 }
 
+
 class PandaPowerBackend(AbstractBackend):
-    """Backend implementation that uses :ref:`PandaPower <http://www.pandapower.org>`_."""
+    """Backend implementation that uses `PandaPower <http://www.pandapower.org>`_."""
 
     valid_extensions = (".json", ".pkl")
-    valid_features = VALID_FEATURES
-    valid_addresses = VALID_ADDRESSES
+    valid_feature_names = VALID_FEATURE_NAMES
+    valid_address_names = VALID_ADDRESS_NAMES
 
     def __init__(self):
         """Initializes a PandaPowerBackend."""
         super().__init__()
 
+    def load_network(self, file_path):
+        """Loads a power grid instance, either from a `.pkl` or from a `.json` file."""
+        if file_path.endswith('.json'):
+            net = pp.from_json(file_path)
+        elif file_path.endswith('.pkl'):
+            net = pp.from_pickle(file_path)
+        else:
+            raise NotImplementedError('No support for file {}'.format(file_path))
+        return net
+
+    def set_feature_network(self, net, y):
+        """Updates a power grid by setting features according to `y`."""
+        for k in y.keys():
+            for f in y[k].keys():
+                try:
+                    net[k][f] = y[k][f]
+                except ValueError:
+                    print('Object {} and key {} are not available with PandaPower'.format(k, f))
+
+    def run_network(self, net, **kwargs):
+        """Runs a power flow simulation."""
+        try:
+            pp.runpp(net, **kwargs)
+        except pp.powerflow.LoadflowNotConverged:
+            pass
+
+    def get_feature_network(self, network, feature_names):
+        """Returns features from a single power grid instance."""
+        table_dict = self.get_table_dict(network, feature_names)
+        x = {k: {f: np.array(xkf, dtype=np.float32) for f, xkf in xk.items()} for k, xk in table_dict.items()}
+        return clean_dict(x)
+
+    def get_address_network(self, network, address_names):
+        """Extracts a nested dict of address ids from a power grid instance."""
+        table_dict = self.get_table_dict(network, address_names)
+        id_dict = build_unique_id_dict(table_dict, address_names)
+        a = {k: {f: np.array(xkf.astype(str).map(id_dict), dtype=np.int32) for f, xkf in xk.items()}
+             for k, xk in table_dict.items()}
+        return clean_dict(a)
+
+    def get_table_dict(self, network, feature_names):
+        """Gets a dict of pandas tables for all the objects in feature_names, from the input network."""
+        return {k: self.get_table(network, k, f) for k, f in feature_names.items()}
+
     def get_table(self, net, key, feature_list):
-        """Gets a pandas dataframe describing the features of a specific object in a power grid instance."""
+        """Gets a pandas dataframe describing the features of a specific object in a power grid instance.
+
+        Pandapower puts the results of power flow simulations into a separate table. For instance,
+        results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res
+        for the considered features.
+
+        """
         if key == 'bus':
             table = net.bus.copy(deep=True)
             table = table.join(net.res_bus.add_prefix('res_'))
@@ -87,34 +139,10 @@ class PandaPowerBackend(AbstractBackend):
             table['element'] = table.et.astype(str) + '_' + table.element.astype(str)
         else:
             raise ValueError('Object {} is not a valid object name. ' +
-                             'Please pick from this list : {}'.format(key, VALID_FEATURES))
+                             'Please pick from : {}'.format(key, self.valid_feature_names))
         table['id'] = table.index
         table.replace([np.inf], 99999, inplace=True)
         table.replace([-np.inf], -99999, inplace=True)
         table = table.fillna(0.)
         features_to_keep = list(set(list(table)) & set(feature_list))
         return table[features_to_keep]
-
-    def load_network(self, file_path):
-        """Loads a power grid instance, either from a `.pkl` or from a `.json` file."""
-        if file_path.endswith('.json'):
-            net = pp.from_json(file_path)
-        elif file_path.endswith('.pkl'):
-            net = pp.from_pickle(file_path)
-        else:
-            raise NotImplementedError('No support for file {}'.format(file_path))
-        return net
-
-    def update_network(self, net, y):
-        """Updates a power grid by setting features according to `y`."""
-        for k in y.keys():
-            for f in y[k].keys():
-                try:
-                    net[k][f] = y[k][f]
-                except ValueError:
-                    print('Object {} and key {} are not available with PandaPower'.format(k, f))
-
-    def run_load_flow(self, net, **kwargs):
-        """Runs a power flow simulation."""
-        # TODO : what if power flow diverges
-        pp.runpp(net, **kwargs)

@@ -36,3 +36,15 @@ html_theme = 'sphinx_rtd_theme'
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
+
+# Exclude certain files from the compilation
+exclude_patterns = [
+    'usecase/0\ Loading\ and\ preprocessing\ data',
+    'usecase/1\ Training\ a\ dense\ neural\ network',
+    'usecase/2\ Training\ a\ graphical\ neural\ network',
+    'usecase/2\ Training\ a\ graphical\ neural\ network-Copy1',
+    'usecase/3\ Loading\ a\ trained\ method'
+]
+
+# Display to do items
+todo_include_todos = True

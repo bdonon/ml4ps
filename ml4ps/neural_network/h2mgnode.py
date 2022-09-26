@@ -50,14 +50,13 @@ class H2MGNODE:
             self.load(file)
         else:
             try:
-                self.addresses = kwargs['addresses']
-                self.input_features = kwargs['input_features']
-                self.output_features = kwargs['output_features']
+                self.address_names = kwargs['address_names']
+                self.input_feature_names = kwargs['input_feature_names']
+                self.output_feature_names = kwargs['output_feature_names']
             except:
                 raise AttributeError("One should provide 'addresses', 'input_features' and 'output_features'.")
 
             self.random_key = kwargs.get('random_key', random.PRNGKey(1))
-            self.time_window = kwargs.get('time_window', 1)
             self.hidden_dimensions = kwargs.get('hidden_dimensions', [8])
             self.latent_dimension = kwargs.get('latent_dimension', 4)
 
@@ -71,10 +70,9 @@ class H2MGNODE:
     def save(self, filename):
         """Saves a H2MGNODE instance."""
         file = open(filename, 'wb')
-        pickle.dump(self.addresses, file)
-        pickle.dump(self.input_features, file)
-        pickle.dump(self.output_features, file)
-        pickle.dump(self.time_window, file)
+        pickle.dump(self.address_names, file)
+        pickle.dump(self.input_feature_names, file)
+        pickle.dump(self.output_feature_names, file)
         pickle.dump(self.hidden_dimensions, file)
         pickle.dump(self.latent_dimension, file)
         pickle.dump(self.weights, file)
@@ -83,10 +81,9 @@ class H2MGNODE:
     def load(self, filename):
         """Reloads a H2MGNODE instance."""
         file = open(filename, 'rb')
-        self.addresses = pickle.load(file)
-        self.input_features = pickle.load(file)
-        self.output_features = pickle.load(file)
-        self.time_window = pickle.load(file)
+        self.address_names = pickle.load(file)
+        self.input_feature_names = pickle.load(file)
+        self.output_feature_names = pickle.load(file)
         self.hidden_dimensions = pickle.load(file)
         self.latent_dimension = pickle.load(file)
         self.weights = pickle.load(file)
@@ -103,15 +100,14 @@ class H2MGNODE:
     def initialize_phi_c_o_weights(self, rk_o):
         """Initializes weights of neural network that update latent variables of addresses."""
         self.weights['phi_c_o'] = {}
-        rk_o = random.split(rk_o, len(self.addresses.keys()))
-        for rk_o_k, k in zip(rk_o, self.addresses.keys()):
+        rk_o = random.split(rk_o, len(self.address_names.keys()))
+        for rk_o_k, k in zip(rk_o, self.address_names.keys()):
             self.weights['phi_c_o'][k] = {}
             rk_o_k = random.split(rk_o_k, len(k))
-            for rk_o_k_f, f in zip(rk_o_k, self.addresses[k]):
-                order = len(self.addresses[k])
-                in_dim = len(self.input_features[k]) if k in self.input_features.keys() else 0
-                #nn_input_dim = (order + 1) * self.latent_dimension + in_dim * self.time_window + 1
-                nn_input_dim = (order + 2) * self.latent_dimension + in_dim +1 #* self.time_window + 1
+            for rk_o_k_f, f in zip(rk_o_k, self.address_names[k]):
+                order = len(self.address_names[k])
+                in_dim = len(self.input_feature_names[k]) if k in self.input_feature_names.keys() else 0
+                nn_input_dim = (order + 2) * self.latent_dimension + in_dim + 1
                 nn_output_dim = self.latent_dimension
                 wd = [nn_input_dim, *self.hidden_dimensions, nn_output_dim]
                 self.weights['phi_c_o'][k][f] = initialize_nn_weights(wd, rk_o_k_f)
@@ -120,12 +116,11 @@ class H2MGNODE:
     def initialize_phi_c_h_weights(self, rk_h):
         """Initializes weights of neural network that update latent variables of hyper-edges."""
         self.weights['phi_c_h'] = {}
-        rk_h = random.split(rk_h, len(self.addresses.keys()))
-        for rk_h_k, k in zip(rk_h, self.addresses.keys()):
-            order = len(self.addresses[k])
-            in_dim = len(self.input_features[k]) if k in self.input_features.keys() else 0
-            #nn_input_dim = (order + 1) * self.latent_dimension + in_dim * self.time_window + 1
-            nn_input_dim = (order + 2) * self.latent_dimension + in_dim +1 #* self.time_window + 1
+        rk_h = random.split(rk_h, len(self.address_names.keys()))
+        for rk_h_k, k in zip(rk_h, self.address_names.keys()):
+            order = len(self.address_names[k])
+            in_dim = len(self.input_feature_names[k]) if k in self.input_feature_names.keys() else 0
+            nn_input_dim = (order + 2) * self.latent_dimension + in_dim + 1
             nn_output_dim = self.latent_dimension
             wd = [nn_input_dim, *self.hidden_dimensions, nn_output_dim]
             self.weights['phi_c_h'][k] = initialize_nn_weights(wd, rk_h_k)
@@ -133,12 +128,11 @@ class H2MGNODE:
     def initialize_phi_c_g_weights(self, rk_g):
         """Initializes weights of neural network that updates global latent variables."""
         self.weights['phi_c_g'] = {}
-        rk_g = random.split(rk_g, len(self.addresses.keys()))
-        for rk_g_k, k in zip(rk_g, self.addresses.keys()):
-            order = len(self.addresses[k])
-            in_dim = len(self.input_features[k]) if k in self.input_features.keys() else 0
-            #nn_input_dim = (order + 1) * self.latent_dimension + in_dim * self.time_window + 1
-            nn_input_dim = (order + 2) * self.latent_dimension + in_dim +1 #* self.time_window + 1
+        rk_g = random.split(rk_g, len(self.address_names.keys()))
+        for rk_g_k, k in zip(rk_g, self.address_names.keys()):
+            order = len(self.address_names[k])
+            in_dim = len(self.input_feature_names[k]) if k in self.input_feature_names.keys() else 0
+            nn_input_dim = (order + 2) * self.latent_dimension + in_dim + 1
             nn_output_dim = self.latent_dimension
             wd = [nn_input_dim, *self.hidden_dimensions, nn_output_dim]
             self.weights['phi_c_g'][k] = initialize_nn_weights(wd, rk_g_k)
@@ -146,22 +140,21 @@ class H2MGNODE:
     def initialize_phi_c_y_weights(self, rk_y):
         """Initializes weights of neural network that decode the output into a meaningful prediction."""
         self.weights['phi_c_y'] = {}
-        rk_y = random.split(rk_y, len(self.output_features.keys()))
-        for rk_y_k, k in zip(rk_y, self.output_features.keys()):
+        rk_y = random.split(rk_y, len(self.output_feature_names.keys()))
+        for rk_y_k, k in zip(rk_y, self.output_feature_names.keys()):
             self.weights['phi_c_y'][k] = {}
             rk_y_k = random.split(rk_y_k, len(k))
-            for rk_y_k_f, f in zip(rk_y_k, self.output_features[k]):
-                order = len(self.addresses[k])
-                in_dim = len(self.input_features[k]) if k in self.input_features.keys() else 0
-                #nn_input_dim = (order + 1) * self.latent_dimension + in_dim * self.time_window
-                nn_input_dim = (order + 2) * self.latent_dimension + in_dim #* self.time_window
-                nn_output_dim = 1#self.time_window
+            for rk_y_k_f, f in zip(rk_y_k, self.output_feature_names[k]):
+                order = len(self.address_names[k])
+                in_dim = len(self.input_feature_names[k]) if k in self.input_feature_names.keys() else 0
+                nn_input_dim = (order + 2) * self.latent_dimension + in_dim
+                nn_output_dim = 1
                 wd = [nn_input_dim, *self.hidden_dimensions, nn_output_dim]
                 self.weights['phi_c_y'][k][f] = initialize_nn_weights(wd, rk_y_k_f)
 
     def forward(self, weights, a, x):
         """Performs a forward pass for a single sample."""
-        self.check_keys(a, self.addresses), self.check_keys(x, self.input_features)
+        #self.check_keys(a, self.addresses), self.check_keys(x, self.input_features)
         init_state = self.init_state(a, x)
         return self.solve_and_decode(weights, init_state)
 
@@ -192,9 +185,9 @@ class H2MGNODE:
     def decode_final_state(self, start_and_final_state, weights):
         """Extracts the final state, and decodes it into a meaningful output."""
         fs = self.get_final_state(start_and_final_state)
-        used_output = set(list(self.addresses.keys())) & set(list(fs['a'].keys())) & set(list(self.output_features.keys()))
+        used_output = set(list(self.address_names.keys())) & set(list(fs['a'].keys())) & set(list(self.output_feature_names.keys()))
         nn_input = self.get_nn_input(fs['a'], fs['x'], fs['h_v'], fs['h_e'], fs['h_g'])
-        r = {k: {f: self.output_nn_batch(weights['phi_c_y'][k][f], nn_input[k])[0] for f in self.output_features[k]}
+        r = {k: {f: self.output_nn_batch(weights['phi_c_y'][k][f], nn_input[k])[:, 0] for f in self.output_feature_names[k]}
                 for k in used_output}
         return r
 
@@ -236,23 +229,23 @@ class H2MGNODE:
 
     def get_n_obj_tot(self, a):
         """Returns the maximal address in the sample or batch."""
-        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
+        used_addresses = set(list(self.address_names.keys())) & set(list(a.keys()))
         n_obj_tot = 0
         for k in used_addresses:
-            assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
-            for f in self.addresses[k]:
+            assert set(list(self.address_names[k])).issubset(set(list(a[k].keys())))
+            for f in self.address_names[k]:
                 n_obj_tot = np.maximum(n_obj_tot, np.max(a[k][f]))
         return n_obj_tot + 1
         #return np.max([np.max([a_k_f for f, a_k_f in a_k.items()]) for k, a_k in a.items()]) + 1
 
     def get_n_obj(self, a):
         """Returns a dict of the amount of objects per class, in the sample or batch."""
-        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
+        used_addresses = set(list(self.address_names.keys())) & set(list(a.keys()))
         n_obj = {}
         for k in used_addresses:
             n_obj[k] = 0
-            assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
-            for f in self.addresses[k]:
+            assert set(list(self.address_names[k])).issubset(set(list(a[k].keys())))
+            for f in self.address_names[k]:
                 n_obj[k] = np.maximum(n_obj[k], np.shape(a[k][f])[1])
         return n_obj
         #return {k: np.max([np.shape(a_k_f)[1] for f, a_k_f in a_k.items()]) for k, a_k in a.items()}
@@ -277,11 +270,11 @@ class H2MGNODE:
     def h_v_dynamics(self, a, x, h_v, h_e, h_g, t, weights):
         """Dynamics of the address latent variables."""
         dh_v, n = 0.*h_v, 0.*h_v + EPS
-        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
+        used_addresses = set(list(self.address_names.keys())) & set(list(a.keys()))
         nn_input = self.get_nn_input(a, x, h_v, h_e, h_g, t)
         for k in used_addresses:
-            assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
-            for f in self.addresses[k]:
+            assert set(list(self.address_names[k])).issubset(set(list(a[k].keys())))
+            for f in self.address_names[k]:
                 update = self.latent_nn_batch(weights['phi_c_o'][k][f], nn_input[k])
                 adr = a[k][f]
                 dh_v, n = dh_v.at[adr].add(update), n.at[adr].add(1+0.*update)
@@ -290,24 +283,26 @@ class H2MGNODE:
     def h_e_dynamics(self, a, x, h_v, h_e, h_g, t, weights):
         """Dynamics of the hyper-edge latent variables."""
         nn_input = self.get_nn_input(a, x, h_v, h_e, h_g, t)
-        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
-        return {k: self.latent_nn_batch(weights['phi_c_h'][k], nn_input[k]) for k in used_addresses}
+        object_keys = set(list(self.address_names.keys())) & set(list(a.keys()))
+        return {k: self.latent_nn_batch(weights['phi_c_h'][k], nn_input[k]) for k in object_keys}
 
     def h_g_dynamics(self, a, x, h_v, h_e, h_g, t, weights):
         """Dynamics of the global latent variable."""
         dh_g, n = 0.*h_g, 0.*h_g + EPS
-        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
+        object_keys = set(list(self.address_names.keys())) & set(list(a.keys()))
         nn_input = self.get_nn_input(a, x, h_v, h_e, h_g, t)
-        for k in used_addresses:
+        for k in object_keys:
             update = self.latent_nn_batch(weights['phi_c_g'][k], nn_input[k])
-            dh_v, n = jnp.sum(update, axis=0, keepdims=True), jnp.sum(1+0.*update, axis=0, keepdims=True)
-        return dh_v / n
+            dh_g = dh_g + jnp.sum(update, axis=0, keepdims=True)
+            n = n + jnp.sum(1+0.*update, axis=0, keepdims=True)
+            #dh_g, n = jnp.sum(update, axis=0, keepdims=True), jnp.sum(1+0.*update, axis=0, keepdims=True)
+        return dh_g / n
 
     def get_nn_input(self, a, x, h_v, h_e, h_g, t=None):
         """Returns a dict of neural network inputs."""
         # TODO ici on ne veut garder que l'intersection de self.addresses.keys() et a.keys()
-        used_addresses = set(list(self.addresses.keys())) & set(list(a.keys()))
-        used_input_features = set(list(self.input_features.keys())) & set(list(x.keys()))
+        used_addresses = set(list(self.address_names.keys())) & set(list(a.keys()))
+        used_input_features = set(list(self.input_feature_names.keys())) & set(list(x.keys()))
         nn_input = {k: [] for k in used_addresses}
         for k in used_addresses:
 
@@ -315,8 +310,8 @@ class H2MGNODE:
             # inputs, or even none.
 
             if k in used_input_features:
-                assert set(list(self.input_features[k])).issubset(set(list(x[k].keys())))
-                for f_ in self.input_features[k]:
+                assert set(list(self.input_feature_names[k])).issubset(set(list(x[k].keys())))
+                for f_ in self.input_feature_names[k]:
                     nn_input[k].append(jnp.reshape(x[k][f_], [-1, 1]))
 
             # Get the hyper-edge latent variables for hyper-edges of class k.
@@ -329,8 +324,8 @@ class H2MGNODE:
             # There are as many variables to retrieve per hyper-edge, as there are addresses
             # to which it is connected.
 
-            assert set(list(self.addresses[k])).issubset(set(list(a[k].keys())))
-            for f_ in self.addresses[k]:
+            assert set(list(self.address_names[k])).issubset(set(list(a[k].keys())))
+            for f_ in self.address_names[k]:
                 nn_input[k].append(h_v[a[k][f_]])
 
             # Get also the time variable if it is given

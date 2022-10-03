@@ -14,6 +14,7 @@ classifiers = []
 dependencies = [
     "jax>=0.3.13",
     "jaxlib>=0.3.13",
+    "julia>=0.5.7",
     "numpy>=1.21.1",
     "scipy>=1.4.1",
     "pandapower>=2.9.0",

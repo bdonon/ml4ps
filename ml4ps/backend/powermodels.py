@@ -1,9 +1,10 @@
 from ml4ps.backend.interface import AbstractBackend
 from ml4ps.utils import clean_dict, build_unique_id_dict
-
 from julia.api import LibJulia
+import os
+
 api = LibJulia.load()
-api.sysimage = "sys.so" # this will need to be changed
+api.sysimage = os.environ['PYJULIA_SYSIMAGE_PATH']
 api.init_julia()
 from julia import Main
 Main.eval('using PowerModels, Ipopt, Gurobi')

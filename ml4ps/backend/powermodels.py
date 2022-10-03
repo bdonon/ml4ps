@@ -1,13 +1,18 @@
 from ml4ps.backend.interface import AbstractBackend
 from ml4ps.utils import clean_dict, build_unique_id_dict
 from julia.api import LibJulia
-import os
+import os, warnings
 
 api = LibJulia.load()
-api.sysimage = os.environ['PYJULIA_SYSIMAGE_PATH']
-api.init_julia()
-from julia import Main
-Main.eval('using PowerModels, Ipopt, Gurobi')
+
+sysimage = os.getenv('PYJULIA_SYSIMAGE_PATH', None)
+if sysimage != None:
+    api.sysimage = os.environ['PYJULIA_SYSIMAGE_PATH']
+    api.init_julia()
+    from julia import Main
+    Main.eval('using PowerModels, Ipopt, Gurobi')
+else:
+	warnings.warn('PowerModels.jl isn''t properly installed.')
 
 VALID_FEATURE_NAMES = {
     'bus': ['zone', 'bus_i', 'bus_type', 'name', 'vmax', 'source_id', 'area', 'vmin', 'index', 'va', 'vm', 'base_kv',

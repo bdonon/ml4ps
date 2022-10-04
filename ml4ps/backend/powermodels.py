@@ -1,3 +1,7 @@
+import julia
+julia.install()
+
+
 from ml4ps.backend.interface import AbstractBackend
 from ml4ps.utils import clean_dict, build_unique_id_dict
 from julia.api import LibJulia

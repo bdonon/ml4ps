@@ -1,5 +1,5 @@
-import julia
-julia.install()
+#import julia
+#julia.install()
 
 
 from ml4ps.backend.interface import AbstractBackend

@@ -35,6 +35,7 @@ myModule = ["*.json"]
 
 [tool.setuptools.packages.find]
 where = [""]
+include = ["ml4ps.backend.pandapower_data_structure.json"]
 exclude = ["venv", "doc"]
 namespaces = false
 

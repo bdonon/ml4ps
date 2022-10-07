@@ -35,6 +35,9 @@ where = [""]
 exclude = ["venv", "doc"]
 namespaces = false
 
+[tool.setuptools.package-data]
+mypkg = ["*.json"]
+
 [project.urls]
 "Homepage" = "https://github.com/bdonon/ml4ps"
 "Bug Tracker" = "https://github.com/bdonon/ml4ps/issues"

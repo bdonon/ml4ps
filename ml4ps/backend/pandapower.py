@@ -11,7 +11,63 @@ class PandaPowerBackend(AbstractBackend):
     """Backend implementation that uses `PandaPower <http://www.pandapower.org>`_."""
 
     valid_extensions = (".json", ".pkl")
-    valid_data_structure = valid_data_structure
+    valid_data_structure = {
+        "global": ["converged", "f_hz", "sn_mva"],
+        "bus": {
+            "address_names": ["id"],
+            "feature_names": ["in_service", "max_vm_pu", "min_vm_pu", "vn_kv", "res_vm_pu",
+                              "res_va_degree", "res_p_mw", "res_q_mvar"]
+        },
+        "load": {
+            "address_names": ["bus", "name"],
+            "feature_names": ["const_i_percent", "const_z_percent", "controllable", "in_service",
+                              "p_mw", "q_mvar", "scaling", "sn_mva", "res_p_mw", "res_q_mvar"]
+        },
+        "sgen": {
+            "address_names": ["bus", "name"],
+            "feature_names": ["controllable", "in_service", "p_mw", "q_mvar", "scaling", "sn_mva",
+                              "current_source", "res_p_mw", "res_q_mvar"]
+        },
+        "gen": {
+            "address_names": ["bus", "name"],
+            "feature_names": ["controllable", "in_service", "p_mw", "scaling", "sn_mva", "vm_pu",
+                              "slack", "max_p_mw", "min_p_mw", "max_q_mvar", "min_q_mvar", "slack_weight",
+                              "res_p_mw", "res_q_mvar", "res_va_degree", "res_vm_pu"]
+        },
+        "shunt": {
+            "address_names": ["bus", "name"],
+            "feature_names": ["q_mvar", "p_mw", "vn_kv", "step", "max_step", "in_service", "res_p_mw",
+                              "res_q_mvar", "res_vm_pu"]
+        },
+        "ext_grid": {
+            "address_names": ["bus", "name"],
+            "feature_names": ["in_service", "va_degree", "vm_pu", "max_p_mw", "min_p_mw", "max_q_mvar",
+                              "min_q_mvar", "slack_weight", "res_p_mw", "res_q_mvar"]
+        },
+        "line": {
+            "address_names": ["from_bus", "to_bus", "name"],
+            "feature_names": ["c_nf_per_km", "df", "g_us_per_km", "in_service", "length_km", "max_i_ka",
+                              "max_loading_percent", "parallel", "r_ohm_per_km", "x_ohm_per_km", "res_p_from_mw",
+                              "res_q_from_mvar", "res_p_to_mw", "res_q_to_mvar", "res_pl_mw", "res_ql_mvar",
+                              "res_i_from_ka", "res_i_to_ka", "res_i_ka", "res_vm_from_pu", "res_va_from_degree",
+                              "res_vm_to_pu", "res_va_to_degree", "res_loading_percent"]
+        },
+        "trafo": {
+            "address_names": ["hv_bus", "lv_bus", "name"],
+            "feature_names": ["df", "i0_percent", "in_service", "max_loading_percent", "parallel",
+                              "pfe_kw", "shift_degree", "sn_mva", "tap_max", "tap_neutral", "tap_min",
+                              "tap_phase_shifter", "tap_pos", "tap_side", "tap_step_degree", "tap_step_percent",
+                              "vn_hv_kv", "vn_lv_kv", "vk_percent", "vkr_percent", "res_p_hv_mw", "res_q_hv_mvar",
+                              "res_p_lv_mw", "res_q_lv_mvar", "res_pl_mw", "res_ql_mvar", "res_i_hv_ka",
+                              "res_i_lv_ka", "res_vm_hv_pu", "res_va_hv_degree", "res_vm_lv_pu", "res_va_lv_degree",
+                              "res_loading_percent"]
+        },
+        "poly_cost": {
+            "address_names": ["element"],
+            "feature_names": ["cp0_eur", "cp1_eur_per_mw", "cp2_eur_per_mw2", "cq0_eur", "cq1_eur_per_mvar",
+                              "cq2_eur_per_mvar2"]
+        }
+    }
 
     def __init__(self):
         """Initializes a PandaPowerBackend."""
@@ -168,60 +224,4 @@ def get_table(net, key):  # , feature_list):
     return table
 
 
-valid_data_structure = {
-    "global": ["converged", "f_hz", "sn_mva"],
-    "bus": {
-        "address_names": ["id"],
-        "feature_names": ["in_service", "max_vm_pu", "min_vm_pu", "vn_kv", "res_vm_pu",
-                          "res_va_degree", "res_p_mw", "res_q_mvar"]
-    },
-    "load": {
-        "address_names": ["bus", "name"],
-        "feature_names": ["const_i_percent", "const_z_percent", "controllable", "in_service",
-                          "p_mw", "q_mvar", "scaling", "sn_mva", "res_p_mw", "res_q_mvar"]
-    },
-    "sgen": {
-        "address_names": ["bus", "name"],
-        "feature_names": ["controllable", "in_service", "p_mw", "q_mvar", "scaling", "sn_mva",
-                          "current_source", "res_p_mw", "res_q_mvar"]
-    },
-    "gen": {
-        "address_names": ["bus", "name"],
-        "feature_names": ["controllable", "in_service", "p_mw", "scaling", "sn_mva", "vm_pu",
-                          "slack", "max_p_mw", "min_p_mw", "max_q_mvar", "min_q_mvar", "slack_weight",
-                          "res_p_mw", "res_q_mvar", "res_va_degree", "res_vm_pu"]
-    },
-    "shunt": {
-        "address_names": ["bus", "name"],
-        "feature_names": ["q_mvar", "p_mw", "vn_kv", "step", "max_step", "in_service", "res_p_mw",
-                          "res_q_mvar", "res_vm_pu"]
-    },
-    "ext_grid": {
-        "address_names": ["bus", "name"],
-        "feature_names": ["in_service", "va_degree", "vm_pu", "max_p_mw", "min_p_mw", "max_q_mvar",
-                          "min_q_mvar", "slack_weight", "res_p_mw", "res_q_mvar"]
-    },
-    "line": {
-        "address_names": ["from_bus", "to_bus", "name"],
-        "feature_names": ["c_nf_per_km", "df", "g_us_per_km", "in_service", "length_km", "max_i_ka",
-                          "max_loading_percent", "parallel", "r_ohm_per_km", "x_ohm_per_km", "res_p_from_mw",
-                          "res_q_from_mvar", "res_p_to_mw", "res_q_to_mvar", "res_pl_mw", "res_ql_mvar",
-                          "res_i_from_ka", "res_i_to_ka", "res_i_ka", "res_vm_from_pu", "res_va_from_degree",
-                          "res_vm_to_pu", "res_va_to_degree", "res_loading_percent"]
-    },
-    "trafo": {
-        "address_names": ["hv_bus", "lv_bus", "name"],
-        "feature_names": ["df", "i0_percent", "in_service", "max_loading_percent", "parallel",
-                          "pfe_kw", "shift_degree", "sn_mva", "tap_max", "tap_neutral", "tap_min",
-                          "tap_phase_shifter", "tap_pos", "tap_side", "tap_step_degree", "tap_step_percent",
-                          "vn_hv_kv", "vn_lv_kv", "vk_percent", "vkr_percent", "res_p_hv_mw", "res_q_hv_mvar",
-                          "res_p_lv_mw", "res_q_lv_mvar", "res_pl_mw", "res_ql_mvar", "res_i_hv_ka",
-                          "res_i_lv_ka", "res_vm_hv_pu", "res_va_hv_degree", "res_vm_lv_pu", "res_va_lv_degree",
-                          "res_loading_percent"]
-    },
-    "poly_cost": {
-        "address_names": ["element"],
-        "feature_names": ["cp0_eur", "cp1_eur_per_mw", "cp2_eur_per_mw2", "cq0_eur", "cq1_eur_per_mvar",
-                          "cq2_eur_per_mvar2"]
-    }
-}
+

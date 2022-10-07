@@ -48,8 +48,10 @@ class Normalizer:
             self.n_samples = kwargs.get('n_samples', 100)
             self.shuffle = kwargs.get("shuffle", False)
             self.n_breakpoints = kwargs.get('n_breakpoints', 200)
-            self.features = kwargs.get("features", self.backend.valid_feature_names)
-            self.backend.check_feature_names(self.features)
+            self.data_structure = kwargs.get("data_structure", self.backend.valid_data_structure)
+            self.backend.check_data_structure(self.data_structure)
+            # self.features = kwargs.get("features", self.backend.valid_feature_names)
+            # self.backend.check_feature_names(self.features)
             self.tqdm = kwargs.get('tqdm', tqdm.tqdm)
 
             self.build_functions()
@@ -61,15 +63,24 @@ class Normalizer:
             exactly `n_samples` of them. Then, those files are imported, and their features are extracted. Then,
             based on the obtained data, a separate normalizing function is built for each feature of each object.
         """
-        print("Building a Normalizer.")
-        data_files = self.backend.get_valid_files(self.data_dir, n_samples=self.n_samples)
-        network_batch = [self.backend.load_network(file) for file in self.tqdm(data_files, desc='Loading power grids ')]
-        values = [self.backend.get_feature_network(net, self.features)
-                  for net in self.tqdm(network_batch, desc='Extracting features ')]
+        data_files = self.backend.get_valid_files(self.data_dir, n_samples=self.n_samples, shuffle=self.shuffle)
+        net_batch = [self.backend.load_network(file)
+                     for file in self.tqdm(data_files, desc='Loading power grids.')]
+        values = [self.backend.get_data_network(net, self.data_structure)
+                  for net in self.tqdm(net_batch, desc='Extracting features.')]
         values = collate_dict(values)
-        self.functions = {k: {f: NormalizationFunction(values[k][f], self.n_breakpoints) for f in v}
-                          for k, v in self.tqdm(values.items(), desc='Building normalizing functions ')}
-        print("Normalizer ready to normalize !")
+        self.functions = self.build_function_tree(values)
+
+    def build_function_tree(self, values):
+        r = {}
+        for k in values.keys():
+            if k == 'address':
+                continue
+            if isinstance(values[k], dict):
+                r[k] = self.build_function_tree(values[k])
+            else:
+                r[k] = NormalizationFunction(values[k], self.n_breakpoints)
+        return r
 
     def save(self, filename):
         """Saves a normalizer."""
@@ -90,11 +101,21 @@ class Normalizer:
             If one feature and/or one object present in the input has no corresponding normalization function,
             then it is returned as is.
         """
-        x_norm = {k: {f: x[k][f] for f in x[k].keys()} for k in x.keys()}
-        for k in list(set(x.keys()) & set(self.functions.keys())):
-            for f in list(set(x[k].keys()) & set(self.functions[k].keys())):
-                x_norm[k][f] = self.functions[k][f](x[k][f])
-        return x_norm
+        return apply_normalization(x, self.functions)
+
+
+def apply_normalization(x, functions):
+    r = {}
+    for k in x.keys():
+        if k in functions.keys():
+            if isinstance(x[k], dict):
+                r[k] = apply_normalization(x[k], functions[k])
+            else:
+                r[k] = functions[k](x[k])
+        else:
+            r[k] = x[k]
+    return r
+
 
 
 class NormalizationFunction:

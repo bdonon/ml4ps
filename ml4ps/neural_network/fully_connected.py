@@ -17,23 +17,32 @@ class FullyConnected:
         else:
             self.x = kwargs.get('x')
             self.n_obj = get_n_obj(self.x)
-            self.input_feature_names = kwargs.get('input_feature_names')
-            self.output_feature_names = kwargs.get('output_feature_names')
+            self.data_structure = kwargs.get('data_structure')
+            # self.input_feature_names = kwargs.get('input_feature_names')
+            # self.output_feature_names = kwargs.get('output_feature_names')
             #self.n_obj = kwargs.get('n_obj')
             self.random_key = kwargs.get('random_key', random.PRNGKey(1))
             self.hidden_dimensions = kwargs.get('hidden_dimensions', [8])
 
-        self.input_dimension = 0
-        for k in self.input_feature_names.keys():
-            n_obj_k = self.n_obj[k]
-            for _ in self.input_feature_names[k]:
-                self.input_dimension += n_obj_k
+        self.input_dimension, self.output_dimension = 0, 0
+        for k in self.data_structure.keys():
+            if 'input_feature_names' in self.data_structure[k].keys():
+                self.input_dimension += len(self.data_structure[k]['input_feature_names']) * self.n_obj[k]
+            if 'output_feature_names' in self.data_structure[k].keys():
+                self.output_dimension += len(self.data_structure[k]['output_feature_names']) * self.n_obj[k]
 
-        self.output_dimension = 0
-        for k in self.output_feature_names.keys():
-            n_obj_k = self.n_obj[k]
-            for _ in self.output_feature_names[k]:
-                self.output_dimension += n_obj_k
+
+        # self.input_dimension = 0
+        # for k in self.input_feature_names.keys():
+        #     n_obj_k = self.n_obj[k]
+        #     for _ in self.input_feature_names[k]:
+        #         self.input_dimension += n_obj_k
+        #
+        # self.output_dimension = 0
+        # for k in self.output_feature_names.keys():
+        #     n_obj_k = self.n_obj[k]
+        #     for _ in self.output_feature_names[k]:
+        #         self.output_dimension += n_obj_k
 
         self.dimensions = [self.input_dimension, *self.hidden_dimensions, self.output_dimension]
 
@@ -45,8 +54,9 @@ class FullyConnected:
         """Saves a FC instance."""
         file = open(filename, 'wb')
         pickle.dump(self.weights, file)
-        pickle.dump(self.input_feature_names, file)
-        pickle.dump(self.output_feature_names, file)
+        pickle.dump(self.data_structure, file)
+        # pickle.dump(self.input_feature_names, file)
+        # pickle.dump(self.output_feature_names, file)
         pickle.dump(self.n_obj, file)
         #pickle.dump(self.time_window, file)
         pickle.dump(self.hidden_dimensions, file)
@@ -56,8 +66,9 @@ class FullyConnected:
         """Reloads an FC instance."""
         file = open(filename, 'rb')
         self.weights = pickle.load(file)
-        self.input_feature_names = pickle.load(file)
-        self.output_feature_names = pickle.load(file)
+        self.data_structure = pickle.load(file)
+        # self.input_feature_names = pickle.load(file)
+        # self.output_feature_names = pickle.load(file)
         self.n_obj = pickle.load(file)
         self.hidden_dimensions = pickle.load(file)
         file.close()
@@ -83,18 +94,32 @@ class FullyConnected:
 
     def flatten_input(self, x):
         x_flat = []
-        for k in self.input_feature_names:
-            for f in self.input_feature_names[k]:
-                x_flat.append(x[k][f])
+        for k in self.data_structure.keys():
+            if 'input_feature_names' in self.data_structure[k].keys():
+                for f in self.data_structure[k]['input_feature_names']:
+                    x_flat.append(x[k]['features'][f])
         return jnp.concatenate(x_flat)
 
     def build_out_dict(self, out):
-        out_dict = {}
+        r = {}
         i = 0
-        for k in self.output_feature_names.keys():
-            out_dict[k] = {}
-            a = self.n_obj[k]
-            for f in self.output_feature_names[k]:
-                out_dict[k][f] = out[i:i+a]
-                i += a
-        return out_dict
+        for k in self.data_structure.keys():
+            if 'output_feature_names' in self.data_structure[k].keys():
+                a = self.n_obj[k]
+                if a > 0:
+                    r[k] = {}
+                    for f in self.data_structure[k]['output_feature_names']:
+                        r[k][f] = out[i:i+a]
+                        i += a
+        return r
+
+
+        # out_dict = {}
+        # i = 0
+        # for k in self.output_feature_names.keys():
+        #     out_dict[k] = {}
+        #     a = self.n_obj[k]
+        #     for f in self.output_feature_names[k]:
+        #         out_dict[k][f] = out[i:i+a]
+        #         i += a
+        # return out_dict

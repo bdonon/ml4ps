@@ -17,6 +17,3 @@ python:
     - method: pip
       path: .
 
-search:
-   ignore:
-     - ml4ps/backend/powermodels.py

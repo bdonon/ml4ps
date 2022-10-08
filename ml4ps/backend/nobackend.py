@@ -11,12 +11,14 @@ class NoBackend(AbstractBackend):
     valid_feature_names = []
     valid_address_names = []
 
-    def __init__(self):
+    def __init__(self, warns=False):
         """Initializes a NoBackend."""
+        self.warns = warns
         super().__init__()
         
     def warning(self):
-        print("No backend is used")
+        if self.warns:
+            print("No backend is used")
         
     def warning_none_return(self):
         self.warning()

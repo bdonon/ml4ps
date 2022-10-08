@@ -44,7 +44,7 @@ exclude_patterns = [
     'usecase/2\ Training\ a\ graphical\ neural\ network',
     'usecase/2\ Training\ a\ graphical\ neural\ network-Copy1',
     'usecase/3\ Loading\ a\ trained\ method',
-    'powermodels.py'
+    '*/powermodels.py'
 ]
 
 # Display to do items

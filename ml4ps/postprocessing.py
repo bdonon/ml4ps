@@ -36,12 +36,22 @@ class PostProcessor:
 
     def __call__(self, y):
         """Applies sequentially the post-processing mappings to the features contained in y."""
-        y_post = {k: {f: y[k][f] for f in y[k].keys()} for k in y.keys()}
-        for k in list(set(y.keys()) & set(self.functions.keys())):
-            for f in list(set(y[k].keys()) & set(self.functions[k].keys())):
-                for function in self.functions[k][f]:
-                    y_post[k][f] = function(y_post[k][f])
-        return y_post
+        return apply_postprocessing(y, self.functions)
+
+
+def apply_postprocessing(y, functions):
+    r = {}
+    for k in y.keys():
+        if k in functions.keys():
+            if isinstance(y[k], dict):
+                r[k] = apply_postprocessing(y[k], functions[k])
+            else:
+                r[k] = y[k]
+                for function in functions[k]:
+                    r[k] = function(r[k])
+        else:
+            r[k] = y[k]
+    return r
 
 
 class AffineTransform:

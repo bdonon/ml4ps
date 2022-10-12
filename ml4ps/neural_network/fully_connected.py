@@ -107,9 +107,9 @@ class FullyConnected:
             if 'output_feature_names' in self.data_structure[k].keys():
                 a = self.n_obj[k]
                 if a > 0:
-                    r[k] = {}
+                    r[k] = {'features': {}}
                     for f in self.data_structure[k]['output_feature_names']:
-                        r[k][f] = out[i:i+a]
+                        r[k]['features'][f] = out[i:i+a]
                         i += a
         return r
 

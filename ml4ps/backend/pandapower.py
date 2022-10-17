@@ -2,9 +2,6 @@ from ml4ps.backend.interface import AbstractBackend
 from ml4ps.utils import clean_dict, convert_addresses_to_integers#, build_unique_id_dict
 import pandapower as pp
 import numpy as np
-import json
-import sys
-import os
 
 
 class PandaPowerBackend(AbstractBackend):
@@ -81,7 +78,23 @@ class PandaPowerBackend(AbstractBackend):
             net = pp.from_pickle(file_path)
         else:
             raise NotImplementedError('No support for file {}'.format(file_path))
+
+        file_name = os.path.basename(file_path)
+        net.name = file_name
+
         return net
+
+    def save_network(self, net, path):
+        """Saves a power grid instance."""
+        file_name = net.name
+        file_path = os.path.join(path, file_name)
+        if file_path.endswith('.json'):
+            pp.to_json(net, file_path)
+        elif file_path.endswith('.pkl'):
+            pp.to_pickle(net, file_path)
+        else:
+            raise NotImplementedError('No support for file {}'.format(file_path))
+
 
     def set_feature_network(self, net, y):
         """Updates a power grid by setting features according to `y`."""

@@ -49,8 +49,21 @@ class AbstractBackend(ABC):
         """Loads a single power grid instance.
 
         Should be overridden in a proper backend implementation.
-        Should be consistent with `valid_extensions`."""
+        Should be consistent with `valid_extensions`.
+        """
         pass
+
+    @abstractmethod
+    def save_network(self, net, path):
+        """Saves a single power grid instance in path.
+
+        Should be overridden in a proper backend implementation.
+        """
+        pass
+
+    def save_batch(self, network_batch, path):
+        """Saves a batch of power grid instances in path."""
+        [self.save_network(net, path) for net in network_batch]
 
     def set_feature_batch(self, network_batch, y_batch):
         """Modifies a batch of power grids with a batch of features."""

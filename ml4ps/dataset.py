@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 class PowerGridDataset(Dataset):
     """Subclass of torch.utils.data.Dataset that supports our data formalism.
 
-    It returns a tuple `(a, x, net)` where :
+    It returns a pair `(x, net)` where :
 
         1. `a` describes the addresses of the different objects that are present in the power grid ;
         2. `x` describes the numerical features of the different ovjects that are present in the power grid ;
@@ -37,22 +37,31 @@ class PowerGridDataset(Dataset):
 
         """
         self.backend = backend
+        self.data_structure = kwargs.get('data_structure', self.backend.valid_data_structure)
+        self.backend.check_data_structure(self.data_structure)
         self.files = self.backend.get_valid_files(data_dir)
         self.normalizer = kwargs.get('normalizer', None)
-        self.address_names = kwargs.get('address_names', self.backend.valid_address_names)
-        self.backend.check_address_names(self.address_names)
-        self.feature_names = kwargs.get('feature_names', self.backend.valid_feature_names)
-        self.backend.check_feature_names(self.feature_names)
+        self.transform = kwargs.get('transform', None)
+        # self.address_names = kwargs.get('address_names', self.backend.valid_address_names)
+        # self.backend.check_address_names(self.address_names)
+        # self.feature_names = kwargs.get('feature_names', self.backend.valid_feature_names)
+        # self.backend.check_feature_names(self.feature_names)
 
     def __getitem__(self, index):
         """Returns a tuple `(a, x, net)`."""
         filename = self.files[index]
         net = self.backend.load_network(filename)
-        a = self.backend.get_address_network(net, self.address_names)
-        x = self.backend.get_feature_network(net, self.feature_names)
+        x = self.backend.get_data_network(net, self.data_structure)
+        #a = self.backend.get_address_network(net, self.address_names)
+        #x = self.backend.get_feature_network(net, self.feature_names)
+
         if self.normalizer is not None:
             x = self.normalizer(x)
-        return a, x, net
+
+        if self.transform is not None:
+            return self.transform(x, net)
+        else:
+            return x, net
 
     def __len__(self):
         """Length of the dataset."""

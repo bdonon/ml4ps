@@ -1,4 +1,4 @@
-from ml4ps.utils import collate_dict, separate_dict
+from ml4ps.utils import collate_dict, separate_dict, assert_substructure
 from abc import ABC, abstractmethod
 import numpy as np
 import os
@@ -31,13 +31,18 @@ class AbstractBackend(ABC):
 
     @property
     @abstractmethod
-    def valid_address_names(self):
+    def valid_data_structure(self):
         pass
 
-    @property
-    @abstractmethod
-    def valid_feature_names(self):
-        pass
+    #@property
+    #@abstractmethod
+    #def valid_address_names(self):
+    #    pass
+
+    #@property
+    #@abstractmethod
+    #def valid_feature_names(self):
+    #    pass
 
     @abstractmethod
     def load_network(self, file_path):
@@ -85,55 +90,72 @@ class AbstractBackend(ABC):
         """
         pass
 
-    def get_feature_batch(self, network_batch, feature_names):
-        """Returns features from a batch of power grids.
-        """
-        return collate_dict([self.get_feature_network(network, feature_names) for network in network_batch])
+    def get_data_batch(self, net_batch, data_structure):
+        """Returns features from a batch of power grids."""
+        return collate_dict([self.get_data_network(net, data_structure) for net in net_batch])
 
     @abstractmethod
-    def get_feature_network(self, network, feature_names):
+    def get_data_network(self, net, data_structure):
         """Returns feature values from a single power grid instance.
 
         Should be overridden in a proper backend implementation.
-        Should be consistent with `valid_feature_names`.
+        Should be consistent with `valid_data_structure`.
         """
         pass
 
-    @abstractmethod
-    def get_address_network(self, network, address_names):
-        """Extracts a nested dict of address values from a power grid instance.
+    # def get_feature_batch(self, network_batch, feature_names):
+    #     """Returns features from a batch of power grids."""
+    #     return collate_dict([self.get_feature_network(network, feature_names) for network in network_batch])
+    #
+    # @abstractmethod
+    # def get_feature_network(self, network, feature_names):
+    #     """Returns feature values from a single power grid instance.
+    #
+    #     Should be overridden in a proper backend implementation.
+    #     Should be consistent with `valid_feature_names`.
+    #     """
+    #     pass
 
-        Should return nested dict of integers.
-        Should be overridden in a proper backend implementation.
-        Should be consistent with `valid_address_names`.
-        """
-        pass
+    #@abstractmethod
+    #def get_address_network(self, network, address_names):
+    #    """Extracts a nested dict of address values from a power grid instance.
 
-    def check_feature_names(self, feature_names):
-        """Checks that feature names are valid w.r.t. the current backend."""
-        for k in feature_names.keys():
-            if k in self.valid_feature_names.keys():
-                for f in feature_names[k]:
-                    if f in self.valid_feature_names[k]:
-                        continue
-                    else:
-                        raise Warning('{} is not a valid feature for {}. '.format(f, k) +
-                                      'Please pick from this list : {}'.format(self.valid_feature_names[k]))
-            else:
-                raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_feature_names))
+    #   Should return nested dict of integers.
+    #    Should be overridden in a proper backend implementation.
+    #    Should be consistent with `valid_address_names`.
+    #    """
+    #    pass
 
-    def check_address_names(self, address_names):
-        """Checks that addresses are valid w.r.t. the current backend."""
-        for k in address_names.keys():
-            if k in self.valid_address_names.keys():
-                for f in address_names[k]:
-                    if f in self.valid_address_names[k]:
-                        continue
-                    else:
-                        raise Warning('{} is not a valid feature for {}. '.format(f, k) +
-                                      'Please pick from this list : {}'.format(self.valid_address_names[k]))
-            else:
-                raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_address_names))
+    def check_data_structure(self, data_structure):
+        """Asserts that `data_structure` is a valid structure, w.r.t. the backend."""
+        assert_substructure(data_structure, self.valid_data_structure)
+
+    #
+    # def check_feature_names(self, feature_names):
+    #     """Checks that feature names are valid w.r.t. the current backend."""
+    #     for k in feature_names.keys():
+    #         if k in self.valid_feature_names.keys():
+    #             for f in feature_names[k]:
+    #                 if f in self.valid_feature_names[k]:
+    #                     continue
+    #                 else:
+    #                     raise Warning('{} is not a valid feature for {}. '.format(f, k) +
+    #                                   'Please pick from this list : {}'.format(self.valid_feature_names[k]))
+    #         else:
+    #             raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_feature_names))
+    #
+    # def check_address_names(self, address_names):
+    #     """Checks that addresses are valid w.r.t. the current backend."""
+    #     for k in address_names.keys():
+    #         if k in self.valid_address_names.keys():
+    #             for f in address_names[k]:
+    #                 if f in self.valid_address_names[k]:
+    #                     continue
+    #                 else:
+    #                     raise Warning('{} is not a valid feature for {}. '.format(f, k) +
+    #                                   'Please pick from this list : {}'.format(self.valid_address_names[k]))
+    #         else:
+    #             raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_address_names))
 
     def get_valid_files(self, path, shuffle=False, n_samples=None):
         """Gets file that have a valid extension w.r.t. the backend, from path."""

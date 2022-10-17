@@ -2,7 +2,7 @@ from ml4ps.backend.interface import AbstractBackend
 from ml4ps.utils import clean_dict, convert_addresses_to_integers#, build_unique_id_dict
 import pandapower as pp
 import numpy as np
-
+import os
 
 class PandaPowerBackend(AbstractBackend):
     """Backend implementation that uses `PandaPower <http://www.pandapower.org>`_."""
@@ -226,8 +226,7 @@ def get_table(net, key):  # , feature_list):
         table = net.poly_cost.copy(deep=True)
         table['element'] = table.et.astype(str) + '_' + table.element.astype(str)
     else:
-        raise ValueError('Object {} is not a valid object name. ' +
-                         'Please pick from : {}'.format(key, self.valid_feature_names))
+        raise ValueError('Object {} is not a valid object name.'.format(key))
     table['id'] = table.index
     table.replace([np.inf], 99999, inplace=True)
     table.replace([-np.inf], -99999, inplace=True)

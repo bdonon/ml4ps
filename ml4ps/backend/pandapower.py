@@ -99,9 +99,9 @@ class PandaPowerBackend(AbstractBackend):
     def set_feature_network(self, net, y):
         """Updates a power grid by setting features according to `y`."""
         for k in y.keys():
-            for f in y[k].keys():
+            for f in y[k]['features'].keys():
                 try:
-                    net[k][f] = y[k][f]
+                    net[k][f] = y[k]['features'][f]
                 except ValueError:
                     print('Object {} and key {} are not available with PandaPower'.format(k, f))
 

@@ -12,6 +12,7 @@ class AbstractBackend(ABC):
         Attributes:
             valid_extensions (:obj:`list` of :obj:`str`): List of valid file extensions that can be read by the
                 backend. Should be overridden in a proper backend implementation.
+            valid_object_names (:obj:`list` of :obj:`str`): List of object names.
             valid_address_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
                 object names as keys and valid address names for each of these keys. Should be overridden in a
                 proper backend implementation.
@@ -31,18 +32,13 @@ class AbstractBackend(ABC):
 
     @property
     @abstractmethod
-    def valid_data_structure(self):
+    def valid_address_names(self):
         pass
 
-    #@property
-    #@abstractmethod
-    #def valid_address_names(self):
-    #    pass
-
-    #@property
-    #@abstractmethod
-    #def valid_feature_names(self):
-    #    pass
+    @property
+    @abstractmethod
+    def valid_feature_names(self):
+        pass
 
     @abstractmethod
     def load_network(self, file_path):
@@ -65,12 +61,8 @@ class AbstractBackend(ABC):
         """Saves a batch of power grid instances in path."""
         [self.save_network(net, path) for net in network_batch]
 
-    def set_feature_batch(self, network_batch, y_batch):
-        """Modifies a batch of power grids with a batch of features."""
-        [self.set_feature_network(network, y) for network, y in zip(network_batch, separate_dict(y_batch))]
-
     @abstractmethod
-    def set_feature_network(self, net, y):
+    def set_data_network(self, net, y):
         """Modifies a power grid with the feature values contained in y.
 
         Should be overridden in a proper backend implementation.
@@ -78,9 +70,9 @@ class AbstractBackend(ABC):
         """
         pass
 
-    def run_batch(self, network_batch, **kwargs):
-        """Performs power flow computations for a batch of power grids."""
-        [self.run_network(net, **kwargs) for net in network_batch]
+    def set_data_batch(self, network_batch, y_batch):
+        """Modifies a batch of power grids with a batch of features."""
+        [self.set_data_network(network, y) for network, y in zip(network_batch, separate_dict(y_batch))]
 
     @abstractmethod
     def run_network(self, net, **kwargs):
@@ -90,12 +82,12 @@ class AbstractBackend(ABC):
         """
         pass
 
-    def get_data_batch(self, net_batch, data_structure):
-        """Returns features from a batch of power grids."""
-        return collate_dict([self.get_data_network(net, data_structure) for net in net_batch])
+    def run_batch(self, network_batch, **kwargs):
+        """Performs power flow computations for a batch of power grids."""
+        [self.run_network(net, **kwargs) for net in network_batch]
 
     @abstractmethod
-    def get_data_network(self, net, data_structure):
+    def get_data_network(self, net, feature_names=None, address_names=None):
         """Returns feature values from a single power grid instance.
 
         Should be overridden in a proper backend implementation.
@@ -103,59 +95,16 @@ class AbstractBackend(ABC):
         """
         pass
 
-    # def get_feature_batch(self, network_batch, feature_names):
-    #     """Returns features from a batch of power grids."""
-    #     return collate_dict([self.get_feature_network(network, feature_names) for network in network_batch])
-    #
-    # @abstractmethod
-    # def get_feature_network(self, network, feature_names):
-    #     """Returns feature values from a single power grid instance.
-    #
-    #     Should be overridden in a proper backend implementation.
-    #     Should be consistent with `valid_feature_names`.
-    #     """
-    #     pass
+    def get_data_batch(self, net_batch, feature_names=None, address_names=None):
+        """Returns features from a batch of power grids."""
+        return collate_dict([self.get_data_network(net, feature_names=feature_names, address_names=address_names) for net in net_batch])
 
-    #@abstractmethod
-    #def get_address_network(self, network, address_names):
-    #    """Extracts a nested dict of address values from a power grid instance.
-
-    #   Should return nested dict of integers.
-    #    Should be overridden in a proper backend implementation.
-    #    Should be consistent with `valid_address_names`.
-    #    """
-    #    pass
-
-    def check_data_structure(self, data_structure):
-        """Asserts that `data_structure` is a valid structure, w.r.t. the backend."""
-        assert_substructure(data_structure, self.valid_data_structure)
-
-    #
-    # def check_feature_names(self, feature_names):
-    #     """Checks that feature names are valid w.r.t. the current backend."""
-    #     for k in feature_names.keys():
-    #         if k in self.valid_feature_names.keys():
-    #             for f in feature_names[k]:
-    #                 if f in self.valid_feature_names[k]:
-    #                     continue
-    #                 else:
-    #                     raise Warning('{} is not a valid feature for {}. '.format(f, k) +
-    #                                   'Please pick from this list : {}'.format(self.valid_feature_names[k]))
-    #         else:
-    #             raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_feature_names))
-    #
-    # def check_address_names(self, address_names):
-    #     """Checks that addresses are valid w.r.t. the current backend."""
-    #     for k in address_names.keys():
-    #         if k in self.valid_address_names.keys():
-    #             for f in address_names[k]:
-    #                 if f in self.valid_address_names[k]:
-    #                     continue
-    #                 else:
-    #                     raise Warning('{} is not a valid feature for {}. '.format(f, k) +
-    #                                   'Please pick from this list : {}'.format(self.valid_address_names[k]))
-    #         else:
-    #             raise Warning('{} is not a valid name. Please pick from : {}'.format(k, self.valid_address_names))
+    def assert_names(self, feature_names=None, address_names=None):
+        """Asserts that `object_names`, `feature_names` and `address_names` are valid w.r.t. the backend."""
+        if feature_names is not None:
+            assert_substructure(feature_names, self.valid_feature_names)
+        if address_names is not None:
+            assert_substructure(address_names, self.valid_address_names)
 
     def get_valid_files(self, path, shuffle=False, n_samples=None):
         """Gets file that have a valid extension w.r.t. the backend, from path."""

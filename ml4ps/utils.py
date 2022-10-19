@@ -90,21 +90,40 @@ def clean_dict(data):
 #     return {address: i for i, address in enumerate(unique_addresses)}
 
 
-def convert_addresses_to_integers(x):
+def convert_addresses_to_integers(x, address_names):
     all_addresses = []
-    for key, val in x.items():
-        if "address" in x[key].keys():
-            for address_list in x[key]["address"].values():
-                all_addresses.append(address_list)
-            #all_addresses.append([list(address_list) for address_list in x[key]["address"].values()])
+    for object_name, object_address_names in address_names.items():
+        if object_name in x.keys():
+            for object_address_name in object_address_names:
+                all_addresses.append(x[object_name][object_address_name])
     if all_addresses:
         unique_addresses = list(np.unique(np.concatenate(all_addresses)))
         str_to_int = {address: i for i, address in enumerate(unique_addresses)}
-        for key, val in x.items():
-            if "address" in x[key].keys():
-                for a in x[key]["address"].keys():
-                    x[key]["address"][a] = np.vectorize(str_to_int.get)(x[key]["address"][a])
-        #return x
+        converter = np.vectorize(str_to_int.get)
+        for object_name, object_address_names in address_names.items():
+            if object_name in x.keys():
+                for object_address_name in object_address_names:
+                    x[object_name][object_address_name] = converter(x[object_name][object_address_name])
+
+    #
+    #     for key, val in x.items():
+    #         if "address" in x[key].keys():
+    #             for a in x[key]["address"].keys():
+    #                 x[key]["address"][a] = np.vectorize(str_to_int.get)(x[key]["address"][a])
+    #
+    #
+    #     if "address" in x[key].keys():
+    #         for address_list in x[key]["address"].values():
+    #             all_addresses.append(address_list)
+    #         #all_addresses.append([list(address_list) for address_list in x[key]["address"].values()])
+    # if all_addresses:
+    #     unique_addresses = list(np.unique(np.concatenate(all_addresses)))
+    #     str_to_int = {address: i for i, address in enumerate(unique_addresses)}
+    #     for key, val in x.items():
+    #         if "address" in x[key].keys():
+    #             for a in x[key]["address"].keys():
+    #                 x[key]["address"][a] = np.vectorize(str_to_int.get)(x[key]["address"][a])
+    #     #return x
 
 
 def assert_substructure(a, b):
@@ -117,25 +136,29 @@ def assert_substructure(a, b):
         assert ((sorted(a) == sorted(b)) and (len(a) == len(b)))
 
 
+# def get_n_obj(x):
+#     """Returns a dictionary that counts the amount of objects of each class."""
+#     r = {}
+#     for k in x.keys():
+#         r[k] = 0
+#         for f in x[k].keys():
+#             r[k] = max(r[k], np.shape(x[k][f])[1])
+#     return r
+#     #
+#     #     if k == 'global':
+#     #         for f in x[k].keys():
+#     #             current_max = max(current_max, np.shape(x[k][f])[1])
+#     #     else:
+#     #         # for f in x[k].keys():
+#     #         # if f=='address':
+#     #         for a in x[k]['address'].keys():
+#     #             current_max = max(current_max, np.shape(x[k]['address'][a])[1])
+#     #         for f in x[k]['features'].keys():
+#     #             current_max = max(current_max, np.shape(x[k]['features'][f])[1])
+#     #     r[k] = current_max
+#     # return r
+
+
 def get_n_obj(x):
     """Returns a dictionary that counts the amount of objects of each class."""
-    r = {}
-    for k in x.keys():
-        current_max = 0
-        if k == 'global':
-            for f in x[k].keys():
-                current_max = max(current_max, np.shape(x[k][f])[1])
-        else:
-            # for f in x[k].keys():
-            # if f=='address':
-            for a in x[k]['address'].keys():
-                current_max = max(current_max, np.shape(x[k]['address'][a])[1])
-            for f in x[k]['features'].keys():
-                current_max = max(current_max, np.shape(x[k]['features'][f])[1])
-        r[k] = current_max
-    return r
-
-def get_n_obj_old(x):
-    """Returns a dictionary that counts the amount of objects of each class."""
     return {k: np.max([np.shape(x_k_f)[1] for f, x_k_f in x_k.items()]) for k, x_k in x.items()}
-

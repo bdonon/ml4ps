@@ -1,4 +1,4 @@
-.. _dataset:
+.. _powergriddataset:
 
 Power Grid Dataset
 ==================
@@ -110,21 +110,6 @@ network to perform some prediction, while the last one can be used to directly i
 
     for a, x, nets in loader:
         train_step(a, x, nets)
-
-Accelerating the training loop
-______________________________
-
-The torch implementation of data loaders allows to use multiprocessing, and to prefetch the next batch
-before the end of the current training step. This can be done by setting the option `num_workers` of
-the DataLoader to a non-zero integer.
-
-.. code-block:: pycon
-
-    loader = DataLoader(train_set,
-                        batch_size=64,
-                        shuffle=True,
-                        num_workers=4,
-                        collate_fn=mp.power_grid_collate)
 
 Contents
 --------

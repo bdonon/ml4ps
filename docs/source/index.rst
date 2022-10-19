@@ -41,7 +41,7 @@ Contents
     :maxdepth: 1
 
     data_formalism
-    dataset
+    dataset/index
     normalization
     neural_networks/index
     postprocessing

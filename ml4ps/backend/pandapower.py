@@ -79,9 +79,9 @@ class PandaPowerBackend(AbstractBackend):
         Overrides the abstract `set_feature_network` method.
         """
         for k in y.keys():
-            for f in y[k].keys():
+            for f in y[k]['features'].keys():
                 try:
-                    net[k][f] = y[k][f]
+                    net[k][f] = y[k]['features'][f]
                 except ValueError:
                     print('Object {} and feature {} are not available with PandaPower'.format(k, f))
 

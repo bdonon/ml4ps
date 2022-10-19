@@ -1,6 +1,9 @@
+import os
+import pickle
 import torch
 import numpy as np
 from torch.utils.data import Dataset
+import pandapower as pp
 
 
 class PowerGridDataset(Dataset):
@@ -10,7 +13,7 @@ class PowerGridDataset(Dataset):
     the power grid, and `net` is a power grid instance.
     """
 
-    def __init__(self, data_dir, backend, **kwargs):
+    def __init__(self, data_dir=None, backend=None, pickle=False, return_network=True, **kwargs):
         """Initializes a power grid dataset.
 
         Args:
@@ -33,13 +36,22 @@ class PowerGridDataset(Dataset):
         """
         self.data_dir = data_dir
         self.backend = backend
-        self.files = self.backend.get_valid_files(data_dir)
 
         self.feature_names = kwargs.get('feature_names', self.backend.valid_feature_names)
         self.address_names = kwargs.get('address_names', self.backend.valid_address_names)
         self.backend.assert_names(feature_names=self.feature_names, address_names=self.address_names)
+        self.pickle = pickle
+        self.return_network = return_network
+        if self.pickle:
+            self.files = []
+            for file in os.listdir(data_dir):
+                if file.endswith(".pkl"):
+                    self.files.append(os.path.join(data_dir, file))
+        else:
+            self.files = self.backend.get_valid_files(data_dir)
+        
         self.normalizer = kwargs.get('normalizer', None)
-        self.transform = kwargs.get('transform', None)
+        #self.transform = kwargs.get('transform', None)
         # self.address_names = kwargs.get('address_names', self.backend.valid_address_names)
         # self.backend.check_address_names(self.address_names)
         # self.feature_names = kwargs.get('feature_names', self.backend.valid_feature_names)
@@ -48,18 +60,27 @@ class PowerGridDataset(Dataset):
     def __getitem__(self, index):
         """Returns a tuple `(x, net)`."""
         filename = self.files[index]
-        net = self.backend.load_network(filename)
-        x = self.backend.get_data_network(net, self.feature_names, self.address_names)
-        #a = self.backend.get_address_network(net, self.address_names)
-        #x = self.backend.get_feature_network(net, self.feature_names)
+        if self.pickle:
+            with open(filename, 'rb') as fp:
+                data = pickle.load(fp)
+            if self.return_network:
+                x, net = data['x'], data['net']
+            else:
+                x = data['x']
+        else:
+            net = self.backend.load_network(filename)
+            x = self.backend.get_data_network(net, self.feature_names, self.address_names)
+
 
         if self.normalizer is not None:
             x = self.normalizer(x)
 
-        if self.transform is not None:
-            return self.transform(x, net)
-        else:
+        #if self.transform is not None:
+        #    x, net = self.transform(x, net)
+        if self.return_network:
             return x, net
+        else:
+            return x
 
     def __len__(self):
         """Length of the dataset."""

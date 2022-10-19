@@ -13,7 +13,7 @@ def pickle_dataset(source_dir, target_dir, backend, data_structure=None, save_ne
     Example :
         >>> import ml4ps as mp
         >>> backend = mp.PandaPowerBackend()
-        >>> pickle_dataset('data/train', 'data/train_pkl', backend=backend)
+        >>> mp.pickle_dataset('data/train', 'data/train_pkl', backend=backend)
         >>> dataset = mp.PowerGridDataset('data/train_pkl', backend=backend, pickle=True)
 
     **Note**

@@ -11,7 +11,6 @@ class PandaPowerBackend(AbstractBackend):
     """Backend implementation that uses `PandaPower <http://www.pandapower.org>`_."""
 
     valid_extensions = (".json", ".pkl")
-    valid_object_names = ["global", "bus", "load", "sgen", "gen", "shunt", "ext_grid", "line", "trafo", "poly_cost"]
     valid_address_names = {
         "bus": ["id"], "load": ["bus", "name"], "sgen": ["bus", "name"], "gen": ["bus", "name"],
         "shunt": ["bus", "name"], "ext_grid": ["bus", "name"], "line": ["from_bus", "to_bus", "name"],
@@ -97,11 +96,18 @@ class PandaPowerBackend(AbstractBackend):
         except pp.powerflow.LoadflowNotConverged:
             pass
 
-    def get_data_network(self, network, object_names, feature_names, address_names):
+    def get_data_network(self, network, feature_names=None, address_names=None):
         """Extracts features from a pandapower network.
 
+        Addresses are converted into unique integers that start at 0.
         Overrides the abstract `get_data_network` method.
         """
+        if feature_names is None:
+            feature_names = dict()
+        if address_names is None:
+            address_names = dict()
+
+        object_names = list(set(list(feature_names.keys()) + list(address_names.keys())))
         x = {}
         for object_name in object_names:
 
@@ -128,7 +134,6 @@ def get_table(net, key):
     Pandapower puts the results of power flow simulations into a separate table. For instance,
     results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res
     for the considered features.
-
     """
     if key == 'bus':
         table = net.bus.copy(deep=True)

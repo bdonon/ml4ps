@@ -48,8 +48,10 @@ class Normalizer:
             self.n_samples = kwargs.get('n_samples', 100)
             self.shuffle = kwargs.get("shuffle", False)
             self.n_breakpoints = kwargs.get('n_breakpoints', 200)
-            self.data_structure = kwargs.get("data_structure", self.backend.valid_data_structure)
-            self.backend.check_data_structure(self.data_structure)
+            self.feature_names = kwargs.get('feature_names', self.backend.valid_feature_names)
+            self.backend.assert_names(feature_names=self.feature_names)
+            #self.data_structure = kwargs.get("data_structure", self.backend.valid_data_structure)
+            #self.backend.check_data_structure(self.data_structure)
             # self.features = kwargs.get("features", self.backend.valid_feature_names)
             # self.backend.check_feature_names(self.features)
             self.tqdm = kwargs.get('tqdm', tqdm.tqdm)
@@ -66,7 +68,7 @@ class Normalizer:
         data_files = self.backend.get_valid_files(self.data_dir, n_samples=self.n_samples, shuffle=self.shuffle)
         net_batch = [self.backend.load_network(file)
                      for file in self.tqdm(data_files, desc='Loading power grids.')]
-        values = [self.backend.get_data_network(net, self.data_structure)
+        values = [self.backend.get_data_network(net, feature_names=self.feature_names)
                   for net in self.tqdm(net_batch, desc='Extracting features.')]
         values = collate_dict(values)
         self.functions = self.build_function_tree(values)

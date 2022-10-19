@@ -136,25 +136,29 @@ def assert_substructure(a, b):
         assert ((sorted(a) == sorted(b)) and (len(a) == len(b)))
 
 
+# def get_n_obj(x):
+#     """Returns a dictionary that counts the amount of objects of each class."""
+#     r = {}
+#     for k in x.keys():
+#         r[k] = 0
+#         for f in x[k].keys():
+#             r[k] = max(r[k], np.shape(x[k][f])[1])
+#     return r
+#     #
+#     #     if k == 'global':
+#     #         for f in x[k].keys():
+#     #             current_max = max(current_max, np.shape(x[k][f])[1])
+#     #     else:
+#     #         # for f in x[k].keys():
+#     #         # if f=='address':
+#     #         for a in x[k]['address'].keys():
+#     #             current_max = max(current_max, np.shape(x[k]['address'][a])[1])
+#     #         for f in x[k]['features'].keys():
+#     #             current_max = max(current_max, np.shape(x[k]['features'][f])[1])
+#     #     r[k] = current_max
+#     # return r
+
+
 def get_n_obj(x):
-    """Returns a dictionary that counts the amount of objects of each class."""
-    r = {}
-    for k in x.keys():
-        current_max = 0
-        if k == 'global':
-            for f in x[k].keys():
-                current_max = max(current_max, np.shape(x[k][f])[1])
-        else:
-            # for f in x[k].keys():
-            # if f=='address':
-            for a in x[k]['address'].keys():
-                current_max = max(current_max, np.shape(x[k]['address'][a])[1])
-            for f in x[k]['features'].keys():
-                current_max = max(current_max, np.shape(x[k]['features'][f])[1])
-        r[k] = current_max
-    return r
-
-
-def get_n_obj_old(x):
     """Returns a dictionary that counts the amount of objects of each class."""
     return {k: np.max([np.shape(x_k_f)[1] for f, x_k_f in x_k.items()]) for k, x_k in x.items()}

@@ -32,11 +32,6 @@ class AbstractBackend(ABC):
 
     @property
     @abstractmethod
-    def valid_object_names(self):
-        pass
-
-    @property
-    @abstractmethod
     def valid_address_names(self):
         pass
 
@@ -92,7 +87,7 @@ class AbstractBackend(ABC):
         [self.run_network(net, **kwargs) for net in network_batch]
 
     @abstractmethod
-    def get_data_network(self, net, object_names, feature_names, address_names):
+    def get_data_network(self, net, feature_names=None, address_names=None):
         """Returns feature values from a single power grid instance.
 
         Should be overridden in a proper backend implementation.
@@ -100,15 +95,16 @@ class AbstractBackend(ABC):
         """
         pass
 
-    def get_data_batch(self, net_batch, object_names, feature_names, address_names):
+    def get_data_batch(self, net_batch, feature_names=None, address_names=None):
         """Returns features from a batch of power grids."""
-        return collate_dict([self.get_data_network(net, object_names, feature_names, address_names) for net in net_batch])
+        return collate_dict([self.get_data_network(net, feature_names=feature_names, address_names=address_names) for net in net_batch])
 
-    def assert_names(self, object_names, feature_names, address_names):
+    def assert_names(self, feature_names=None, address_names=None):
         """Asserts that `object_names`, `feature_names` and `address_names` are valid w.r.t. the backend."""
-        assert_substructure(object_names, self.valid_object_names)
-        assert_substructure(feature_names, self.valid_feature_names)
-        assert_substructure(address_names, self.valid_address_names)
+        if feature_names is not None:
+            assert_substructure(feature_names, self.valid_feature_names)
+        if address_names is not None:
+            assert_substructure(address_names, self.valid_address_names)
 
     def get_valid_files(self, path, shuffle=False, n_samples=None):
         """Gets file that have a valid extension w.r.t. the backend, from path."""

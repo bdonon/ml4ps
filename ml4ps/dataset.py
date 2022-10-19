@@ -6,16 +6,11 @@ from torch.utils.data import Dataset
 class PowerGridDataset(Dataset):
     """Subclass of torch.utils.data.Dataset that supports our data formalism.
 
-    It returns a pair `(x, net)` where :
-
-        1. `a` describes the addresses of the different objects that are present in the power grid ;
-        2. `x` describes the numerical features of the different ovjects that are present in the power grid ;
-        3. `net` is a power grid instance based on the backend. This part of the data will serve if one needs
-            to interact with the said power grid, by performing AC Power Flow simulations for instance.
-
+    It returns a pair `(x, net)` where `x` describes the numerical features and addresses of the objects that compose
+    the power grid, and `net` is a power grid instance.
     """
 
-    def __init__(self, data_dir=None, backend=None, **kwargs):
+    def __init__(self, data_dir, backend, **kwargs):
         """Initializes a power grid dataset.
 
         Args:
@@ -36,10 +31,13 @@ class PowerGridDataset(Dataset):
                 provided by the ``backend.
 
         """
+        self.data_dir = data_dir
         self.backend = backend
-        self.data_structure = kwargs.get('data_structure', self.backend.valid_data_structure)
-        self.backend.check_data_structure(self.data_structure)
         self.files = self.backend.get_valid_files(data_dir)
+
+        self.feature_names = kwargs.get('feature_names', self.backend.valid_feature_names)
+        self.address_names = kwargs.get('address_names', self.backend.valid_address_names)
+        self.backend.assert_names(feature_names=self.feature_names, address_names=self.address_names)
         self.normalizer = kwargs.get('normalizer', None)
         self.transform = kwargs.get('transform', None)
         # self.address_names = kwargs.get('address_names', self.backend.valid_address_names)
@@ -48,10 +46,10 @@ class PowerGridDataset(Dataset):
         # self.backend.check_feature_names(self.feature_names)
 
     def __getitem__(self, index):
-        """Returns a tuple `(a, x, net)`."""
+        """Returns a tuple `(x, net)`."""
         filename = self.files[index]
         net = self.backend.load_network(filename)
-        x = self.backend.get_data_network(net, self.data_structure)
+        x = self.backend.get_data_network(net, self.feature_names, self.address_names)
         #a = self.backend.get_address_network(net, self.address_names)
         #x = self.backend.get_feature_network(net, self.feature_names)
 

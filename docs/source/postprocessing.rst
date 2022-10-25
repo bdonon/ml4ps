@@ -62,7 +62,7 @@ We provide implementations of basic mappings.
 Users can define their own post-processing functions, as long as they are defined as
 instances of a class, which then allows them to be saved and loaded.
 
-.. module:: ml4ps.postprocessing
+.. module:: ml4ps.transform
 .. autoclass:: AffineTransform
 .. autoclass:: AbsValTransform
 .. autoclass:: TanhTransform

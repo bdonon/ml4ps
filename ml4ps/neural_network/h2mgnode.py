@@ -153,7 +153,7 @@ def get_key_list(*args):
 
 
 class H2MGNODE:
-    """Hyper Heterogeneous Multi Graph Neural Ordinary Differential Equation.
+    r"""Hyper Heterogeneous Multi Graph Neural Ordinary Differential Equation.
 
     It takes as input a Hyper Heterogeneous Multi Graph, associates each address with a latent vector,
     solves a dynamical systems where each address interact through the hyper-edges that interconnects them,

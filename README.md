@@ -10,7 +10,7 @@ pip install git+https://github.com/bdonon/ml4ps
 or
 ```
 git clone https://github.com/bdonon/ml4ps
-cd MachineLearning4PowerSystems
+cd ml4ps
 pip install .
 ```
 

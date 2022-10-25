@@ -315,7 +315,7 @@ class H2MGNODE:
         """Initializes params of the neural networks that define the dynamics of local latent variables."""
         params = {object_name: {} for object_name in self.local_address_names.keys()}
         for object_name in self.local_address_names.keys():
-            nn_input_dim = self.n_global_input_features + self.n_local_input_features[object_name] + \
+            nn_input_dim = self.n_global_input_features + self.n_local_input_features.get(object_name, 0) + \
                            (self.n_local_addresses[object_name] + 1) * self.latent_dimension + 1
             nn_output_dim = self.latent_dimension
             params_dim = [nn_input_dim, *hidden_dimensions, nn_output_dim]
@@ -328,7 +328,7 @@ class H2MGNODE:
         """Initializes params of the neural networks that decode latent variables into local meaningful predictions."""
         params = {object_name: {} for object_name in self.local_output_feature_names.keys()}
         for object_name in self.local_output_feature_names.keys():
-            nn_input_dim = self.n_global_input_features + self.n_local_input_features[object_name] + \
+            nn_input_dim = self.n_global_input_features + self.n_local_input_features.get(object_name, 0) + \
                            (self.n_local_addresses[object_name] + 1) * self.latent_dimension + 1
             nn_output_dim = 1
             params_dim = [nn_input_dim, *hidden_dimensions, nn_output_dim]

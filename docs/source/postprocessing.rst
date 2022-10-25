@@ -10,7 +10,7 @@ the output of a neural network directly into a power grid instance, so as to per
 Flow simulation, then we want to plug values that are `physically meaningful` (i.e. that have the
 right order of magnitude w.r.t. the units it is expressed in).
 
-To give a concrete example, acting on voltage setpoints will require values that are more or less
+To give a concrete example, acting on voltage set points will require values that are more or less
 in the interval 0.95 `p.u.` and 1.05 `p.u.`, while acting on active power generation will require
 values that can be spread between 0 `MW` and 100 `MW`.
 
@@ -77,8 +77,8 @@ At first, one has to declare the different post-processing functions to be appli
     import ml4ps as mp
 
     functions = {
-        'gen': {'p_mw': [mp.TanhTransform(), mp.AffineTransform(slope=1e3)]}
-        'load': {'q_mvar': [mp.AffineTransform(slope=1e2)]}
+        'gen': {'p_mw': [['tanh', {}], ['affine', {'slope':1e3}]],
+        'load': {'q_mvar': [['affine', {'slope':1e3, 'offset':1e4}]]}
     }
 
     postprocessor = mp.PostProcessor(functions=functions)

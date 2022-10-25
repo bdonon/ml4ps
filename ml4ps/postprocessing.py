@@ -1,5 +1,5 @@
 import pickle
-import jax.numpy as jnp
+from ml4ps.transform import get_transform
 
 
 class PostProcessor:
@@ -11,16 +11,31 @@ class PostProcessor:
         Args:
             filename (:obj:`str`, optional): Path to a postprocessor that should be loaded. If not specified, a new
                 postprocessor is created based on the other arguments.
-            functions (:obj:`dict` of :obj:`dict` of :obj:`list` of :obj:functions): Transforms that should be
-                applied over each of the features. For each feature, multiple functions may be defined in a list,
-                in which case the mappings are applied sequentially in the order of the list. Those functions should
-                be objects of a class, to be savable and loadable.
+            config (:obj:`dict` of :obj:`dict` of :obj:`list`of :obj:`list`): For each object name and each feature
+                name, it provides a list of pair (`identifier`, `config`) that specifies a postprocessing transform.
+                Postprocessing transforms are applied sequentially.
         """
         self.functions = {}
         if filename is not None:
             self.load(filename)
         else:
-            self.functions = kwargs.get("functions", None)
+            self.config = kwargs.get("config", None)
+            self.build_functions()
+
+    def build_functions(self):
+        """Build post-processing functions."""
+        self.functions = {}
+        for key, subdict in self.config.items():
+            self.functions[key] = {}
+            for subkey, function_configs in subdict.items():
+                self.functions[key][subkey] = []
+                for function_config in function_configs:
+                    if len(function_config) == 1:
+                        self.functions[key][subkey].append(get_transform(function_config[0]))
+                    elif len(function_config) == 2:
+                        self.functions[key][subkey].append(get_transform(function_config[0], **function_config[1]))
+                    else:
+                        raise ValueError('Too many arguments as postprocessing function config.')
 
     def save(self, filename):
         """Saves a postprocessor."""
@@ -40,6 +55,7 @@ class PostProcessor:
 
 
 def apply_postprocessing(y, functions):
+    """Applies mapping contained in the dict `functions` to the dict `y`."""
     r = {}
     for k in y.keys():
         if k in functions.keys():
@@ -53,33 +69,3 @@ def apply_postprocessing(y, functions):
             r[k] = y[k]
     return r
 
-
-class AffineTransform:
-    """Class of functions that apply an affine transform, defined by its offset and slope."""
-
-    def __init__(self, offset=0., slope=1.):
-        """Initializes an affine transform (x -> offset + slope * x)."""
-        self.offset, self.slope = offset, slope
-
-    def __call__(self, x):
-        return self.offset + self.slope * x
-
-
-class AbsValTransform:
-    """Class of functions that return the absolute value of the input."""
-
-    def __init__(self):
-        pass
-
-    def __call__(self, x):
-        return jnp.abs(x)
-
-
-class TanhTransform:
-    """Class of functions that return the hyperbolic tangent of the input."""
-
-    def __init__(self):
-        pass
-
-    def __call__(self, x):
-        return jnp.tanh(x)

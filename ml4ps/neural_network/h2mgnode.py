@@ -163,13 +163,13 @@ class H2MGNODE:
 
     .. math::
 
-        h_i(t=0) = [0, \dots, 0] \\
-        h^g(t=0) = [0, \dots, 0] \\
-        \frac{dh_i}{dt} = tanh(\sum_{(c,e,o) \in \mathcal{N}(i)} \Phi_\theta^{c,o} (x^g, x^c_e, h^g,
-        (h_{o(e)})_{o\in \mathcal{O}^c}, t) \\
-        \frac{dh^g}{dt} = \Phi^g_\theta (x^g, h^g, \frac{1}{N}\sum_{i=1}^N h_i, t) \\
-        \hat{y}^c_e = \Psi_\theta^{c} (x^g, x^c_e, h^g(t=1), (h_{o(e)}(t=1))_{o\in \mathcal{O}^c}, t) \\
-        \hat{y}^g = \Psi^g_\theta (x^g, h^g(t=1), \frac{1}{N}\sum_{i=1}^N h_i(t=1), t)
+            h_i(t=0) = [0, \dots, 0] \\
+            h^g(t=0) = [0, \dots, 0] \\
+            \frac{dh_i}{dt} = tanh(\sum_{(c,e,o) \in \mathcal{N}(i)} \Phi_\theta^{c,o} (x^g, x^c_e, h^g,
+            (h_{o(e)})_{o\in \mathcal{O}^c}, t) \\
+            \frac{dh^g}{dt} = \Phi^g_\theta (x^g, h^g, \frac{1}{N}\sum_{i=1}^N h_i, t) \\
+            \hat{y}^c_e = \Psi_\theta^{c} (x^g, x^c_e, h^g(t=1), (h_{o(e)}(t=1))_{o\in \mathcal{O}^c}, t) \\
+            \hat{y}^g = \Psi^g_\theta (x^g, h^g(t=1), \frac{1}{N}\sum_{i=1}^N h_i(t=1), t)
 
 
     Where :math:`\mathcal{N}(i) = \{ (c,e,o) | c \in \mathcal{C}, e \in \mathcal{E}^c, o \in \mathcal{O}^c, o(e)=i \}`.

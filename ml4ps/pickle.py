@@ -3,7 +3,7 @@ import pickle
 import os
 
 
-def pickle_dataset(source_dir, target_dir, backend, data_structure=None, save_network=True):
+def pickle_dataset(source_dir, target_dir, backend, feature_names=None, address_names=None, save_network=True):
     """Converts a dataset into a pickle version.
 
     It imports each `net` in `source_dir`, extracts the desired features `x`, and saves the pair `(x, net)` in a
@@ -37,9 +37,12 @@ def pickle_dataset(source_dir, target_dir, backend, data_structure=None, save_ne
             in the .pkl file. Otherwise, it only saves the data `x` in the .pkl file. In that case, when creating
             a PowerGridDataSet, the keyword argument `return_network` should be set to False.
     """
-    if data_structure is None:
-        data_structure = backend.valid_data_structure
-    backend.check_data_structure(data_structure)
+
+    if feature_names is None:
+        feature_names = backend.valid_feature_names
+    if address_names is None:
+        address_names = backend.valid_address_names
+    backend.assert_names(feature_names=feature_names, address_names=address_names)
     file_path_list = backend.get_valid_files(source_dir)
     os.mkdir(target_dir)
 
@@ -47,7 +50,7 @@ def pickle_dataset(source_dir, target_dir, backend, data_structure=None, save_ne
         file_name = os.path.basename(file_path)
         case_name = os.path.splitext(file_name)[0]
         net = backend.load_network(file_path)
-        x = backend.get_data_network(net, data_structure)
+        x = backend.get_data_network(net, feature_names=feature_names, address_names=address_names)
         if save_network:
             data = {'x': x, 'net': net}
         else:

@@ -161,6 +161,7 @@ class H2MGNODE:
 
     The H2MGNODE architecture relies on the following dynamical system :
     .. math::
+
         h_i(t=0) = [0, \dots, 0] \\
         h^g(t=0) = [0, \dots, 0] \\
         \frac{dh_i}{dt} = tanh(\sum_{(c,e,o) \in \mathcal{N}(i)} \Phi_\theta^{c,o} (x^g, x^c_e, h^g,

@@ -35,6 +35,11 @@ We provide a series of tools that were built with this concern in mind :
 - an **interface** that allows to plug various power grid packages to our library, which are used
   to read power grid data, modify them and perform simulations.
 
+# Documentation
+
+An extensive documentation on the main principles behind ml4ps and how to use it is available 
+at [ml4ps.org](ml4ps.org).
+
 # Contact
 
 If you have in mind a use-case that would require some adjustments of the present package,

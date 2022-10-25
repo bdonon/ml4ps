@@ -160,6 +160,7 @@ class H2MGNODE:
     and decodes the final state of each latent vector to produce a meaningful prediction.
 
     The H2MGNODE architecture relies on the following dynamical system :
+
     .. math::
 
         h_i(t=0) = [0, \dots, 0] \\
@@ -169,6 +170,7 @@ class H2MGNODE:
         \frac{dh^g}{dt} = \Phi^g_\theta (x^g, h^g, \frac{1}{N}\sum_{i=1}^N h_i, t) \\
         \hat{y}^c_e = \Psi_\theta^{c} (x^g, x^c_e, h^g(t=1), (h_{o(e)}(t=1))_{o\in \mathcal{O}^c}, t) \\
         \hat{y}^g = \Psi^g_\theta (x^g, h^g(t=1), \frac{1}{N}\sum_{i=1}^N h_i(t=1), t)
+
 
     Where :math:`\mathcal{N}(i) = \{ (c,e,o) | c \in \mathcal{C}, e \in \mathcal{E}^c, o \in \mathcal{O}^c, o(e)=i \}`.
     """

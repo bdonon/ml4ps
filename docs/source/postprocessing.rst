@@ -106,4 +106,5 @@ It can be reloaded as follows :
 
 Contents
 --------
+.. module:: ml4ps.postprocessing
 .. autoclass:: PostProcessor

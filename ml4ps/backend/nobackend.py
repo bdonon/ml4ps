@@ -16,7 +16,7 @@ class NoBackend(AbstractBackend):
         "branch": ['br_r', 'rate_a', 'shift', 'pt', 'mu_sm_fr', 'br_x', 'g_to', 'g_fr', 'b_fr', 'mu_sm_to',
             'br_status', 'b_to', 'index', 'qf', 'angmin', 'angmax', 'transformer', 'qt', 'tap', 'pf'],
         "gen": ['apf', 'qc1max', 'lin_cost', 'pg', 'model', 'shutdown', 'startup', 'qc2max', 'ramp_agc', 'qg', 'pmax',
-            'ramp_10', 'vg', 'mbase', 'pc2', 'index', 'cost', 'qmax', 'gen_status', 'qmin', 'qc1min',
+            'ramp_10', 'vg', 'mbase', 'pc2', 'index', 'cost1', 'cost2', 'qmax', 'gen_status', 'qmin', 'qc1min',
             'qc2min', 'pc1', 'ramp_q', 'ramp_30', 'ncost', 'pmin'],
         "load": ['status', 'qd', 'pd', 'index'],
         "bus": ['zone', 'lam_kcl_r', 'bus_i', 'bus_type', 'vmax', 'col_2', 'col_1', 'area', 'vmin',
@@ -81,7 +81,13 @@ class NoBackend(AbstractBackend):
 
                 object_feature_names = feature_names.get(object_name, [])
                 for feature_name in object_feature_names:
-                    x[object_name][feature_name] = np.array(net[object_name][feature_name], dtype=np.float32)
+                    if feature_name == 'cost1':
+                        x[object_name][feature_name] = np.array(net[object_name]['cost'], dtype=np.float32)[:, 0]
+                    elif feature_name == 'cost2':
+                        x[object_name][feature_name] = np.array(net[object_name]['cost'], dtype=np.float32)[:, 1]
+                    else:
+                        x[object_name][feature_name] = np.array(net[object_name][feature_name], dtype=np.float32)
+
 
         clean_dict(x)
         convert_addresses_to_integers(x, address_names)

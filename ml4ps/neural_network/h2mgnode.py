@@ -234,7 +234,7 @@ class H2MGNODE:
             self.check_names()
 
             self.phi_hidden_dimensions = kwargs.get('phi_hidden_dimensions', [64])
-            self.psi_hidden_dimensions = kwargs.get('psi_hidden_dimensions', [32])
+            self.psi_hidden_dimensions = kwargs.get('psi_hidden_dimensions', [32, 32])
             self.phi_scale_init = kwargs.get('phi_scale_init', [[1e-1, 1e-1], [1e-1, 0]])
             self.psi_scale_init = kwargs.get('psi_scale_init', [[1e-1, 1e-1], [1e-1, 1e-1], [1e-1, 0]])
             self.latent_dimension = kwargs.get('latent_dimension', 16)

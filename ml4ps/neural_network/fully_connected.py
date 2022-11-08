@@ -19,7 +19,7 @@ def get_dim(feature_names, n_obj):
     """Counts the input / output dimensions based on `feature_names` and the object counts `n_obj`."""
     r = 0
     for object_name, object_input_feature_names in feature_names.items():
-        r += len(object_input_feature_names) * n_obj[object_name]
+        r += len(object_input_feature_names) * n_obj.get(object_name, 0)
     return r
 
 
@@ -64,6 +64,14 @@ class FullyConnected:
             file (:obj:`str`): Path to a saved FullyConnected instance. If `None`, then a new model is initialized.
             x (:obj:`dict` of :obj:`dict` of :obj:`np.Array`): Batch of data. Required to define the input and output
                 dimensions, and thus for the weight initialization.
+            local_input_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary of local object
+                classes and feature names that should be taken as numerical inputs.
+            local_output_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary of local object
+                classes and feature names for which the model should produce a numerical output.
+            global_input_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`, optional): Dictionary of
+                global object classes and global feature names that should be taken as input of the model.
+            global_output_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`, optional): Dictionary of
+                global object classes and global feature names that should be returned by the model.
             input_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that defines for each object
                 class a list of feature names that should be taken as input of the neural network. Features that
                 are present in the input `x` but absent from `input_feature_names` will be discarded and not passed
@@ -80,10 +88,17 @@ class FullyConnected:
         else:
             self.x = kwargs.get('x')
             self.n_obj = get_n_obj(self.x)
-            self.input_feature_names = kwargs.get('input_feature_names')
+
+            self.local_input_feature_names = kwargs.get('local_input_feature_names', {})
+            self.global_input_feature_names = kwargs.get('global_input_feature_names', {})
+            self.input_feature_names = self.local_input_feature_names | self.global_input_feature_names
             self.in_dim = get_dim(self.input_feature_names, self.n_obj)
-            self.output_feature_names = kwargs.get('output_feature_names')
+
+            self.local_output_feature_names = kwargs.get('local_output_feature_names', {})
+            self.global_output_feature_names = kwargs.get('global_output_feature_names', {})
+            self.output_feature_names = self.local_output_feature_names | self.global_output_feature_names
             self.out_dim = get_dim(self.output_feature_names, self.n_obj)
+
             self.hidden_dimensions = kwargs.get('hidden_dim', [8])
             self.dimensions = [self.in_dim, *self.hidden_dimensions, self.out_dim]
             self.random_key = kwargs.get('random_key', random.PRNGKey(1))

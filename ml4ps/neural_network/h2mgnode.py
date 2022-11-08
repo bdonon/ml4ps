@@ -507,5 +507,7 @@ class H2MGNODE:
         nn_params = params['phi_g']
         return self.latent_nn_batch(nn_params, nn_input)
 
-
+    def apply(self, params, x):
+        """Forward pass for a batch of data."""
+        return self.forward_batch(params, x)
 

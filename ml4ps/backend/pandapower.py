@@ -3,6 +3,7 @@ import pandas as pd
 from ml4ps.backend.interface import AbstractBackend
 from ml4ps.utils import clean_dict, convert_addresses_to_integers
 import pandapower as pp
+import pandapower.converter as pc
 import numpy as np
 import os
 
@@ -10,7 +11,7 @@ import os
 class PandaPowerBackend(AbstractBackend):
     """Backend implementation that uses `PandaPower <http://www.pandapower.org>`_."""
 
-    valid_extensions = (".json", ".pkl")
+    valid_extensions = (".json", ".pkl", ".mat")
     valid_address_names = {
         "bus": ["id"], "load": ["bus", "name"], "sgen": ["bus", "name"], "gen": ["bus", "name"],
         "shunt": ["bus", "name"], "ext_grid": ["bus", "name"], "line": ["from_bus", "to_bus", "name"],
@@ -53,6 +54,8 @@ class PandaPowerBackend(AbstractBackend):
             net = pp.from_json(file_path)
         elif file_path.endswith('.pkl'):
             net = pp.from_pickle(file_path)
+        elif file_path.endswith('.mat'):
+            net = pc.from_mpc(file_path)
         else:
             raise NotImplementedError('No support for file {}'.format(file_path))
         net.name = os.path.basename(file_path)
@@ -70,6 +73,8 @@ class PandaPowerBackend(AbstractBackend):
             pp.to_json(net, file_path)
         elif file_path.endswith('.pkl'):
             pp.to_pickle(net, file_path)
+        elif file_path.endswith('.mat'):
+            pc.to_mpc(net, filename=file_path)
         else:
             raise NotImplementedError('No support for file {}'.format(file_path))
 

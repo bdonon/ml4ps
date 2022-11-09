@@ -4,8 +4,40 @@ from ml4ps.backend.interface import AbstractBackend
 from ml4ps.utils import clean_dict, convert_addresses_to_integers
 import pandapower as pp
 import pandapower.converter as pc
+import mat73
 import numpy as np
 import os
+from types import SimpleNamespace
+
+from pandapower.converter.matpower.from_mpc import _copy_data_from_mpc_to_ppc, _adjust_ppc_indices, _change_ppc_TAP_value
+
+
+
+def from_mpc73(mpc_file, f_hz=50, validate_conversion=False, **kwargs):
+    mpc = mat73.loadmat(mpc_file)#, squeeze_me=True, struct_as_record=False)
+    ppc = dict()
+    ppc['version'] = 'X.X'
+    ppc["baseMVA"] = mpc['mpc']['baseMVA']
+    ppc["bus"] = mpc['mpc']['bus']
+    ppc["gen"] = mpc['mpc']['gen']
+    ppc["branch"] = mpc['mpc']['branch']
+    ppc['gencost'] = mpc['mpc']['gencost']
+
+    #mpc['mpc']['version'] = 'X.X'
+    #mpc['mpc'] = SimpleNamespace(**mpc['mpc'])
+
+    #mpc['mpc'] = np.array(list(mpc['mpc'].items()))#, dtype=dtype)
+    #print
+    # init empty ppc
+
+    #_copy_data_from_mpc_to_ppc(ppc, mpc, 'mpc')
+    _adjust_ppc_indices(ppc)
+    _change_ppc_TAP_value(ppc)
+
+    #ppc = _mat2ppc(mpc_file, casename_mpc_file)
+    net = pc.from_ppc(ppc, f_hz=f_hz, validate_conversion=validate_conversion, **kwargs)
+    return net
+
 
 
 class PandaPowerBackend(AbstractBackend):
@@ -55,7 +87,10 @@ class PandaPowerBackend(AbstractBackend):
         elif file_path.endswith('.pkl'):
             net = pp.from_pickle(file_path)
         elif file_path.endswith('.mat'):
-            net = pc.from_mpc(file_path)
+            try :
+                net = pc.from_mpc(file_path)
+            except NotImplementedError:
+                net = from_mpc73(file_path)
         else:
             raise NotImplementedError('No support for file {}'.format(file_path))
         net.name = os.path.basename(file_path)

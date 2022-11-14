@@ -56,7 +56,7 @@ def collate_power_grid(data, **kwargs):
     #         for f in x[k].keys():
     #             current_n_obj = len(x[k][f])
     #             x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k]-current_n_obj])])
-    return collate_dict(x_batch, **kwargs)
+    return collate_dict(x_batch, **kwargs), nets
 
 
 # def collate_power_grid_old(data):

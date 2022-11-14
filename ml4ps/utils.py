@@ -6,7 +6,22 @@ import numpy as np
 #     return {k: {f: np.array([d[k][f] for d in data]) for f in data[0][k].keys()} for k in data[0].keys()}
 
 
-def collate_dict(data):
+def collate_dict(x_batch, pad_value=np.nan):
+    n_obj = {}
+    for x in x_batch:
+        for k in x.keys():
+            for f in x[k].keys():
+                current_n_obj = len(x[k][f])
+                n_obj[k] = max(n_obj.get(k, 0.), current_n_obj)
+    for x in x_batch:
+        for k in x.keys():
+            for f in x[k].keys():
+                current_n_obj = len(x[k][f])
+                x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k] - current_n_obj])])
+    collate_dict_process(x_batch)
+
+
+def collate_dict_process(data):
     """Transforms a list of data x (nested dictionaries) into a nested dictionary of batched tensors."""
     if isinstance(data[0], dict):
         r = {}
@@ -23,25 +38,25 @@ def collate_dict(data):
 #     return collate_dict(x), nets
 
 
-def collate_power_grid(data, pad_value=np.nan):
+def collate_power_grid(data, **kwargs):
     """Collates pairs `(x, nets)`, by only collating `x` and leaving `nets` untouched.
 
     In the case where samples have different number of objects, additional objects are created and are associated
     with the value specified in `pad_value`.
     """
     x_batch, nets = zip(*data)
-    n_obj = {}
-    for x in x_batch:
-        for k in x.keys():
-            for f in x[k].keys():
-                current_n_obj = len(x[k][f])
-                n_obj[k] = max(n_obj.get(k, 0.), current_n_obj)
-    for x in x_batch:
-        for k in x.keys():
-            for f in x[k].keys():
-                current_n_obj = len(x[k][f])
-                x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k]-current_n_obj])])
-    return collate_dict(x_batch)
+    # n_obj = {}
+    # for x in x_batch:
+    #     for k in x.keys():
+    #         for f in x[k].keys():
+    #             current_n_obj = len(x[k][f])
+    #             n_obj[k] = max(n_obj.get(k, 0.), current_n_obj)
+    # for x in x_batch:
+    #     for k in x.keys():
+    #         for f in x[k].keys():
+    #             current_n_obj = len(x[k][f])
+    #             x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k]-current_n_obj])])
+    return collate_dict(x_batch, **kwargs)
 
 
 # def collate_power_grid_old(data):

@@ -18,7 +18,7 @@ def collate_dict(x_batch, pad_value=np.nan):
             for f in x[k].keys():
                 current_n_obj = len(x[k][f])
                 x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k] - current_n_obj])])
-    collate_dict_process(x_batch)
+    return collate_dict_process(x_batch)
 
 
 def collate_dict_process(data):

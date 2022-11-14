@@ -161,7 +161,9 @@ class NormalizationFunction:
 def get_proba_quantiles(x, n_breakpoints):
     """Get pairs (probability, quantile) for `n_breakpoints` equally distributed probabilities."""
     p = np.arange(0, 1, 1. / n_breakpoints)
-    q = np.quantile(np.reshape(x, [-1]), p)
+    x_reshaped = np.reshape(x, [-1])
+    x_clean = x_reshaped[~np.isnan(x_reshaped)]
+    q = np.quantile(x_clean, p)
     return p, q
 
 

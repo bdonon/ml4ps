@@ -13,14 +13,35 @@ def collate_dict(data):
         for k in data[0].keys():
             r[k] = collate_dict([sample[k] for sample in data])
     else:
-        r = np.array(data)
+        r = np.stack(data)
     return r
 
 
-def collate_power_grid(data):
-    """Collates pairs `(x, nets)`, by only collating `x` and leaving `nets` untouched."""
-    x, nets = zip(*data)
-    return collate_dict(x), nets
+# def collate_power_grid(data):
+#     """Collates pairs `(x, nets)`, by only collating `x` and leaving `nets` untouched."""
+#     x, nets = zip(*data)
+#     return collate_dict(x), nets
+
+
+def collate_power_grid(data, pad_value=np.nan):
+    """Collates pairs `(x, nets)`, by only collating `x` and leaving `nets` untouched.
+
+    In the case where samples have different number of objects, additional objects are created and are associated
+    with the value specified in `pad_value`.
+    """
+    x_batch, nets = zip(*data)
+    n_obj = {}
+    for x in x_batch:
+        for k in x.keys():
+            for f in x[k].keys():
+                current_n_obj = len(x[k][f])
+                n_obj[k] = max(n_obj.get(k, 0.), current_n_obj)
+    for x in x_batch:
+        for k in x.keys():
+            for f in x[k].keys():
+                current_n_obj = len(x[k][f])
+                x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k]-current_n_obj])])
+    return collate_dict(x_batch)
 
 
 # def collate_power_grid_old(data):
@@ -30,7 +51,9 @@ def collate_power_grid(data):
 
 
 def separate_dict(data):
-    """Transforms a dict of batched tensors into a list of dicts that have single tensors as values."""
+    """Transforms a dict of batched tensors into a list of dicts that have single tensors as values.
+
+    TODO c'est pas fini"""
     r = {}
     for k in data.keys():
         if isinstance(data[k], dict):
@@ -38,7 +61,8 @@ def separate_dict(data):
         else:
             r[k] = data[k]
     n_batch = max([len(list_) for list_ in r.values()])
-    return [{key: r[key][i] for key in r.keys()} for i in range(n_batch)]
+    #return [{key: r[key][i] for key in r.keys()} for i in range(n_batch)]
+    return [{key: r[key][i][~np.isnan(r[key][i])] for key in r.keys()} for i in range(n_batch)]
 
 
 # def separate_dict_old(data):

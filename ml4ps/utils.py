@@ -26,7 +26,7 @@ def collate_dict_process(data):
     if isinstance(data[0], dict):
         r = {}
         for k in data[0].keys():
-            r[k] = collate_dict([sample[k] for sample in data])
+            r[k] = collate_dict_process([sample[k] for sample in data])
     else:
         r = np.stack(data)
     return r

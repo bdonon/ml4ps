@@ -116,7 +116,8 @@ def get_local_nn_input(x, h_v, h_g, t, global_input_feature_names, local_address
             r.append(t * ones)
             for address_name in address_names:
                 address = x[object_name][address_name]
-                r.append(h_v[address])
+                #r.append(h_v[address])
+                r.append(h_v.at[address].get(mode='drop'))
             nn_input[object_name] = jnp.concatenate(r, axis=1)
     return nn_input
 
@@ -382,7 +383,12 @@ class H2MGNODE:
         `self.global_input_feature_names`. If a field is missing, then a KeyError is returned.
         All fields that are not declared in `self.global_input_feature_names` but are present in `x`
         are simply discarded.
+
+        It also transforms nan addresses into values that will be automatically TODO
         """
+
+        n_obj_tot = get_n_obj_tot(x, self.local_address_names)
+
         r = {}
         for object_name in self.local_object_names:
             if object_name in x.keys():
@@ -392,7 +398,8 @@ class H2MGNODE:
                         r[object_name][f] = x[object_name][f]
                 if object_name in self.local_address_names.keys():
                     for f in self.local_address_names[object_name]:
-                        r[object_name][f] = x[object_name][f]
+                        #r[object_name][f] = x[object_name][f]
+                        r[object_name][f] = jnp.nan_to_num(x[object_name][f], nan=n_obj_tot+1)
         for object_name in self.global_input_feature_names.keys():
             r[object_name] = {}
             for f in self.global_input_feature_names[object_name]:
@@ -434,7 +441,11 @@ class H2MGNODE:
         return r
 
     def decode_local(self, params, x, h_v, h_g):
-        """Decodes the local information to produce hyper-edge predictions."""
+        """Decodes the local information to produce hyper-edge predictions.
+
+        TODO return nan for non existing objects
+
+        """
         r = {}
         nn_input = get_local_nn_input(x, h_v, h_g, 0.,
                                       self.global_input_feature_names,
@@ -498,7 +509,7 @@ class H2MGNODE:
                 for address_name in self.local_address_names[object_name]:
                     address_value = x[object_name][address_name]
                     update = self.latent_nn_batch(nn_params[object_name][address_name], nn_input[object_name])
-                    dh_v = dh_v.at[address_value].add(update)
+                    dh_v = dh_v.at[address_value].add(update, mode="drop")
         return jnn.tanh(dh_v)
 
     def dynamics_h_g(self, x, h_v, h_g, t, params):

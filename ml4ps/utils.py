@@ -66,9 +66,7 @@ def collate_power_grid(data, **kwargs):
 
 
 def separate_dict(data):
-    """Transforms a dict of batched tensors into a list of dicts that have single tensors as values.
-
-    TODO c'est pas fini"""
+    """Transforms a dict of batched tensors into a list of dicts that have single tensors as values."""
     r = {}
     for k in data.keys():
         if isinstance(data[k], dict):
@@ -76,8 +74,33 @@ def separate_dict(data):
         else:
             r[k] = data[k]
     n_batch = max([len(list_) for list_ in r.values()])
-    #return [{key: r[key][i] for key in r.keys()} for i in range(n_batch)]
-    return [{key: r[key][i][~np.isnan(r[key][i])] for key in r.keys()} for i in range(n_batch)]
+
+    results = []
+    for i in range(n_batch):
+        dict_ = {}
+        for key in r.keys():
+            if isinstance(r[key], np.ndarray):
+                dict_[key] = r[key][i][~np.isnan(r[key][i])]
+            else:
+                dict_[key] = r[key][i]
+
+        results.append(dict_)
+    return results
+
+
+# def separate_dict(data):
+#     """Transforms a dict of batched tensors into a list of dicts that have single tensors as values.
+#
+#     TODO c'est pas fini"""
+#     r = {}
+#     for k in data.keys():
+#         if isinstance(data[k], dict):
+#             r[k] = separate_dict(data[k])
+#         else:
+#             r[k] = data[k]
+#     n_batch = max([len(list_) for list_ in r.values()])
+#     #return [{key: r[key][i] for key in r.keys()} for i in range(n_batch)]
+#     return [{key: r[key][i][~np.isnan(r[key][i])] for key in r.keys()} for i in range(n_batch)]
 
 
 # def separate_dict_old(data):

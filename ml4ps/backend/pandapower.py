@@ -153,7 +153,7 @@ class PandaPowerBackend(AbstractBackend):
 
             if (object_name in address_names.keys()) or (object_name in feature_names.keys()):
                 x[object_name] = {}
-                table = get_table(network, object_name)
+                table = self.get_table(network, object_name)
 
                 object_address_names = address_names.get(object_name, [])
                 for address_name in object_address_names:
@@ -167,55 +167,55 @@ class PandaPowerBackend(AbstractBackend):
         convert_addresses_to_integers(x, address_names)
         return x
 
+    @staticmethod
+    def get_table(net, key):
+        """Gets a pandas dataframe describing the features of a specific object in a power grid instance.
 
-def get_table(net, key):
-    """Gets a pandas dataframe describing the features of a specific object in a power grid instance.
-
-    Pandapower puts the results of power flow simulations into a separate table. For instance,
-    results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res
-    for the considered features.
-    """
-    if key == 'bus':
-        table = net.bus.copy(deep=True)
-        table = table.join(net.res_bus.add_prefix('res_'))
-    elif key == 'load':
-        table = net.load.copy(deep=True)
-        table = table.join(net.res_load.add_prefix('res_'))
-        table.name = 'load_' + table.index.astype(str)
-    elif key == 'sgen':
-        table = net.sgen.copy(deep=True)
-        table = table.join(net.res_sgen.add_prefix('res_'))
-        table.name = 'sgen_' + table.index.astype(str)
-    elif key == 'gen':
-        table = net.gen.copy(deep=True)
-        table = table.join(net.res_gen.add_prefix('res_'))
-        table.name = 'gen_' + table.index.astype(str)
-    elif key == 'shunt':
-        table = net.shunt.copy(deep=True)
-        table = table.join(net.res_shunt.add_prefix('res_'))
-        table.name = 'shunt_' + table.index.astype(str)
-    elif key == 'ext_grid':
-        table = net.ext_grid.copy(deep=True)
-        table = table.join(net.res_ext_grid.add_prefix('res_'))
-        table.name = 'ext_grid_' + table.index.astype(str)
-    elif key == 'line':
-        table = net.line.copy(deep=True)
-        table = table.join(net.res_line.add_prefix('res_'))
-        table.name = 'line_' + table.index.astype(str)
-    elif key == 'trafo':
-        table = net.trafo.copy(deep=True)
-        table = table.join(net.res_trafo.add_prefix('res_'))
-        table.name = 'trafo_' + table.index.astype(str)
-        table.tap_side = table.tap_side.map({'hv': 0., 'lv': 1.})
-    elif key == 'poly_cost':
-        table = net.poly_cost.copy(deep=True)
-        table['element'] = table.et.astype(str) + '_' + table.element.astype(str)
-    elif key == 'global':
-        table = pd.DataFrame({'converged': [net.converged], 'f_hz': [net.f_hz], 'sn_mva': [net.sn_mva]})
-    else:
-        raise ValueError('Object {} is not a valid object name. '.format(key))
-    table['id'] = table.index
-    table.replace([np.inf], 99999, inplace=True)
-    table.replace([-np.inf], -99999, inplace=True)
-    table = table.fillna(0.)
-    return table
+        Pandapower puts the results of power flow simulations into a separate table. For instance,
+        results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res
+        for the considered features.
+        """
+        if key == 'bus':
+            table = net.bus.copy(deep=True)
+            table = table.join(net.res_bus.add_prefix('res_'))
+        elif key == 'load':
+            table = net.load.copy(deep=True)
+            table = table.join(net.res_load.add_prefix('res_'))
+            table.name = 'load_' + table.index.astype(str)
+        elif key == 'sgen':
+            table = net.sgen.copy(deep=True)
+            table = table.join(net.res_sgen.add_prefix('res_'))
+            table.name = 'sgen_' + table.index.astype(str)
+        elif key == 'gen':
+            table = net.gen.copy(deep=True)
+            table = table.join(net.res_gen.add_prefix('res_'))
+            table.name = 'gen_' + table.index.astype(str)
+        elif key == 'shunt':
+            table = net.shunt.copy(deep=True)
+            table = table.join(net.res_shunt.add_prefix('res_'))
+            table.name = 'shunt_' + table.index.astype(str)
+        elif key == 'ext_grid':
+            table = net.ext_grid.copy(deep=True)
+            table = table.join(net.res_ext_grid.add_prefix('res_'))
+            table.name = 'ext_grid_' + table.index.astype(str)
+        elif key == 'line':
+            table = net.line.copy(deep=True)
+            table = table.join(net.res_line.add_prefix('res_'))
+            table.name = 'line_' + table.index.astype(str)
+        elif key == 'trafo':
+            table = net.trafo.copy(deep=True)
+            table = table.join(net.res_trafo.add_prefix('res_'))
+            table.name = 'trafo_' + table.index.astype(str)
+            table.tap_side = table.tap_side.map({'hv': 0., 'lv': 1.})
+        elif key == 'poly_cost':
+            table = net.poly_cost.copy(deep=True)
+            table['element'] = table.et.astype(str) + '_' + table.element.astype(str)
+        elif key == 'global':
+            table = pd.DataFrame({'converged': [net.converged], 'f_hz': [net.f_hz], 'sn_mva': [net.sn_mva]})
+        else:
+            raise ValueError('Object {} is not a valid object name. '.format(key))
+        table['id'] = table.index
+        table.replace([np.inf], 99999, inplace=True)
+        table.replace([-np.inf], -99999, inplace=True)
+        table = table.fillna(0.)
+        return table

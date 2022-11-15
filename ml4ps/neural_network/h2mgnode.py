@@ -466,6 +466,9 @@ class H2MGNODE:
                 r[object_name] = {}
                 for feature_name in self.local_output_feature_names[object_name]:
                     r[object_name][feature_name] = self.output_nn_batch(nn_params[object_name][feature_name], nn_input[object_name])[:, 0]
+
+                    for address_name in self.local_address_names[object_name]:
+                        r[object_name][feature_name] = r[object_name][feature_name] + 0. * x[object_name][address_name]
         return r
 
     def init_state(self, x):

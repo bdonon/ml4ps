@@ -131,7 +131,7 @@ class PyPowSyblBackend(AbstractBackend):
                     net.update_loads(df)
                 else:
                     raise ValueError('Object {} is not a valid object name. ' +
-                                     'Please pick from this list : {}'.format(k, VALID_FEATURE_NAMES))
+                                     'Please pick from this specific list : {}'.format(k, VALID_FEATURE_NAMES))
 
     def run_network(self, net, **kwargs):
         pl.run_ac(net, **kwargs)

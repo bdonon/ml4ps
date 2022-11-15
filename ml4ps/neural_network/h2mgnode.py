@@ -256,7 +256,7 @@ class H2MGNODE:
 
         self.output_nn_batch = vmap(output_nn, in_axes=(None, 0), out_axes=0)
         self.latent_nn_batch = vmap(latent_nn, in_axes=(None, 0), out_axes=0)
-        self.solve_and_decode_batch = vmap(self.solve_and_decode, in_axes=(None, 0))
+        self.solve_and_decode_batch = vmap(self.solve_and_decode, in_axes=(None, 0, 0))
 
     def check_names(self):
         """Checks that the various features and addresses are consistent."""
@@ -366,12 +366,12 @@ class H2MGNODE:
     def forward(self, params, x, **kwargs):
         """Performs a forward pass for a single sample."""
         init_state = self.init_state(x)
-        return self.solve_and_decode(params, init_state, **kwargs)
+        return self.solve_and_decode(params, init_state, x, **kwargs)
 
     def forward_batch(self, params, x_batch, **kwargs):
         """Performs a forward pass for a batch of samples."""
         init_state_batch = self.init_state_batch(x_batch)
-        return self.solve_and_decode_batch(params, init_state_batch, **kwargs)
+        return self.solve_and_decode_batch(params, init_state_batch, x_batch, **kwargs)
 
     def input_filter(self, x):
         """Extracts the input features from `x`.
@@ -401,7 +401,8 @@ class H2MGNODE:
                 r[object_name] = {}
                 if object_name in self.local_input_feature_names.keys():
                     for f in self.local_input_feature_names[object_name]:
-                        r[object_name][f] = x[object_name][f]
+                        #r[object_name][f] = x[object_name][f]
+                        r[object_name][f] = jnp.nan_to_num(x[object_name][f], nan=0.)
                 if object_name in self.local_address_names.keys():
                     for f in self.local_address_names[object_name]:
                         #r[object_name][f] = x[object_name][f]
@@ -413,10 +414,10 @@ class H2MGNODE:
         return r
 
     @partial(jit, static_argnums=(0,))
-    def solve_and_decode(self, params, init_state, **kwargs):
+    def solve_and_decode(self, params, init_state, x, **kwargs):
         """Solves the dynamics of the system and decodes the final state into a meaningful output."""
         final_state = self.solve(params, init_state, **kwargs)
-        return self.decode(params, final_state)
+        return self.decode(params, final_state, x)
 
     def solve(self, params, init_state, **kwargs):
         """Solves the system dynamics using the JAX implementation of Runge-Kutta, and returns the final state.
@@ -429,9 +430,10 @@ class H2MGNODE:
         trajectory = odeint(self.dynamics, init_state, jnp.array([0., 1.]), params, rtol=rtol, atol=atol, mxstep=mxstep)
         return get_final_state(trajectory)
 
-    def decode(self, params, final_state):
+    def decode(self, params, final_state, x):
         """Converts the final state of a latent trajectory into a meaningful prediction."""
-        x, h_v, h_g = final_state['x'], final_state['h_v'], final_state['h_g']
+        #x, h_v, h_g = final_state['x'], final_state['h_v'], final_state['h_g']
+        x, h_v, h_g = x, final_state['h_v'], final_state['h_g']
         r_global = self.decode_global(params, x, h_v, h_g)
         r_local = self.decode_local(params, x, h_v, h_g)
         return {**r_global, **r_local}

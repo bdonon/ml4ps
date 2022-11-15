@@ -459,7 +459,7 @@ class H2MGNODE:
                                       self.global_input_feature_names,
                                       self.local_address_names,
                                       self.local_input_feature_names,
-                                      replace_nan=False)
+                                      replace_nan=True)
         nn_params = params['psi_c']
         for object_name in self.local_output_feature_names.keys():
             if object_name in x.keys():

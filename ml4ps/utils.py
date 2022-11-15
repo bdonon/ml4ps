@@ -86,7 +86,7 @@ def separate_dict(data):
                 dict_[key] = r[key][i][~np.isnan(r[key][i])]
             elif isinstance(r[key], jnp.DeviceArray):
                 #r[key][i] = np.asarray(r[key][i])
-                temp = jnp.to_ndarray(r[key][i])
+                temp = np.array(r[key][i])
                 dict_[key] = temp[~np.isnan(temp)]
             else:
                 dict_[key] = r[key][i]

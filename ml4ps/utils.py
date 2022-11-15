@@ -12,13 +12,15 @@ def collate_dict(x_batch, pad_value=np.nan):
         for k in x.keys():
             for f in x[k].keys():
                 current_n_obj = len(x[k][f])
-                n_obj[k] = max(n_obj.get(k, 0.), current_n_obj)
+                n_obj[k] = max(n_obj.get(k, 0), current_n_obj)
     for x in x_batch:
         for k in x.keys():
             for f in x[k].keys():
                 current_n_obj = len(x[k][f])
-                x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k] - current_n_obj])])
+                #x[k][f] = np.concatenate([x[k][f]])
+                x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k] - current_n_obj])])#, dtype=x[k][f].dtype)
     return collate_dict_process(x_batch)
+
 
 
 def collate_dict_process(data):

@@ -84,7 +84,7 @@ def get_global_nn_input(x, h_v, h_g, t, global_input_feature_names):
     return nn_input
 
 
-def get_local_nn_input(x, h_v, h_g, t, global_input_feature_names, local_address_names, local_input_feature_names):
+def get_local_nn_input(x, h_v, h_g, t, global_input_feature_names, local_address_names, local_input_feature_names, replace_nan=False):
     """Returns the input for each local neural network.
 
     For each object class :math:`c` specified as keys of  `local_address_names`,
@@ -122,7 +122,8 @@ def get_local_nn_input(x, h_v, h_g, t, global_input_feature_names, local_address
                 r.append(h_v.at[address].get(mode='drop'))
 
             nn_input[object_name] = jnp.concatenate(r, axis=1)
-            nn_input[object_name] = jnp.nan_to_num(nn_input[object_name], nan=0)
+            if replace_nan:
+                nn_input[object_name] = jnp.nan_to_num(nn_input[object_name], nan=0)
 
     return nn_input
 
@@ -455,7 +456,8 @@ class H2MGNODE:
         nn_input = get_local_nn_input(x, h_v, h_g, 0.,
                                       self.global_input_feature_names,
                                       self.local_address_names,
-                                      self.local_input_feature_names)
+                                      self.local_input_feature_names,
+                                      replace_nan=False)
         nn_params = params['psi_c']
         for object_name in self.local_output_feature_names.keys():
             if object_name in x.keys():
@@ -507,7 +509,8 @@ class H2MGNODE:
         nn_input = get_local_nn_input(x, h_v, h_g, t,
                                       self.global_input_feature_names,
                                       self.local_address_names,
-                                      self.local_input_feature_names)
+                                      self.local_input_feature_names,
+                                      replace_nan=True)
         nn_params = params['phi_c']
         for object_name in self.local_address_names.keys():
             if object_name in x.keys():

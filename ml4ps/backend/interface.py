@@ -87,7 +87,7 @@ class AbstractBackend(ABC):
         [self.run_network(net, **kwargs) for net in network_batch]
 
     @abstractmethod
-    def get_data_network(self, net, feature_names=None, address_names=None):
+    def get_data_network(self, net, feature_names=None, address_names=None, address_to_int=True):
         """Returns feature values from a single power grid instance.
 
         Should be overridden in a proper backend implementation.
@@ -95,9 +95,9 @@ class AbstractBackend(ABC):
         """
         pass
 
-    def get_data_batch(self, net_batch, feature_names=None, address_names=None):
+    def get_data_batch(self, net_batch, **kwargs):#feature_names=None, address_names=None, address_to_int=True):
         """Returns features from a batch of power grids."""
-        return collate_dict([self.get_data_network(net, feature_names=feature_names, address_names=address_names) for net in net_batch])
+        return collate_dict([self.get_data_network(net, **kwargs) for net in net_batch])
 
     def assert_names(self, feature_names=None, address_names=None):
         """Asserts that `object_names`, `feature_names` and `address_names` are valid w.r.t. the backend."""

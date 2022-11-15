@@ -118,7 +118,7 @@ def get_local_nn_input(x, h_v, h_g, t, global_input_feature_names, local_address
             for address_name in address_names:
                 address = x[object_name][address_name].astype(int)
                 #r.append(h_v[address])
-                r.append(h_v.at[address].get(mode='drop'))
+                r.append(h_v.at[address].get())#mode='drop'))
             nn_input[object_name] = jnp.concatenate(r, axis=1)
     return nn_input
 
@@ -510,7 +510,7 @@ class H2MGNODE:
                 for address_name in self.local_address_names[object_name]:
                     address_value = x[object_name][address_name].astype(int)
                     update = self.latent_nn_batch(nn_params[object_name][address_name], nn_input[object_name])
-                    dh_v = dh_v.at[address_value].add(update, mode="drop")
+                    dh_v = dh_v.at[address_value].add(update)#, mode="drop")
         return jnn.tanh(dh_v)
 
     def dynamics_h_g(self, x, h_v, h_g, t, params):

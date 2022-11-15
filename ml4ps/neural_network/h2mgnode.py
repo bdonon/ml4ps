@@ -45,7 +45,7 @@ def get_n_batch(x):
     n_batch = 0
     for object_name in x.keys():
         for feature_name in x[object_name].keys():
-            n_batch = np.maximum(n_batch, np.shape(x[object_name][feature_name])[0])
+            n_batch = np.maximum(n_batch, np.shape(x[object_name][feature_name])[0]).astype(int)
     return n_batch
 
 
@@ -55,7 +55,7 @@ def get_n_obj_tot(x, local_address_names):
     for object_name in local_address_names.keys():
         if object_name in x.keys():
             for address_name in local_address_names[object_name]:
-                n_obj_tot = np.maximum(n_obj_tot, np.max(x[object_name][address_name]))
+                n_obj_tot = np.maximum(n_obj_tot, np.max(x[object_name][address_name])).astype(int)
     return n_obj_tot + 1
 
 
@@ -115,7 +115,7 @@ def get_local_nn_input(x, h_v, h_g, t, global_input_feature_names, local_address
                     r.append(jnp.expand_dims(x[object_name][feature_name], 1))
             r.append(t * ones)
             for address_name in address_names:
-                address = x[object_name][address_name]
+                address = x[object_name][address_name].astype(int)
                 #r.append(h_v[address])
                 r.append(h_v.at[address].get(mode='drop'))
             nn_input[object_name] = jnp.concatenate(r, axis=1)
@@ -507,7 +507,7 @@ class H2MGNODE:
         for object_name in self.local_address_names.keys():
             if object_name in x.keys():
                 for address_name in self.local_address_names[object_name]:
-                    address_value = x[object_name][address_name]
+                    address_value = x[object_name][address_name].astype(int)
                     update = self.latent_nn_batch(nn_params[object_name][address_name], nn_input[object_name])
                     dh_v = dh_v.at[address_value].add(update, mode="drop")
         return jnn.tanh(dh_v)

@@ -1,4 +1,5 @@
 import numpy as np
+import jax.numpy as jnp
 
 
 # def collate_dict_old(data):
@@ -83,6 +84,8 @@ def separate_dict(data):
         for key in r.keys():
             if isinstance(r[key], np.ndarray):
                 dict_[key] = r[key][i][~np.isnan(r[key][i])]
+            elif isinstance(r[key], jnp.DeviceArray):
+                dict_[key] = np.array(dict_[key])
             else:
                 dict_[key] = r[key][i]
 

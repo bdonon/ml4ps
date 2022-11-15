@@ -29,11 +29,11 @@ class PowerGridDataset(Dataset):
                 raw data (that is very likely to follow a multimodal distribution) into a distribution that is
                 more suitable for the training of neural networks. If not provided, no normalization is applied
                 to the features.
-            addresses (:obj:`dict` of :obj:`list` of :obj:`str`, optional): Defines the addresses that the Dataset
+            address_names (:obj:`dict` of :obj:`list` of :obj:`str`, optional): Defines the addresses that the Dataset
                 should return. The object names and address names should be compatible with the provided backend.
                 If no addresses is provided, then the Dataset simply uses the default objects and addresses
                 provided by the backend.
-            features (:obj:`dict` of :obj:`list` of :obj:`str`, optional): Defines the features that the Dataset
+            feature_names (:obj:`dict` of :obj:`list` of :obj:`str`, optional): Defines the features that the Dataset
                 should return. The object names and feature names should be compatible with the provided backend.
                 If no addresses is provided, then the Dataset simply uses the default objects and features
                 provided by the ``backend.

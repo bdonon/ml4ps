@@ -7,6 +7,7 @@ import pypowsybl.network as pn
 import os
 import pandas as pd
 import numpy as np
+from joblib import Parallel, delayed,parallel_backend
 
 VALID_FEATURE_NAMES = {
     'bus': ['v_mag', 'v_angle'],
@@ -30,6 +31,7 @@ VALID_ADDRESSE_NAMES = {
     'load': ['id', 'bus_id'],
     'shunt': ['id', 'bus_id'],
     'linear_shunt_compensator_sections': ['id'],
+    "static_var_compensators": ['id'],
     'batteries': ["id", "bus_id"],
     'line': ['id', 'bus1_id', 'bus2_id'],
     'twt': ['id', 'bus1_id', 'bus2_id'],
@@ -43,8 +45,10 @@ class PyPowSyblBackend(AbstractBackend):
     valid_feature_names = VALID_FEATURE_NAMES
     valid_address_names = VALID_ADDRESSE_NAMES
 
-    def __init__(self):
+    def __init__(self, n_cores=0):
         super().__init__()
+
+        self.n_cores = n_cores
 
     @staticmethod
     def get_table(net, key):
@@ -134,7 +138,8 @@ class PyPowSyblBackend(AbstractBackend):
                                      'Please pick from this specific list : {}'.format(k, VALID_FEATURE_NAMES))
 
     def run_network(self, net, **kwargs):
-        pl.run_ac(net, **kwargs)
+        parameters = pl.Parameters(voltage_init_mode=pl.VoltageInitMode.DC_VALUES)
+        pl.run_ac(net, parameters=parameters)
 
     def save_network(self, net, path):
         """Saves a power grid instance using the same name as in the initial file.
@@ -150,3 +155,16 @@ class PyPowSyblBackend(AbstractBackend):
             net.dump(file_path, format=file_path)
         else:
             raise NotImplementedError('No support for file {}'.format(file_path))
+
+    def run_batch(self, network_batch, **kwargs):
+        """Performs power flow computations for a batch of power grids."""
+        def run_single(i):
+            net = network_batch[i]
+            parameters = pl.Parameters(voltage_init_mode=pl.VoltageInitMode.DC_VALUES)
+            pl.run_ac(net, parameters=parameters)
+
+        if self.n_cores > 0:
+            Parallel(n_jobs=self.n_cores, require='sharedmem')(delayed(run_single)(i) for i in range(len(network_batch)))
+        else:
+            super(PyPowSyblBackend, self).run_batch(network_batch, **kwargs)
+

@@ -136,7 +136,7 @@ class PandaPowerBackend(AbstractBackend):
         except pp.powerflow.LoadflowNotConverged:
             pass
 
-    def get_data_network(self, network, feature_names=None, address_names=None):
+    def get_data_network(self, network, feature_names=None, address_names=None, address_to_int=True):
         """Extracts features from a pandapower network.
 
         Addresses are converted into unique integers that start at 0.
@@ -164,7 +164,8 @@ class PandaPowerBackend(AbstractBackend):
                     x[object_name][feature_name] = np.array(table[feature_name], dtype=np.float32)
 
         clean_dict(x)
-        convert_addresses_to_integers(x, address_names)
+        if address_to_int:
+            convert_addresses_to_integers(x, address_names)
         return x
 
     @staticmethod

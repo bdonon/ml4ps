@@ -236,7 +236,8 @@ class PandaPowerBackend(AbstractBackend):
             #    [self.run_network(network_batch[i], **kwargs) for i in indices]
             #network_superbatch = np.array_split(network_batch, self.n_cores)
             #self.pool.map(run_single, network_superbatch)
-            return self.pool.imap_unordered(run_single, network_batch)
+            return self.pool.imap(run_single, network_batch)
+            #return self.pool.imap_unordered(run_single, network_batch)
 
             #Parallel(n_jobs=self.n_cores, require='sharedmem')(delayed(run_single)(indices) for indices in range_splits)
         else:

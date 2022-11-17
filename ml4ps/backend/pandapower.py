@@ -229,8 +229,8 @@ class PandaPowerBackend(AbstractBackend):
             n_nets = len(network_batch)
             range_splits = np.array_split(range(n_nets), self.n_cores)
 
-            def run_single(i):
-                [self.run_network(network_batch[idx], **kwargs) for idx in range_splits[i]]
-            Parallel(n_jobs=self.n_cores, require='sharedmem')(delayed(run_single)(i) for i in range(self.n_cores))
+            def run_single(indices):
+                [self.run_network(network_batch[i], **kwargs) for i in indices]
+            Parallel(n_jobs=self.n_cores, require='sharedmem')(delayed(run_single)(indices) for indices in range_splits)
         else:
             super(PandaPowerBackend, self).run_batch(network_batch, **kwargs)

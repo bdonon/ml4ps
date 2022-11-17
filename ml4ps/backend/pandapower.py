@@ -10,7 +10,7 @@ import os
 from types import SimpleNamespace
 
 from pandapower.converter.matpower.from_mpc import _copy_data_from_mpc_to_ppc, _adjust_ppc_indices, _change_ppc_TAP_value
-
+from joblib import Parallel, delayed,parallel_backend
 
 
 def from_mpc73(mpc_file, f_hz=50, validate_conversion=False, **kwargs):
@@ -73,9 +73,10 @@ class PandaPowerBackend(AbstractBackend):
         "poly_cost": ["cp0_eur", "cp1_eur_per_mw", "cp2_eur_per_mw2", "cq0_eur", "cq1_eur_per_mvar",
             "cq2_eur_per_mvar2"]}
 
-    def __init__(self):
-        """Initializes a PandaPowerBackend."""
+    def __init__(self, n_cores=0):
+        """Initializes a PandaPower backend."""
         super().__init__()
+        self.n_cores = n_cores
 
     def load_network(self, file_path):
         """Loads a pandapower power grid instance, either from a `.pkl` or from a `.json` file.
@@ -220,3 +221,16 @@ class PandaPowerBackend(AbstractBackend):
         table.replace([-np.inf], -99999, inplace=True)
         table = table.fillna(0.)
         return table
+
+    def run_batch(self, network_batch, **kwargs):
+        """Performs power flow computations for a batch of power grids."""
+
+        if self.n_cores > 0:
+            n_nets = len(network_batch)
+            range_splits = np.array_split(range(n_nets), self.n_cores)
+
+            def run_single(i):
+                [self.run_network(network_batch[idx], **kwargs) for idx in range_splits[i]]
+            Parallel(n_jobs=self.n_cores, require='sharedmem')(delayed(run_single)(i) for i in range(self.n_cores))
+        else:
+            super(PandaPowerBackend, self).run_batch(network_batch, **kwargs)

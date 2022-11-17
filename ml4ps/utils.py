@@ -202,7 +202,7 @@ def assert_substructure(a, b):
             assert (k in b.keys())
             assert_substructure(a[k], b[k])
     elif isinstance(a, list):
-        assert set(a).issubset(set(b))
+        assert set(a).issubset(set(b))#(sorted(a) == sorted(b)) and (len(a) == len(b)))
 
 
 # def get_n_obj(x):

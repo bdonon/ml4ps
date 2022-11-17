@@ -9,12 +9,14 @@ import numpy as np
 import os
 from types import SimpleNamespace
 
-from pandapower.converter.matpower.from_mpc import _copy_data_from_mpc_to_ppc, _adjust_ppc_indices, _change_ppc_TAP_value
-from joblib import Parallel, delayed,parallel_backend
+from pandapower.converter.matpower.from_mpc import _copy_data_from_mpc_to_ppc, _adjust_ppc_indices, \
+    _change_ppc_TAP_value
+from joblib import Parallel, delayed, parallel_backend
+from multiprocessing import Pool
 
 
 def from_mpc73(mpc_file, f_hz=50, validate_conversion=False, **kwargs):
-    mpc = mat73.loadmat(mpc_file)#, squeeze_me=True, struct_as_record=False)
+    mpc = mat73.loadmat(mpc_file)  # , squeeze_me=True, struct_as_record=False)
     ppc = dict()
     ppc['version'] = 'X.X'
     ppc["baseMVA"] = mpc['mpc']['baseMVA']
@@ -23,21 +25,20 @@ def from_mpc73(mpc_file, f_hz=50, validate_conversion=False, **kwargs):
     ppc["branch"] = mpc['mpc']['branch']
     ppc['gencost'] = mpc['mpc']['gencost']
 
-    #mpc['mpc']['version'] = 'X.X'
-    #mpc['mpc'] = SimpleNamespace(**mpc['mpc'])
+    # mpc['mpc']['version'] = 'X.X'
+    # mpc['mpc'] = SimpleNamespace(**mpc['mpc'])
 
-    #mpc['mpc'] = np.array(list(mpc['mpc'].items()))#, dtype=dtype)
-    #print
+    # mpc['mpc'] = np.array(list(mpc['mpc'].items()))#, dtype=dtype)
+    # print
     # init empty ppc
 
-    #_copy_data_from_mpc_to_ppc(ppc, mpc, 'mpc')
+    # _copy_data_from_mpc_to_ppc(ppc, mpc, 'mpc')
     _adjust_ppc_indices(ppc)
     _change_ppc_TAP_value(ppc)
 
-    #ppc = _mat2ppc(mpc_file, casename_mpc_file)
+    # ppc = _mat2ppc(mpc_file, casename_mpc_file)
     net = pc.from_ppc(ppc, f_hz=f_hz, validate_conversion=validate_conversion, **kwargs)
     return net
-
 
 
 class PandaPowerBackend(AbstractBackend):
@@ -77,6 +78,8 @@ class PandaPowerBackend(AbstractBackend):
         """Initializes a PandaPower backend."""
         super().__init__()
         self.n_cores = n_cores
+        if self.n_cores > 0:
+            self.pool = Pool(self.n_cores)
 
     def load_network(self, file_path):
         """Loads a pandapower power grid instance, either from a `.pkl` or from a `.json` file.
@@ -88,7 +91,7 @@ class PandaPowerBackend(AbstractBackend):
         elif file_path.endswith('.pkl'):
             net = pp.from_pickle(file_path)
         elif file_path.endswith('.mat'):
-            try :
+            try:
                 net = pc.from_mpc(file_path)
             except NotImplementedError:
                 net = from_mpc73(file_path)
@@ -229,8 +232,17 @@ class PandaPowerBackend(AbstractBackend):
             n_nets = len(network_batch)
             range_splits = np.array_split(range(n_nets), self.n_cores)
 
-            def run_single(indices):
-                [self.run_network(network_batch[i], **kwargs) for i in indices]
-            Parallel(n_jobs=self.n_cores, require='sharedmem')(delayed(run_single)(indices) for indices in range_splits)
+            #def run_single(indices):
+            #    [self.run_network(network_batch[i], **kwargs) for i in indices]
+            #network_superbatch = np.array_split(network_batch, self.n_cores)
+            #self.pool.map(run_single, network_superbatch)
+            self.pool.imap_unordered(run_single, network_batch, chunksize=10)
+
+            #Parallel(n_jobs=self.n_cores, require='sharedmem')(delayed(run_single)(indices) for indices in range_splits)
         else:
             super(PandaPowerBackend, self).run_batch(network_batch, **kwargs)
+
+
+def run_single(net):
+    pp.runpp(net)
+    #[pp.runpp(net) for net in nets]

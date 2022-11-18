@@ -46,9 +46,10 @@ class PandaPowerBackend(AbstractBackend):
 
     valid_extensions = (".json", ".pkl", ".mat")
     valid_address_names = {
-        "bus": ["id"], "load": ["bus", "name"], "sgen": ["bus", "name"], "gen": ["bus", "name"],
-        "shunt": ["bus", "name"], "ext_grid": ["bus", "name"], "line": ["from_bus", "to_bus", "name"],
-        "trafo": ["hv_bus", "lv_bus", "name"], "poly_cost": ["element"]}
+        "bus": ["id", "name"], "load": ["id", "name", "bus_id"], "sgen": ["id", "name", "bus_id"],
+        "gen": ["id", "name", "bus_id"], "shunt": ["id", "name", "bus_id"], "ext_grid": ["id", "name", "bus_id"],
+        "line": ["id", "name", "from_bus_id", "to_bus_id"], "trafo": ["id", "name", "hv_bus_id", "lv_bus_id"],
+        "poly_cost": ["element"]}
     valid_feature_names = {
         "global": ["converged", "f_hz", "sn_mva"],
         "bus": ["in_service", "max_vm_pu", 'min_vm_pu', "vn_kv", "res_vm_pu", "res_va_degree", "res_p_mw",
@@ -183,34 +184,44 @@ class PandaPowerBackend(AbstractBackend):
         if key == 'bus':
             table = net.bus.copy(deep=True)
             table = table.join(net.res_bus.add_prefix('res_'))
+            table['id'] = 'bus_' + table.index.astype(str)
         elif key == 'load':
             table = net.load.copy(deep=True)
             table = table.join(net.res_load.add_prefix('res_'))
-            table.name = 'load_' + table.index.astype(str)
+            table['id'] = 'load_' + table.index.astype(str)
+            table['bus_id'] = 'bus_' + table.bus.astype(str)
         elif key == 'sgen':
             table = net.sgen.copy(deep=True)
             table = table.join(net.res_sgen.add_prefix('res_'))
-            table.name = 'sgen_' + table.index.astype(str)
+            table['id'] = 'sgen_' + table.index.astype(str)
+            table['bus_id'] = 'bus_' + table.bus.astype(str)
         elif key == 'gen':
             table = net.gen.copy(deep=True)
             table = table.join(net.res_gen.add_prefix('res_'))
-            table.name = 'gen_' + table.index.astype(str)
+            table['id'] = 'gen_' + table.index.astype(str)
+            table['bus_id'] = 'bus_' + table.bus.astype(str)
         elif key == 'shunt':
             table = net.shunt.copy(deep=True)
             table = table.join(net.res_shunt.add_prefix('res_'))
-            table.name = 'shunt_' + table.index.astype(str)
+            table['id'] = 'shunt_' + table.index.astype(str)
+            table['bus_id'] = 'bus_' + table.bus.astype(str)
         elif key == 'ext_grid':
             table = net.ext_grid.copy(deep=True)
             table = table.join(net.res_ext_grid.add_prefix('res_'))
-            table.name = 'ext_grid_' + table.index.astype(str)
+            table['id'] = 'ext_grid_' + table.index.astype(str)
+            table['bus_id'] = 'bus_' + table.bus.astype(str)
         elif key == 'line':
             table = net.line.copy(deep=True)
             table = table.join(net.res_line.add_prefix('res_'))
-            table.name = 'line_' + table.index.astype(str)
+            table['id'] = 'line_' + table.index.astype(str)
+            table['from_bus_id'] = 'bus_' + table.from_bus.astype(str)
+            table['to_bus_id'] = 'bus_' + table.to_bus.astype(str)
         elif key == 'trafo':
             table = net.trafo.copy(deep=True)
             table = table.join(net.res_trafo.add_prefix('res_'))
-            table.name = 'trafo_' + table.index.astype(str)
+            table['id'] = 'trafo_' + table.index.astype(str)
+            table['hv_bus_id'] = 'bus_' + table.hv_bus.astype(str)
+            table['lv_bus_id'] = 'bus_' + table.lv_bus.astype(str)
             table.tap_side = table.tap_side.map({'hv': 0., 'lv': 1.})
         elif key == 'poly_cost':
             table = net.poly_cost.copy(deep=True)
@@ -219,7 +230,7 @@ class PandaPowerBackend(AbstractBackend):
             table = pd.DataFrame({'converged': [net.converged], 'f_hz': [net.f_hz], 'sn_mva': [net.sn_mva]})
         else:
             raise ValueError('Object {} is not a valid object name. '.format(key))
-        table['id'] = table.index
+        #table['id'] = table.index
         table.replace([np.inf], 99999, inplace=True)
         table.replace([-np.inf], -99999, inplace=True)
         table = table.fillna(0.)
@@ -229,14 +240,15 @@ class PandaPowerBackend(AbstractBackend):
         """Performs power flow computations for a batch of power grids."""
 
         if self.n_cores > 0:
-            n_nets = len(network_batch)
-            range_splits = np.array_split(range(n_nets), self.n_cores)
+            #range_splits = np.array_split(range(n_nets), self.n_cores)
+            self.pool.map(run_single, np.array_split(network_batch, self.n_cores))
+            #n_nets = len(network_batch)
+            #
 
             #def run_single(indices):
             #    [self.run_network(network_batch[i], **kwargs) for i in indices]
             #network_superbatch = np.array_split(network_batch, self.n_cores)
             #self.pool.map(run_single, network_superbatch)
-            return self.pool.map(run_single, network_batch)
             #return self.pool.imap(run_single, network_batch)
             #return self.pool.imap_unordered(run_single, network_batch)
 
@@ -245,7 +257,6 @@ class PandaPowerBackend(AbstractBackend):
             super(PandaPowerBackend, self).run_batch(network_batch, **kwargs)
 
 
-def run_single(net):
-    pp.runpp(net)
-    return net
-    #[pp.runpp(net) for net in nets]
+def run_single(nets):
+    #pp.runpp(net)
+    [pp.runpp(net) for net in nets]

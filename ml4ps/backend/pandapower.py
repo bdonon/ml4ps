@@ -7,6 +7,7 @@ import pandapower.converter as pc
 import mat73
 import numpy as np
 import os
+import time
 from types import SimpleNamespace
 
 from pandapower.converter.matpower.from_mpc import _copy_data_from_mpc_to_ppc, _adjust_ppc_indices, \
@@ -258,5 +259,10 @@ class PandaPowerBackend(AbstractBackend):
 
 
 def run_single(nets):
+    for net in nets:
+        start = time.time()
+        pp.runpp(net)
+        end = time.time()
+        print(end-start)
     #pp.runpp(net)
-    [pp.runpp(net) for net in nets]
+    #[pp.runpp(net) for net in nets]

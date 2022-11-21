@@ -263,6 +263,5 @@ def run_single(nets):
         start = time.time()
         pp.runpp(net)
         end = time.time()
-        print(end-start)
     #pp.runpp(net)
     #[pp.runpp(net) for net in nets]

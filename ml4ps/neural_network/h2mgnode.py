@@ -256,7 +256,7 @@ class H2MGNODE:
 
         self.output_nn_batch = vmap(output_nn, in_axes=(None, 0), out_axes=0)
         self.latent_nn_batch = vmap(latent_nn, in_axes=(None, 0), out_axes=0)
-        self.solve_and_decode_batch = vmap(self.solve_and_decode, in_axes=(None, 0, 0))
+        self.solve_and_decode_batch = jit(vmap(self.solve_and_decode, in_axes=(None, 0, 0)))
 
     def check_names(self):
         """Checks that the various features and addresses are consistent."""

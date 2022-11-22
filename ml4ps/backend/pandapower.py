@@ -1,23 +1,21 @@
+import pandapower.converter as pc
+import pandapower as pp
 import pandas as pd
+import numpy as np
+import mat73
+import os
+
+from pandapower.converter.matpower.from_mpc import _adjust_ppc_indices, _change_ppc_TAP_value
+from multiprocessing import Pool
 
 from ml4ps.backend.interface import AbstractBackend
-from ml4ps.utils import clean_dict, convert_addresses_to_integers
-import pandapower as pp
-import pandapower.converter as pc
-import mat73
-import numpy as np
-import os
-import time
-from types import SimpleNamespace
-
-from pandapower.converter.matpower.from_mpc import _copy_data_from_mpc_to_ppc, _adjust_ppc_indices, \
-    _change_ppc_TAP_value
-from joblib import Parallel, delayed, parallel_backend
-from multiprocessing import Pool
+from ml4ps.utils import clean_dict, convert_addresses_to_integers, collate_dict, separate_dict
 
 
 def from_mpc73(mpc_file, f_hz=50, validate_conversion=False, **kwargs):
-    mpc = mat73.loadmat(mpc_file)  # , squeeze_me=True, struct_as_record=False)
+    """Implementation of from_mpc that supports matlab 7.3 .m format."""
+
+    mpc = mat73.loadmat(mpc_file)
     ppc = dict()
     ppc['version'] = 'X.X'
     ppc["baseMVA"] = mpc['mpc']['baseMVA']
@@ -26,20 +24,10 @@ def from_mpc73(mpc_file, f_hz=50, validate_conversion=False, **kwargs):
     ppc["branch"] = mpc['mpc']['branch']
     ppc['gencost'] = mpc['mpc']['gencost']
 
-    # mpc['mpc']['version'] = 'X.X'
-    # mpc['mpc'] = SimpleNamespace(**mpc['mpc'])
-
-    # mpc['mpc'] = np.array(list(mpc['mpc'].items()))#, dtype=dtype)
-    # print
-    # init empty ppc
-
-    # _copy_data_from_mpc_to_ppc(ppc, mpc, 'mpc')
     _adjust_ppc_indices(ppc)
     _change_ppc_TAP_value(ppc)
 
-    # ppc = _mat2ppc(mpc_file, casename_mpc_file)
-    net = pc.from_ppc(ppc, f_hz=f_hz, validate_conversion=validate_conversion, **kwargs)
-    return net
+    return pc.from_ppc(ppc, f_hz=f_hz, validate_conversion=validate_conversion, **kwargs)
 
 
 class PandaPowerBackend(AbstractBackend):
@@ -119,7 +107,8 @@ class PandaPowerBackend(AbstractBackend):
         else:
             raise NotImplementedError('No support for file {}'.format(file_path))
 
-    def set_data_network(self, net, y):
+    @staticmethod
+    def set_data_network(net, y):
         """Updates a power grid by setting features according to `y`.
 
         Overrides the abstract `set_feature_network` method.
@@ -131,7 +120,20 @@ class PandaPowerBackend(AbstractBackend):
                 except ValueError:
                     print('Object {} and feature {} are not available with PandaPower'.format(k, f))
 
-    def run_network(self, net, **kwargs):
+    # def set_data_network(self, net, y):
+    #     """Updates a power grid by setting features according to `y`.
+    #
+    #     Overrides the abstract `set_feature_network` method.
+    #     """
+    #     for k in y.keys():
+    #         for f in y[k].keys():
+    #             try:
+    #                 net[k][f] = y[k][f]
+    #             except ValueError:
+    #                 print('Object {} and feature {} are not available with PandaPower'.format(k, f))
+
+    @staticmethod
+    def run_network(net, **kwargs):
         """Runs a power flow simulation.
 
         Pandapower `runpp` options can be passed as keyword arguments.
@@ -142,10 +144,11 @@ class PandaPowerBackend(AbstractBackend):
         except pp.powerflow.LoadflowNotConverged:
             pass
 
-    def get_data_network(self, network, feature_names=None, address_names=None, address_to_int=True):
+    @staticmethod
+    def get_data_network(network, feature_names=None, address_names=None, address_to_int=True):
         """Extracts features from a pandapower network.
 
-        Addresses are converted into unique integers that start at 0.
+        If `address_to_int` is True, addresses are converted into unique integers that start at 0.
         Overrides the abstract `get_data_network` method.
         """
         if feature_names is None:
@@ -155,113 +158,90 @@ class PandaPowerBackend(AbstractBackend):
 
         object_names = list(set(list(feature_names.keys()) + list(address_names.keys())))
         x = {}
-        for object_name in object_names:
+        for key in object_names:
+            if key == 'global':
+                x[key] = pd.DataFrame({
+                    'converged': [network.converged * 1.], 'f_hz': [network.f_hz], 'sn_mva': [network.sn_mva]})
+            else:
+                x[key] = {}
+                table = network.get(key)
+                res_table = network.get('res_' + key)
+                for feature_name in feature_names.get(key, []):
+                    if feature_name == 'tap_side':
+                        x[key][feature_name] = table[feature_name].map({'hv': 0., 'lv': 1.}).astype(float).values
+                    elif feature_name[:4] == 'res_':
+                        x[key][feature_name] = res_table[feature_name[4:]].astype(float).values
+                    else:
+                        x[key][feature_name] = table[feature_name].astype(float).values
+                    x[key][feature_name] = np.nan_to_num(x[key][feature_name], copy=False) * 1
 
-            if (object_name in address_names.keys()) or (object_name in feature_names.keys()):
-                x[object_name] = {}
-                table = self.get_table(network, object_name)
-
-                object_address_names = address_names.get(object_name, [])
-                for address_name in object_address_names:
-                    x[object_name][address_name] = table[address_name].astype(str)
-
-                object_feature_names = feature_names.get(object_name, [])
-                for feature_name in object_feature_names:
-                    x[object_name][feature_name] = np.array(table[feature_name], dtype=np.float32)
-
+                for address_name in address_names.get(key, []):
+                    if address_name == 'id':
+                        x[key][address_name] = (key + '_' + table.index.astype(str)).values
+                    elif address_name == 'bus_id':
+                        x[key][address_name] = ('bus_' + table.bus.astype(str)).values
+                    elif address_name == 'from_bus_id':
+                        x[key][address_name] = ('bus_' + table.from_bus.astype(str)).values
+                    elif address_name == 'to_bus_id':
+                        x[key][address_name] = ('bus_' + table.to_bus.astype(str)).values
+                    elif address_name == 'hv_bus_id':
+                        x[key][address_name] = ('bus_' + table.hv_bus.astype(str)).values
+                    elif address_name == 'lv_bus_id':
+                        x[key][address_name] = ('bus_' + table.lv_bus.astype(str)).values
+                    elif address_name == 'element':
+                        x[key][address_name] = table.et.astype(str) + '_' + table.element.astype(str)
+                    else:
+                        x[key][address_name] = table[address_name].values.astype(str)
         clean_dict(x)
         if address_to_int:
             convert_addresses_to_integers(x, address_names)
         return x
 
-    @staticmethod
-    def get_table(net, key):
-        """Gets a pandas dataframe describing the features of a specific object in a power grid instance.
+    def set_run_get_batch(self, network_batch, mod_dict, feature_names, **kwargs):
+        """Applies a list of modifications to a batch of power grids, runs simulations, and returns features.
 
-        Pandapower puts the results of power flow simulations into a separate table. For instance,
-        results at buses is stored in net.res_bus. We thus merge the two table by adding a prefix res
-        for the considered features.
+        Args:
+            network_batch (:obj:`list` of :obj:`pandapower.Network`): Batch of `N_batch` pandapower networks.
+            mod_dict (:obj:`dict` of :obj:`dict` of :obj:`Array`): Dictionary of dictionary of 3D tensors.
+                The upper level keys corresponds to object classes and the lower level keys to feature names.
+                Tensors are of dimension `[N_batch, N_variant, N_object]`, where `N_batch` is the amount of
+                samples per batch, `N_variant` is the amount of modifications one wants to apply to each
+                sample, and `N_object` is the amount of objects of the considered class.
+            feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary of list of object features that
+                should be extracted from the results of the power flow computations.
+            **kwargs: Any keyword argument that should be passed to `pandapower.runpp`.
         """
-        if key == 'bus':
-            table = net.bus.copy(deep=True)
-            table = table.join(net.res_bus.add_prefix('res_'))
-            table['id'] = 'bus_' + table.index.astype(str)
-        elif key == 'load':
-            table = net.load.copy(deep=True)
-            table = table.join(net.res_load.add_prefix('res_'))
-            table['id'] = 'load_' + table.index.astype(str)
-            table['bus_id'] = 'bus_' + table.bus.astype(str)
-        elif key == 'sgen':
-            table = net.sgen.copy(deep=True)
-            table = table.join(net.res_sgen.add_prefix('res_'))
-            table['id'] = 'sgen_' + table.index.astype(str)
-            table['bus_id'] = 'bus_' + table.bus.astype(str)
-        elif key == 'gen':
-            table = net.gen.copy(deep=True)
-            table = table.join(net.res_gen.add_prefix('res_'))
-            table['id'] = 'gen_' + table.index.astype(str)
-            table['bus_id'] = 'bus_' + table.bus.astype(str)
-        elif key == 'shunt':
-            table = net.shunt.copy(deep=True)
-            table = table.join(net.res_shunt.add_prefix('res_'))
-            table['id'] = 'shunt_' + table.index.astype(str)
-            table['bus_id'] = 'bus_' + table.bus.astype(str)
-        elif key == 'ext_grid':
-            table = net.ext_grid.copy(deep=True)
-            table = table.join(net.res_ext_grid.add_prefix('res_'))
-            table['id'] = 'ext_grid_' + table.index.astype(str)
-            table['bus_id'] = 'bus_' + table.bus.astype(str)
-        elif key == 'line':
-            table = net.line.copy(deep=True)
-            table = table.join(net.res_line.add_prefix('res_'))
-            table['id'] = 'line_' + table.index.astype(str)
-            table['from_bus_id'] = 'bus_' + table.from_bus.astype(str)
-            table['to_bus_id'] = 'bus_' + table.to_bus.astype(str)
-        elif key == 'trafo':
-            table = net.trafo.copy(deep=True)
-            table = table.join(net.res_trafo.add_prefix('res_'))
-            table['id'] = 'trafo_' + table.index.astype(str)
-            table['hv_bus_id'] = 'bus_' + table.hv_bus.astype(str)
-            table['lv_bus_id'] = 'bus_' + table.lv_bus.astype(str)
-            table.tap_side = table.tap_side.map({'hv': 0., 'lv': 1.})
-        elif key == 'poly_cost':
-            table = net.poly_cost.copy(deep=True)
-            table['element'] = table.et.astype(str) + '_' + table.element.astype(str)
-        elif key == 'global':
-            table = pd.DataFrame({'converged': [net.converged], 'f_hz': [net.f_hz], 'sn_mva': [net.sn_mva]})
-        else:
-            raise ValueError('Object {} is not a valid object name. '.format(key))
-        #table['id'] = table.index
-        table.replace([np.inf], 99999, inplace=True)
-        table.replace([-np.inf], -99999, inplace=True)
-        table = table.fillna(0.)
-        return table
 
-    def run_batch(self, network_batch, **kwargs):
-        """Performs power flow computations for a batch of power grids."""
+        mod_batch_variant = [separate_dict(m) for m in separate_dict(mod_dict)]
 
         if self.n_cores > 0:
-            #range_splits = np.array_split(range(n_nets), self.n_cores)
-            self.pool.map(run_single, np.array_split(network_batch, self.n_cores))
-            #n_nets = len(network_batch)
-            #
+            # Multiprocessing implementation
+            args = [(network, mod_variant, feature_names, kwargs) for network, mod_variant in
+                zip(network_batch, mod_batch_variant)]
+            out_list = self.pool.map(PandaPowerBackend.set_run_get_single, args)
+            return collate_dict(out_list)
 
-            #def run_single(indices):
-            #    [self.run_network(network_batch[i], **kwargs) for i in indices]
-            #network_superbatch = np.array_split(network_batch, self.n_cores)
-            #self.pool.map(run_single, network_superbatch)
-            #return self.pool.imap(run_single, network_batch)
-            #return self.pool.imap_unordered(run_single, network_batch)
-
-            #Parallel(n_jobs=self.n_cores, require='sharedmem')(delayed(run_single)(indices) for indices in range_splits)
         else:
-            super(PandaPowerBackend, self).run_batch(network_batch, **kwargs)
+            # Standard implementation
+            features_batch_variant = []
+            for network, mod_variant in zip(network_batch, mod_batch_variant):
+                features_variant = []
+                for mod in mod_variant:
+                    PandaPowerBackend.set_data_network(network, mod)
+                    PandaPowerBackend.run_network(network, **kwargs)
+                    features = PandaPowerBackend.get_data_network(network, feature_names=feature_names)
+                    features_variant.append(features)
+                features_batch_variant.append(collate_dict(features_variant))
+            return collate_dict(features_batch_variant)
 
-
-def run_single(nets):
-    for net in nets:
-        start = time.time()
-        pp.runpp(net)
-        end = time.time()
-    #pp.runpp(net)
-    #[pp.runpp(net) for net in nets]
+    @staticmethod
+    def set_run_get_single(args):
+        """Applies a list of modifications to a single net, runs power flows, and returns required features."""
+        network, mod_variant, feature_names, kwargs = args
+        features_variant = []
+        for mod in mod_variant:
+            PandaPowerBackend.set_data_network(network, mod)
+            PandaPowerBackend.run_network(network, **kwargs)
+            features = PandaPowerBackend.get_data_network(network, feature_names=feature_names)
+            features_variant.append(features)
+        return collate_dict(features_variant)

@@ -2,74 +2,30 @@ import numpy as np
 import jax.numpy as jnp
 
 
-# def collate_dict_old(data):
-#     """Transforms a list of dictionaries into a dictionary whose values are tensors with an additional dimension."""
-#     return {k: {f: np.array([d[k][f] for d in data]) for f in data[0][k].keys()} for k in data[0].keys()}
-
-
 def collate_dict(x_batch, pad_value=np.nan):
-    n_obj = {}
-    for x in x_batch:
-        for k in x.keys():
-            for f in x[k].keys():
-                current_n_obj = len(x[k][f])
-                n_obj[k] = max(n_obj.get(k, 0), current_n_obj)
-    for x in x_batch:
-        for k in x.keys():
-            for f in x[k].keys():
-                current_n_obj = len(x[k][f])
-                #x[k][f] = np.concatenate([x[k][f]])
-                x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k] - current_n_obj])])#, dtype=x[k][f].dtype)
-    return collate_dict_process(x_batch)
-
-
-
-def collate_dict_process(data):
-    """Transforms a list of data x (nested dictionaries) into a nested dictionary of batched tensors."""
-    if isinstance(data[0], dict):
-        r = {}
-        for k in data[0].keys():
-            r[k] = collate_dict_process([sample[k] for sample in data])
-    else:
-        r = np.stack(data)
-    return r
-
-
-# def collate_power_grid(data):
-#     """Collates pairs `(x, nets)`, by only collating `x` and leaving `nets` untouched."""
-#     x, nets = zip(*data)
-#     return collate_dict(x), nets
+    """Collates nested dictionaries and pads missing values using `pad_value`."""
+    max_n_obj = get_max_n_obj(x_batch)
+    x_batch = pad_missing_values(x_batch, max_n_obj, pad_value)
+    return {k: {f: np.stack([x[k][f] for x in x_batch]) for f in x_batch[0][k].keys()} for k in x_batch[0].keys()}
 
 
 def collate_power_grid(data, **kwargs):
-    """Collates pairs `(x, nets)`, by only collating `x` and leaving `nets` untouched.
+    """Collates lists of pairs `(x, nets)`, by only collating `x` and leaving `nets` untouched.
 
     In the case where samples have different number of objects, additional objects are created and are associated
     with the value specified in `pad_value`.
     """
     x_batch, nets = zip(*data)
-    # n_obj = {}
-    # for x in x_batch:
-    #     for k in x.keys():
-    #         for f in x[k].keys():
-    #             current_n_obj = len(x[k][f])
-    #             n_obj[k] = max(n_obj.get(k, 0.), current_n_obj)
-    # for x in x_batch:
-    #     for k in x.keys():
-    #         for f in x[k].keys():
-    #             current_n_obj = len(x[k][f])
-    #             x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([n_obj[k]-current_n_obj])])
     return collate_dict(x_batch, **kwargs), nets
 
 
-# def collate_power_grid_old(data):
-#     """Collates tuples `(a, x, nets)`, by only collating `a` and `x` and leaving `nets` untouched."""
-#     a, x, network = zip(*data)
-#     return collate_dict(a), collate_dict(x), network
-
-
 def separate_dict(data):
-    """Transforms a dict of batched tensors into a list of dicts that have single tensors as values."""
+    """Transforms a dict of batched tensors into a list of dicts that have single tensors as values.
+
+    TODO : clean this
+    """
+
+
     r = {}
     for k in data.keys():
         if isinstance(data[k], dict):
@@ -83,38 +39,22 @@ def separate_dict(data):
         dict_ = {}
         for key in r.keys():
             if isinstance(r[key], np.ndarray):
-                dict_[key] = r[key][i][~np.isnan(r[key][i])]
+                if len(r[key][i].shape) > 1:
+                    dict_[key] = r[key][i]
+                else:
+                    dict_[key] = r[key][i][~np.isnan(r[key][i])]
             elif isinstance(r[key], jnp.DeviceArray):
-                #r[key][i] = np.asarray(r[key][i])
                 temp = np.array(r[key][i])
-                dict_[key] = temp[~np.isnan(temp)]
+                if len(temp.shape) > 1:
+                    dict_[key] = temp
+                else:
+                    dict_[key] = temp[~np.isnan(temp)]
             else:
                 dict_[key] = r[key][i]
 
         results.append(dict_)
     return results
 
-
-# def separate_dict(data):
-#     """Transforms a dict of batched tensors into a list of dicts that have single tensors as values.
-#
-#     TODO c'est pas fini"""
-#     r = {}
-#     for k in data.keys():
-#         if isinstance(data[k], dict):
-#             r[k] = separate_dict(data[k])
-#         else:
-#             r[k] = data[k]
-#     n_batch = max([len(list_) for list_ in r.values()])
-#     #return [{key: r[key][i] for key in r.keys()} for i in range(n_batch)]
-#     return [{key: r[key][i][~np.isnan(r[key][i])] for key in r.keys()} for i in range(n_batch)]
-
-
-# def separate_dict_old(data):
-#     """Transforms a dict of batched tensors into a list of dicts that have single tensors as values."""
-#     elem = list(list(data.values())[0].values())[0]
-#     batch_size = np.shape(elem)[0]
-#     return [{k: {f: data[k][f][i] for f in v} for k, v in data.items()} for i in range(batch_size)]
 
 def clean_dict(data):
     """Cleans a dictionary of tensors by deleting keys whose values are empty."""
@@ -135,31 +75,12 @@ def clean_dict(data):
     return data
 
 
-# def clean_dict_old(v):
-#     """Cleans a dictionary of tensors by deleting keys whose values are empty."""
-#     keys_to_erase = []
-#     for k, v_k in v.items():
-#         keys_to_erase_k = []
-#         for f, v_k_f in v_k.items():
-#             if np.shape(v_k_f)[0] == 0:
-#                 keys_to_erase_k.append(f)
-#         for f in keys_to_erase_k:
-#             del v_k[f]
-#         if not v_k:
-#             keys_to_erase.append(k)
-#     for k in keys_to_erase:
-#         del v[k]
-#     return v
-
-
-# def build_unique_id_dict(table_dict, addresses):
-#     """Builds a dictionary to convert `str` indices into unique `int`."""
-#     all_addresses = [list(table_dict[k][f].values.astype(str)) for k, v in addresses.items() for f in v]
-#     unique_addresses = list(np.unique(np.concatenate(all_addresses)))
-#     return {address: i for i, address in enumerate(unique_addresses)}
-
-
 def convert_addresses_to_integers(x, address_names):
+    """Converts `str` addresses into a unique integer id.
+
+    Only addresses specified in `address_names` are considered for defining the mapping from `str` address to
+    unique integer id.
+    """
     all_addresses = []
     for object_name, object_address_names in address_names.items():
         if object_name in x.keys():
@@ -174,26 +95,6 @@ def convert_addresses_to_integers(x, address_names):
                 for object_address_name in object_address_names:
                     x[object_name][object_address_name] = converter(x[object_name][object_address_name])
 
-    #
-    #     for key, val in x.items():
-    #         if "address" in x[key].keys():
-    #             for a in x[key]["address"].keys():
-    #                 x[key]["address"][a] = np.vectorize(str_to_int.get)(x[key]["address"][a])
-    #
-    #
-    #     if "address" in x[key].keys():
-    #         for address_list in x[key]["address"].values():
-    #             all_addresses.append(address_list)
-    #         #all_addresses.append([list(address_list) for address_list in x[key]["address"].values()])
-    # if all_addresses:
-    #     unique_addresses = list(np.unique(np.concatenate(all_addresses)))
-    #     str_to_int = {address: i for i, address in enumerate(unique_addresses)}
-    #     for key, val in x.items():
-    #         if "address" in x[key].keys():
-    #             for a in x[key]["address"].keys():
-    #                 x[key]["address"][a] = np.vectorize(str_to_int.get)(x[key]["address"][a])
-    #     #return x
-
 
 def assert_substructure(a, b):
     """Asserts that `a` is a substructure of `b`."""
@@ -202,30 +103,30 @@ def assert_substructure(a, b):
             assert (k in b.keys())
             assert_substructure(a[k], b[k])
     elif isinstance(a, list):
-        assert set(a).issubset(set(b))#(sorted(a) == sorted(b)) and (len(a) == len(b)))
+        assert set(a).issubset(set(b))
 
 
-# def get_n_obj(x):
-#     """Returns a dictionary that counts the amount of objects of each class."""
-#     r = {}
-#     for k in x.keys():
-#         r[k] = 0
-#         for f in x[k].keys():
-#             r[k] = max(r[k], np.shape(x[k][f])[1])
-#     return r
-#     #
-#     #     if k == 'global':
-#     #         for f in x[k].keys():
-#     #             current_max = max(current_max, np.shape(x[k][f])[1])
-#     #     else:
-#     #         # for f in x[k].keys():
-#     #         # if f=='address':
-#     #         for a in x[k]['address'].keys():
-#     #             current_max = max(current_max, np.shape(x[k]['address'][a])[1])
-#     #         for f in x[k]['features'].keys():
-#     #             current_max = max(current_max, np.shape(x[k]['features'][f])[1])
-#     #     r[k] = current_max
-#     # return r
+def get_max_n_obj(x_batch):
+    """Returns a dictionary that counts the amount of objects of each class."""
+    max_n_obj = {}
+    for x in x_batch:
+        for k in x.keys():
+            for f in x[k].keys():
+                current_n_obj = x[k][f].shape[-1]
+                max_n_obj[k] = max(max_n_obj.get(k, 0), current_n_obj)
+    return max_n_obj
+
+
+def pad_missing_values(x_batch, max_n_obj, pad_value):
+    """Adds `pad_value` to ensure that all samples have the same amount of objects."""
+    for x in x_batch:
+        for k in x.keys():
+            for f in x[k].keys():
+                current_shape = x[k][f].shape
+                missing_objects = max_n_obj[k] - current_shape[-1]
+                if missing_objects > 0:
+                    x[k][f] = np.concatenate([x[k][f], pad_value * np.ones([*current_shape[-1:], missing_objects])])
+    return x_batch
 
 
 def get_n_obj(x):

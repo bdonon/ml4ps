@@ -71,7 +71,6 @@ class Normalizer:
         values = [self.backend.get_data_network(net, feature_names=self.feature_names)
                   for net in self.tqdm(net_batch, desc='Extracting features.')]
         values = collate_dict(values)
-        print(values)
         self.functions = self.build_function_tree(values)
 
     def build_function_tree(self, values):

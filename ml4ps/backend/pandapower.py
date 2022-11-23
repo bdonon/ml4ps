@@ -161,7 +161,7 @@ class PandaPowerBackend(AbstractBackend):
         for key in object_names:
             if key == 'global':
                 x[key] = pd.DataFrame({
-                    'converged': [network.converged * 1.], 'f_hz': [network.f_hz], 'sn_mva': [network.sn_mva]})
+                    'converged': [network.converged * 1.], 'f_hz': [network.f_hz * 1.], 'sn_mva': [network.sn_mva * 1.]})
             else:
                 x[key] = {}
                 table = network.get(key)

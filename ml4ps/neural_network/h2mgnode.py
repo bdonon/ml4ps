@@ -406,7 +406,7 @@ class H2MGNODE:
                 if object_name in self.local_address_names.keys():
                     for f in self.local_address_names[object_name]:
                         #r[object_name][f] = x[object_name][f]
-                        r[object_name][f] = jnp.nan_to_num(x[object_name][f], nan=n_obj_tot+1)
+                        r[object_name][f] = jnp.nan_to_num(x[object_name][f]*1., nan=n_obj_tot+1)
         for object_name in self.global_input_feature_names.keys():
             r[object_name] = {}
             for f in self.global_input_feature_names[object_name]:

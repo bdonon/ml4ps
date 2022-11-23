@@ -110,6 +110,21 @@ def apply_normalization(x, functions):
     r = {}
     for k in x.keys():
         if k in functions.keys():
+            r[k] = {}
+            for f in x[k].keys():
+                if k in functions[k].keys():
+                    r[k][f] = functions[k][f](x[k][f])
+                else:
+                    r[k][f] = x[k][f]
+        else:
+            r[k] = x[k]
+    return r
+
+
+def apply_normalization_old(x, functions):
+    r = {}
+    for k in x.keys():
+        if k in functions.keys():
             if isinstance(x[k], dict):
                 r[k] = apply_normalization(x[k], functions[k])
             else:

@@ -71,6 +71,7 @@ class Normalizer:
         values = [self.backend.get_data_network(net, feature_names=self.feature_names)
                   for net in self.tqdm(net_batch, desc='Extracting features.')]
         values = collate_dict(values)
+        print(values)
         self.functions = self.build_function_tree(values)
 
     def build_function_tree(self, values):
@@ -112,7 +113,7 @@ def apply_normalization(x, functions):
         if k in functions.keys():
             r[k] = {}
             for f in x[k].keys():
-                if k in functions[k].keys():
+                if f in functions[k].keys():
                     r[k][f] = functions[k][f](x[k][f])
                 else:
                     r[k][f] = x[k][f]

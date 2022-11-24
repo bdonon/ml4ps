@@ -186,7 +186,10 @@ def get_proba_quantiles(x, n_breakpoints):
     p = np.arange(0, 1, 1. / n_breakpoints)
     x_reshaped = np.reshape(x, [-1])
     x_clean = x_reshaped[~np.isnan(x_reshaped)]
-    q = np.quantile(x_clean, p)
+    if np.any(x_clean):
+        q = np.quantile(x_clean, p)
+    else:
+        q = 0. * p
     return p, q
 
 

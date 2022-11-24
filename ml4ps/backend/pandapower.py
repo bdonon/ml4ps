@@ -160,8 +160,11 @@ class PandaPowerBackend(AbstractBackend):
         x = {}
         for key in object_names:
             if key == 'global':
-                x[key] = pd.DataFrame({
+                x[key] = {}
+                table = pd.DataFrame({
                     'converged': [network.converged * 1.], 'f_hz': [network.f_hz * 1.], 'sn_mva': [network.sn_mva * 1.]})
+                for feature_name in feature_names[key]:
+                    x[key][feature_name] = table[feature_name].astype(float).values
             else:
                 x[key] = {}
                 table = network.get(key)

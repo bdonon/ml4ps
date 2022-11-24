@@ -2,11 +2,27 @@ import numpy as np
 import jax.numpy as jnp
 
 
-def collate_dict(x_batch, pad_value=np.nan):
-    """Collates nested dictionaries and pads missing values using `pad_value`."""
-    max_n_obj = get_max_n_obj(x_batch)
-    x_batch = pad_missing_values(x_batch, max_n_obj, pad_value)
-    return {k: {f: np.stack([x[k][f] for x in x_batch]) for f in x_batch[0][k].keys()} for k in x_batch[0].keys()}
+def stack_batch(x_list):
+    n_obj = np.max([np.shape(x)[-1] for x in x_list])
+    return np.stack([np.pad(x.astype(float), [(0, n_obj-np.shape(x)[-1])], mode='constant', constant_values=np.nan) for x in x_list])
+
+
+def collate_dict(x_batch):
+    r = {}
+    for k in x_batch[0].keys():
+        if isinstance(x_batch[0][k], dict):
+            r[k] = {}
+            for f in x_batch[0][k].keys():
+                r[k][f] = stack_batch([x[k][f] for x in x_batch])
+        else:
+            r[k] = stack_batch([x[k] for x in x_batch])
+    return r
+
+#def collate_dict(x_batch, pad_value=np.nan):
+#    """Collates nested dictionaries and pads missing values using `pad_value`."""
+#    max_n_obj = get_max_n_obj(x_batch)
+#    x_batch = pad_missing_values(x_batch, max_n_obj, pad_value)
+#    return {k: {f: np.stack([x[k][f] for x in x_batch]) for f in x_batch[0][k].keys()} for k in x_batch[0].keys()}
 
 
 def collate_power_grid(data, **kwargs):
@@ -81,7 +97,7 @@ def convert_addresses_to_integers(x, address_names):
     Only addresses specified in `address_names` are considered for defining the mapping from `str` address to
     unique integer id.
     """
-    all_addresses = []
+    all_addresses, unique_addresses = [], []
     for object_name, object_address_names in address_names.items():
         if object_name in x.keys():
             for object_address_name in object_address_names:
@@ -94,6 +110,12 @@ def convert_addresses_to_integers(x, address_names):
             if object_name in x.keys():
                 for object_address_name in object_address_names:
                     x[object_name][object_address_name] = converter(x[object_name][object_address_name])
+
+
+    n_unique_addresses = len(unique_addresses)
+    x['h_g'] = np.zeros([1, 1])
+    x['h_v'] = np.zeros([n_unique_addresses, 1])
+
 
 
 def assert_substructure(a, b):

@@ -153,4 +153,10 @@ def pad_missing_values(x_batch, max_n_obj, pad_value):
 
 def get_n_obj(x):
     """Returns a dictionary that counts the amount of objects of each class."""
-    return {k: np.max([np.shape(x_k_f)[1] for f, x_k_f in x_k.items()]) for k, x_k in x.items()}
+    r = {}
+    for k, x_k in x.items():
+        if isinstance(x_k, dict):
+            r[k] = np.max([np.shape(x_k_f)[1] for f, x_k_f in x_k.items()])
+    return r
+
+    #return {k: np.max([np.shape(x_k_f)[1] for f, x_k_f in x_k.items()]) for k, x_k in x.items()}

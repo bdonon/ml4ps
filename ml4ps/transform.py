@@ -32,6 +32,16 @@ class TanhTransform:
         return jnp.tanh(x)
 
 
+class Exp:
+    """Class of functions that return the hyperbolic tangent of the input."""
+
+    def __init__(self):
+        pass
+
+    def __call__(self, x):
+        return jnp.exp(x)
+
+
 def get_transform(identifier, **kwargs):
     """Gets the transform function associated with `identifier` with the specified keyword arguments."""
     if identifier == "affine":
@@ -40,5 +50,7 @@ def get_transform(identifier, **kwargs):
         return AbsValTransform()
     elif identifier == "tanh":
         return TanhTransform()
+    elif identifier == "exp":
+        return Exp()
     else:
         raise ValueError('Transform identifier {} not valid.'.format(identifier))

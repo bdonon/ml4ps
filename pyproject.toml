@@ -25,7 +25,8 @@ dependencies = [
     "zenodo_get>=1.3.4",
     "matplotlib>=3.5.3",
     "mat73>=0.59",
-    "numba>=0.56.2"
+    "numba>=0.56.2",
+    "pypowsybl>=0.20.0"
 ]
 
 [build-system]

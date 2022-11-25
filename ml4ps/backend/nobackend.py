@@ -22,6 +22,7 @@ class NoBackend(AbstractBackend):
         "bus": ['zone', 'lam_kcl_r', 'bus_i', 'bus_type', 'vmax', 'col_2', 'col_1', 'area', 'vmin',
             'va', 'lam_kcl_i', 'vm', 'base_kv']}
 
+
     def __init__(self, warns=False):
         """Initializes a NoBackend."""
         self.warns = warns
@@ -87,7 +88,6 @@ class NoBackend(AbstractBackend):
                         x[object_name][feature_name] = np.array(net[object_name]['cost'], dtype=np.float32)[:, 1]
                     else:
                         x[object_name][feature_name] = np.array(net[object_name][feature_name], dtype=np.float32)
-
 
         clean_dict(x)
         convert_addresses_to_integers(x, address_names)

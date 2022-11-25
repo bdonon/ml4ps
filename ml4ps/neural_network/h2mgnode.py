@@ -56,7 +56,7 @@ def get_n_obj_tot(x, local_address_names):
         if object_name in x.keys():
             for address_name in local_address_names[object_name]:
                 current_max = jnp.max(jnp.nan_to_num(x[object_name][address_name] * 1., nan=-1))
-                n_obj_tot = np.maximum(n_obj_tot, current_max).astype(int)
+                n_obj_tot = jnp.maximum(n_obj_tot, current_max).astype(int)
     return n_obj_tot + 1
 
 

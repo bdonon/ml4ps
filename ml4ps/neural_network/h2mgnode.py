@@ -256,7 +256,8 @@ class H2MGNODE:
 
         self.output_nn_batch = vmap(output_nn, in_axes=(None, 0), out_axes=0)
         self.latent_nn_batch = vmap(latent_nn, in_axes=(None, 0), out_axes=0)
-        self.solve_and_decode_batch = jit(vmap(self.solve_and_decode, in_axes=(None, 0, 0)))
+        #self.solve_and_decode_batch = jit(vmap(self.solve_and_decode, in_axes=(None, 0, 0)))
+        self.apply = jit(vmap(self.forward, in_axes=(None, 0)))
 
     def check_names(self):
         """Checks that the various features and addresses are consistent."""
@@ -363,15 +364,16 @@ class H2MGNODE:
                 params[object_name][output_feature_name] = initialize_nn_params(wd, rk_used, scale=scale)
         return params
 
+    @partial(jit, static_argnums=(0,))
     def forward(self, params, x, **kwargs):
         """Performs a forward pass for a single sample."""
         init_state = self.init_state(x)
         return self.solve_and_decode(params, init_state, x, **kwargs)
 
-    def forward_batch(self, params, x_batch, **kwargs):
-        """Performs a forward pass for a batch of samples."""
-        init_state_batch = self.init_state_batch(x_batch)
-        return self.solve_and_decode_batch(params, init_state_batch, x_batch, **kwargs)
+    #def forward_batch(self, params, x_batch, **kwargs):
+    #    """Performs a forward pass for a batch of samples."""
+    #    init_state_batch = self.init_state_batch(x_batch)
+    #    return self.solve_and_decode_batch(params, init_state_batch, x_batch, **kwargs)
 
     def input_filter(self, x):
         """Extracts the input features from `x`.
@@ -473,32 +475,36 @@ class H2MGNODE:
 
     def init_state(self, x):
         """Initializes the latent state for a single sample."""
-        h_v, h_g = self.init_h_v(x), self.init_h_g(x)
-        return {'h_v': h_v, 'h_g': h_g, 'x': self.input_filter(x)}
+        #h_v, h_g = self.init_h_v(x), self.init_h_g(x)
+        return {
+            'h_v': x['h_v']*jnp.zeros([1, self.latent_dimension]),
+            'h_g': x['h_g']*jnp.zeros([1, self.latent_dimension]),
+            'x': self.input_filter(x)
+        }
 
-    def init_state_batch(self, x_batch):
-        """Initializes the latent state for a batch of samples."""
-        h_v_batch, h_g_batch = self.init_h_v_batch(x_batch), self.init_h_g_batch(x_batch)
-        return {'h_v': h_v_batch, 'h_g': h_g_batch, 'x': self.input_filter(x_batch)}
+    #def init_state_batch(self, x_batch):
+    #    """Initializes the latent state for a batch of samples."""
+    #    h_v_batch, h_g_batch = self.init_h_v_batch(x_batch), self.init_h_g_batch(x_batch)
+    #    return {'h_v': h_v_batch, 'h_g': h_g_batch, 'x': self.input_filter(x_batch)}
 
-    def init_h_v(self, x):
-        """Initializes latent variables defined at addresses for a single sample."""
-        n_obj_tot = get_n_obj_tot(x, self.local_address_names)
-        return jnp.zeros([n_obj_tot, self.latent_dimension])
+    #def init_h_v(self, x):
+    #    """Initializes latent variables defined at addresses for a single sample."""
+    #    n_obj_tot = get_n_obj_tot(x, self.local_address_names)
+    #    return jnp.zeros([n_obj_tot, self.latent_dimension])
 
-    def init_h_v_batch(self, x_batch):
-        """Initializes latent variables defined at addresses for a batch of samples."""
-        n_obj_tot, n_batch = get_n_obj_tot(x_batch, self.local_address_names), get_n_batch(x_batch)
-        return jnp.zeros([n_batch, n_obj_tot, self.latent_dimension])
+    #def init_h_v_batch(self, x_batch):
+    #    """Initializes latent variables defined at addresses for a batch of samples."""
+    #    n_obj_tot, n_batch = get_n_obj_tot(x_batch, self.local_address_names), get_n_batch(x_batch)
+    #    return jnp.zeros([n_batch, n_obj_tot, self.latent_dimension])
 
-    def init_h_g(self, a):
-        """Initializes global latent variables shared across a single sample."""
-        return jnp.zeros([1, self.latent_dimension])
+    #def init_h_g(self, a):
+    #    """Initializes global latent variables shared across a single sample."""
+    #    return jnp.zeros([1, self.latent_dimension])
 
-    def init_h_g_batch(self, a_batch):
-        """Initializes global latent variables shared across each sample for a batch of samples."""
-        n_batch = get_n_batch(a_batch)
-        return jnp.zeros([n_batch, 1, self.latent_dimension])
+    #def init_h_g_batch(self, a_batch):
+    #    """Initializes global latent variables shared across each sample for a batch of samples."""
+    #    n_batch = get_n_batch(a_batch)
+    #    return jnp.zeros([n_batch, 1, self.latent_dimension])
 
     def dynamics(self, state, time, params):
         """Dynamics of the neural ordinary differential equation."""
@@ -532,7 +538,7 @@ class H2MGNODE:
         nn_params = params['phi_g']
         return self.latent_nn_batch(nn_params, nn_input)
 
-    def apply(self, params, x):
-        """Forward pass for a batch of data."""
-        return self.forward_batch(params, x)
+    #def apply(self, params, x):
+    #    """Forward pass for a batch of data."""
+    #    return self.forward_batch(params, x)
 

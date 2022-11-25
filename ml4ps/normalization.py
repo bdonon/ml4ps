@@ -75,14 +75,22 @@ class Normalizer:
 
     def build_function_tree(self, values):
         r = {}
+        for k in self.feature_names:
+            if k in values.keys():
+                r[k] = {}
+                for f in self.feature_names[k]:
+                    r[k][f] = NormalizationFunction(values[k][f], self.n_breakpoints)
+        return r
+
+    def build_function_tree_old(self, values):
+        r = {}
         for k in values.keys():
-            if k == 'address':
-                continue
             if isinstance(values[k], dict):
                 r[k] = self.build_function_tree(values[k])
             else:
                 r[k] = NormalizationFunction(values[k], self.n_breakpoints)
         return r
+
 
     def save(self, filename):
         """Saves a normalizer."""
@@ -178,7 +186,10 @@ def get_proba_quantiles(x, n_breakpoints):
     p = np.arange(0, 1, 1. / n_breakpoints)
     x_reshaped = np.reshape(x, [-1])
     x_clean = x_reshaped[~np.isnan(x_reshaped)]
-    q = np.quantile(x_clean, p)
+    if np.any(x_clean):
+        q = np.quantile(x_clean, p)
+    else:
+        q = 0. * p
     return p, q
 
 

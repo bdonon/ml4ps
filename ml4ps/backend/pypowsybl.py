@@ -23,19 +23,22 @@ VALID_FEATURE_NAMES = {
             'connected1', 'connected2'],
     'thwt': ['rated_u0', 'r1', 'x1', 'g1', 'b1', 'rated_u1', 'r2', 'x2', 'g2', 'b2', 'rated_u2', 'r3', 'x3', 'g3', 'b3',
              'rated_u3', 'rated_s1', 'p1', 'q1', 'i1', 'p2', 'q2', 'i2', 'p3', 'q3', 'i3', 'connected1', 'connected2',
-             'connected3']
+             'connected3'],
+    'voltage_levels': ['nominal_v', 'high_voltage_limit', 'low_voltage_limit']
 }
 VALID_ADDRESSE_NAMES = {
-    'bus': ['id'],
-    'gen': ['id', 'bus_id'],
-    'load': ['id', 'bus_id'],
+    'bus': ['id', 'voltage_level_id'],
+    'gen': ['id', 'bus_id', 'voltage_level_id'],
+    'load': ['id', 'bus_id', 'voltage_level_id'],
     'shunt': ['id', 'bus_id'],
     'linear_shunt_compensator_sections': ['id'],
     "static_var_compensators": ['id'],
     'batteries': ["id", "bus_id"],
-    'line': ['id', 'bus1_id', 'bus2_id'],
-    'twt': ['id', 'bus1_id', 'bus2_id'],
+    'line': ['id', 'bus1_id', 'bus2_id', 'voltage_level1_id', 'voltage_level2_id'],
+    'twt': ['id', 'bus1_id', 'bus2_id', 'voltage_level1_id', 'voltage_level2_id'],
     'thwt': ['id', 'bus1_id', 'bus2_id', 'bus3_id'],
+    'voltage_levels': ['id', 'name'],
+    'substations': ['id', 'name', 'TSO']
 }
 
 
@@ -66,12 +69,16 @@ class PyPowSyblBackend(AbstractBackend):
             table = net.get_lines()
         elif key == 'twt':
             table = net.get_2_windings_transformers()
-        elif key == "thwt":
+        elif key == 'thwt':
             table = net.get_3_windings_transformers()
         elif key == 'linear_shunt_compensator_sections':
             table = net.get_linear_shunt_compensator_sections()
         elif key == "static_var_compensators":
             table = net.get_static_var_compensators()
+        elif key == 'voltage_levels':
+            table = net.get_voltage_levels()
+        elif key == 'substations':
+            table = net.get_substations()
         else:
             raise ValueError('Object {} is not a valid object name. ' +
                              'Please pick from this list : {}'.format(key, VALID_FEATURE_NAMES))
@@ -81,7 +88,7 @@ class PyPowSyblBackend(AbstractBackend):
         table = table.fillna(0.)
         return table
 
-    def get_data_network(self, network, feature_names=None, address_names=None):
+    def get_data_network(self, network, feature_names=None, address_names=None, address_to_int=True):
         """Extracts features from a pandapower network.
 
         Addresses are converted into unique integers that start at 0.
@@ -102,14 +109,15 @@ class PyPowSyblBackend(AbstractBackend):
 
                 object_address_names = address_names.get(object_name, [])
                 for address_name in object_address_names:
-                    x[object_name][address_name] = table[address_name].astype(str)
+                    x[object_name][address_name] = table[address_name].astype(str).values
 
                 object_feature_names = feature_names.get(object_name, [])
                 for feature_name in object_feature_names:
                     x[object_name][feature_name] = np.array(table[feature_name], dtype=np.float32)
 
         clean_dict(x)
-        convert_addresses_to_integers(x, address_names)
+        if address_to_int:
+            convert_addresses_to_integers(x, address_names)
         return x
 
     def load_network(self, file_path):
@@ -129,10 +137,10 @@ class PyPowSyblBackend(AbstractBackend):
                     net.update_loads(df)
                 elif k == 'line':
                     df = pd.DataFrame(data=y[k][f], index=net.get_lines().index, columns=[f])
-                    net.update_loads(df)
+                    net.update_lines(df)
                 elif k == 'twt':
                     df = pd.DataFrame(data=y[k][f], index=net.get_2_windings_transformers().index, columns=[f])
-                    net.update_loads(df)
+                    net.update(df)
                 else:
                     raise ValueError('Object {} is not a valid object name. ' +
                                      'Please pick from this specific list : {}'.format(k, VALID_FEATURE_NAMES))

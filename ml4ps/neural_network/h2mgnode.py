@@ -23,7 +23,7 @@ def initialize_layer_params(m, n, key, s):
     return s_w * random.normal(w_key, (n, m)), w_b * random.normal(b_key, (n,))
 
 
-@jit
+#@jit
 def output_nn(params, h):
     """Neural network that decodes latent variables and inputs into an output."""
     for w, b in params[:-1]:
@@ -32,7 +32,7 @@ def output_nn(params, h):
     return jnp.dot(final_w, h) + final_b
 
 
-@jit
+#@jit
 def latent_nn(params, h):
     """Neural network that operates over latent variables, outputs values between -1 and 1."""
     for w, b in params:
@@ -364,7 +364,7 @@ class H2MGNODE:
                 params[object_name][output_feature_name] = initialize_nn_params(wd, rk_used, scale=scale)
         return params
 
-    @partial(jit, static_argnums=(0,))
+    #@partial(jit, static_argnums=(0,))
     def forward(self, params, x, **kwargs):
         """Performs a forward pass for a single sample."""
         init_state = self.init_state(x)

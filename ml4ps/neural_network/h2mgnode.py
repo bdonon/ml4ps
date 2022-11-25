@@ -257,7 +257,7 @@ class H2MGNODE:
         self.output_nn_batch = vmap(output_nn, in_axes=(None, 0), out_axes=0)
         self.latent_nn_batch = vmap(latent_nn, in_axes=(None, 0), out_axes=0)
         #self.solve_and_decode_batch = jit(vmap(self.solve_and_decode, in_axes=(None, 0, 0)))
-        self.apply = jit(vmap(self.forward, in_axes=(None, 0)))
+        self.apply = vmap(self.forward, in_axes=(None, 0))
 
     def check_names(self):
         """Checks that the various features and addresses are consistent."""
@@ -415,7 +415,7 @@ class H2MGNODE:
                 r[object_name][f] = x[object_name][f]
         return r
 
-    @partial(jit, static_argnums=(0,))
+    #@partial(jit, static_argnums=(0,))
     def solve_and_decode(self, params, init_state, x, **kwargs):
         """Solves the dynamics of the system and decodes the final state into a meaningful output."""
         final_state = self.solve(params, init_state, **kwargs)

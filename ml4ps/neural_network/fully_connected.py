@@ -72,14 +72,6 @@ class FullyConnected:
                 global object classes and global feature names that should be taken as input of the model.
             global_output_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`, optional): Dictionary of
                 global object classes and global feature names that should be returned by the model.
-            input_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that defines for each object
-                class a list of feature names that should be taken as input of the neural network. Features that
-                are present in the input `x` but absent from `input_feature_names` will be discarded and not passed
-                to the neural network.
-            output_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that defines for each object
-                class a list of feature names for which the neural network should provide a prediction. The neural
-                network can only produce predictions for objects that are present in the input. If there is no
-                "transformer" in the input, then the neural network will not output anything for this class.
             hidden_dim (:obj:`list` of :obj:`int`, optional): List of hidden dimensions.
             random_key (:obj:`jax.random.PRNGKey`, optional): Random key for parameters initialization
         """

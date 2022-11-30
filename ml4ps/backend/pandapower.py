@@ -3,6 +3,7 @@ import pandapower as pp
 import pandas as pd
 import numpy as np
 import mat73
+import json
 import os
 
 from pandapower.converter.matpower.from_mpc import _adjust_ppc_indices, _change_ppc_TAP_value
@@ -85,6 +86,13 @@ class PandaPowerBackend(AbstractBackend):
                 net = pc.from_mpc(file_path)
             except NotImplementedError:
                 net = from_mpc73(file_path)
+
+            # Go search for a name file
+            name_path = os.path.splitext(file_path)[0] + '.name'
+            with open(name_path, 'r') as f:
+                name_dict = json.load(f)
+            for key, name_list in name_dict.items():
+                net.get(key).name = name_list
         else:
             raise NotImplementedError('No support for file {}'.format(file_path))
         net.name = os.path.basename(file_path)

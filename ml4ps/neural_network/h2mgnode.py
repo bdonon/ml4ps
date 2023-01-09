@@ -27,7 +27,8 @@ def initialize_layer_params(m, n, key, s):
 def output_nn(params, h):
     """Neural network that decodes latent variables and inputs into an output."""
     for w, b in params[:-1]:
-        h = jnn.tanh(jnp.dot(w, h) + b)
+        #h = jnn.tanh(jnp.dot(w, h) + b)
+        h = jnn.leaky_relu(jnp.dot(w, h) + b)
     final_w, final_b = params[-1]
     return jnp.dot(final_w, h) + final_b
 
@@ -395,7 +396,7 @@ class H2MGNODE:
         It also transforms nan addresses into values that will be automatically TODO
         """
 
-        n_obj_tot = get_n_obj_tot(x, self.local_address_names)
+        #n_obj_tot = get_n_obj_tot(x, self.local_address_names)
 
         r = {}
         for object_name in self.local_object_names:
@@ -408,7 +409,7 @@ class H2MGNODE:
                 if object_name in self.local_address_names.keys():
                     for f in self.local_address_names[object_name]:
                         #r[object_name][f] = x[object_name][f]
-                        r[object_name][f] = jnp.nan_to_num(x[object_name][f]*1., nan=n_obj_tot+1)
+                        r[object_name][f] = jnp.nan_to_num(x[object_name][f]*1., nan=999999)
         for object_name in self.global_input_feature_names.keys():
             r[object_name] = {}
             for f in self.global_input_feature_names[object_name]:

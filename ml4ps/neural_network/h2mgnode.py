@@ -477,8 +477,8 @@ class H2MGNODE:
         """Initializes the latent state for a single sample."""
         #h_v, h_g = self.init_h_v(x), self.init_h_g(x)
         return {
-            'h_v': x['h_v']*jnp.zeros([1, self.latent_dimension]),
-            'h_g': x['h_g']*jnp.zeros([1, self.latent_dimension]),
+            'h_v': jnp.expand_dims(x['h_v'], -1)*jnp.zeros([1, self.latent_dimension]),
+            'h_g': jnp.expand_dims(x['h_g'], -1)*jnp.zeros([1, self.latent_dimension]),
             'x': self.input_filter(x)
         }
 

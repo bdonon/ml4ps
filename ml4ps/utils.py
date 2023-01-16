@@ -113,8 +113,8 @@ def convert_addresses_to_integers(x, address_names):
 
 
     n_unique_addresses = len(unique_addresses)
-    x['h_g'] = np.zeros([1, 1])
-    x['h_v'] = np.zeros([n_unique_addresses, 1])
+    x['h_g'] = np.zeros([1])
+    x['h_v'] = np.zeros([n_unique_addresses])
 
 
 

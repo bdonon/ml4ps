@@ -8,6 +8,13 @@ from ml4ps.utils import clean_dict, convert_addresses_to_integers
 class NoBackend(AbstractBackend):
     """ A way to load a `.json` file without using a backend, it assumes the following structure:
         {'elem1': {'feat1: [...], 'feat2: [...]}, 'elem2': {'feat1: [...], 'feat2: [...]}}
+
+        {'bus':
+            {'id': ['A', 'B', 'C'], 'v_min': [0.9, 0.9, 0.9]}
+        'load':
+            {}
+        }
+
     """
 
     valid_extensions = (".json")
@@ -15,7 +22,8 @@ class NoBackend(AbstractBackend):
     valid_feature_names = {
         "branch": ['br_r', 'rate_a', 'shift', 'pt', 'mu_sm_fr', 'br_x', 'g_to', 'g_fr', 'b_fr', 'mu_sm_to',
             'br_status', 'b_to', 'index', 'qf', 'angmin', 'angmax', 'transformer', 'qt', 'tap', 'pf'],
-        "gen": ['apf', 'qc1max', 'lin_cost', 'pg', 'model', 'shutdown', 'startup', 'qc2max', 'ramp_agc', 'qg', 'pmax',
+        "gen": ['apf', 'qc1max', 'lin_cost', 'quad_cost', 'pg', 'model', 'shutdown', 'startup', 'qc2max',
+            'ramp_agc', 'qg', 'pmax',
             'ramp_10', 'vg', 'mbase', 'pc2', 'index', 'cost1', 'cost2', 'qmax', 'gen_status', 'qmin', 'qc1min',
             'qc2min', 'pc1', 'ramp_q', 'ramp_30', 'ncost', 'pmin'],
         "load": ['status', 'qd', 'pd', 'index'],

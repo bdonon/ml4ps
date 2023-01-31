@@ -27,7 +27,8 @@ dependencies = [
     "matplotlib>=3.5.3",
     "mat73>=0.59",
     "numba>=0.56.2",
-    "pypowsybl"
+    "pypowsybl",
+    "matpowercaseframes"
 ]
 
 [build-system]

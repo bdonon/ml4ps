@@ -42,6 +42,7 @@ def count_max_n_obj(backend, data_dir):
         if n_address > max_address:
             max_address = n_address
     max_n_obj["max_address"] = max_address
+    max_n_obj["global"] = 1
     return max_n_obj
 
 class PaddingWrapper(AbstractBackend):

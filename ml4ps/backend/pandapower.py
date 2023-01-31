@@ -4,31 +4,154 @@ import pandas as pd
 import numpy as np
 import mat73
 import json
+import copy
 import os
+import re
 
 from pandapower.converter.matpower.from_mpc import _adjust_ppc_indices, _change_ppc_TAP_value
-from multiprocessing import Pool
+from matpowercaseframes.utils import int_else_float_except_string
+from pandapower.converter.matpower.to_mpc import _ppc2mpc
+from scipy.io import savemat
 
+from ml4ps.utils import clean_dict, convert_addresses_to_integers
 from ml4ps.backend.interface import AbstractBackend
-from ml4ps.utils import clean_dict, convert_addresses_to_integers, collate_dict, separate_dict
 
 
-def from_mpc73(mpc_file, f_hz=50, validate_conversion=False, **kwargs):
-    """Implementation of from_mpc that supports matlab 7.3 .m format."""
+def from_mpc(file_path, format='.mat'):
+    """Implementation of from_mpc that supports both .m and .mat files, while allowing matlab 7.3 .m format."""
 
-    mpc = mat73.loadmat(mpc_file)
-    ppc = dict()
-    ppc['version'] = 'X.X'
-    ppc["baseMVA"] = mpc['mpc']['baseMVA']
-    ppc["bus"] = mpc['mpc']['bus']
-    ppc["gen"] = mpc['mpc']['gen']
-    ppc["branch"] = mpc['mpc']['branch']
-    ppc['gencost'] = mpc['mpc']['gencost']
+    def from_mpc73(mpc_file, f_hz=50, validate_conversion=False, **kwargs):
+        """Implementation of from_mpc that supports matlab 7.3 .m format."""
+        mpc = mat73.loadmat(mpc_file)
+        ppc = {"version": "X.X", "baseMVA": mpc["mpc"]["baseMVA"], "bus": mpc["mpc"]["baseMVA"],
+            "gen": mpc["mpc"]["gen"], "branch": mpc["mpc"]["branch"], "gencost": mpc["mpc"]["gencost"]}
+        _adjust_ppc_indices(ppc)
+        _change_ppc_TAP_value(ppc)
+        return pc.from_ppc(ppc, f_hz=f_hz, validate_conversion=validate_conversion, **kwargs)
 
-    _adjust_ppc_indices(ppc)
-    _change_ppc_TAP_value(ppc)
+    def from_m(file_path):
+        power_grid = pc.from_mpc(file_path)
+        pattern = r'mpc\.{}\s*=\s*\[[\n]?(?P<data>.*?)[\n]?\];'.format("shunt_steps")
+        with open(file_path) as f:
+            match = re.search(pattern, f.read(), re.DOTALL)
+        match = match.groupdict().get('data', None)
+        match = match.strip("'").strip('"')
+        _list = list()
+        for line in match.splitlines():
+            line = line.split('%')[0]
+            line = line.replace(';', '')
+            if line.strip():
+                _list.append([int_else_float_except_string(s) for s in line.strip().split()])
+        power_grid.shunt = pd.DataFrame(_list,
+                                        columns=["bus", "q_mvar", "p_mw", "vn_kv", "step", "max_step", "in_service"])
+        power_grid.shunt["name"] = ""
+        return power_grid
 
-    return pc.from_ppc(ppc, f_hz=f_hz, validate_conversion=validate_conversion, **kwargs)
+    def load_object_names(power_grid, file_path):
+        try:
+            name_path = os.path.splitext(file_path)[0] + '.name'
+            with open(name_path, 'r') as f:
+                name_dict = json.load(f)
+            for key, name_list in name_dict.items():
+                power_grid.get(key).name = name_list
+        except:
+            pass
+
+    if format=='.mat':
+        try:
+            power_grid = pc.from_mpc(file_path)
+        except NotImplementedError:
+            power_grid = from_mpc73(file_path)
+    elif format == '.m':
+        power_grid = from_m(file_path)
+    load_object_names(power_grid, file_path)
+    return power_grid
+
+
+def to_mpc(net, filepath, format='.mat', **kwargs):
+    """Modification of the `to_mpc` implementation of pandapower
+    (https://github.com/e2nIEE/pandapower/blob/develop/pandapower/converter/matpower/to_mpc.py)
+
+    The present implementation saves all objects and sets the status of out-of-service
+    objects to 0.
+    The default implementation deletes objects that are out-of-service, which
+    completely alters the object ordering. For visualization purpose, panoramix relies
+    heavily on this ordering.
+    """
+
+    net = copy.deepcopy(net)
+
+    # Save actual object status
+    gen_status = net.gen.in_service.astype(float).values
+    ext_grid_status = net.ext_grid.in_service.astype(float).values
+    line_status = net.line.in_service.astype(float).values
+    trafo_status = net.trafo.in_service.astype(float).values
+    ppc_gen_status = np.concatenate([ext_grid_status, gen_status])
+    ppc_branch_status = np.concatenate([line_status, trafo_status])
+
+    # Set all objects to be in_service and convert to pypower object
+    net.gen.in_service = True
+    net.ext_grid.in_service = True
+    net.line.in_service = True
+    net.trafo.in_service = True
+    ppc = pp.converter.to_ppc(net, **kwargs)
+
+    # Manually change the Gen and Branch status to reflect the actual in_service values
+    ppc['gen'][:, 7] = ppc_gen_status
+    ppc['branch'][:, 10] = ppc_branch_status
+
+    # Get the current step and max step for shunts
+    shunt = net.shunt[["bus", "q_mvar", "p_mw", "vn_kv", "step", "max_step", "in_service"]].astype(float).values
+    ppc['bus'][:, 4] = 0.
+    ppc['bus'][:, 5] = 0.
+
+    # Untouched part
+    mpc = dict()
+    mpc["mpc"] = _ppc2mpc(ppc)
+    if format == '.mat':
+        savemat(filepath, mpc)
+    elif format == '.m':
+
+        def write_table(f, arr, max_col=None):
+            for r in arr:
+                for v in r[:max_col]:
+                    if v.is_integer():
+                        f.write("\t{}".format(v.astype(int)))
+                    else:
+                        f.write("\t{:.6f}".format(v))
+                f.write(";\n")
+            f.write("];\n")
+
+        with open(filepath, "w") as f:
+            f.write("function mpc = powergrid\n")
+            f.write("mpc.version = '2';\n")
+            f.write("mpc.baseMVA = 100;\n")
+            f.write("mpc.bus = [\n")
+            write_table(f, mpc["mpc"]["bus"], max_col=13)
+            f.write("mpc.gen = [\n")
+            write_table(f, mpc["mpc"]["gen"], max_col=21)
+            f.write("mpc.branch = [\n")
+            write_table(f, mpc["mpc"]["branch"], max_col=13)
+            f.write("%\tbus_i\tQ\tP\tvn_kv\tstep\tmax_step\tstatus\n")
+            f.write("mpc.shunt_steps = [\n")
+            write_table(f, shunt)
+            f.close()
+
+
+    # Save names
+    names = {
+        'bus': list(net.bus.name.astype(str).values),
+        'gen': list(net.gen.name.astype(str).values),
+        'load': list(net.load.name.astype(str).values),
+        'line': list(net.line.name.astype(str).values),
+        'trafo': list(net.trafo.name.astype(str).values),
+        'ext_grid': list(net.ext_grid.name.astype(str).values),
+        'shunt': list(net.shunt.name.astype(str).values),
+    }
+    with open(os.path.splitext(filepath)[0] + '.name', "w") as outfile:
+        json.dump(names, outfile)
+
+    return mpc
 
 
 class PandaPowerBackend(AbstractBackend):
@@ -36,10 +159,15 @@ class PandaPowerBackend(AbstractBackend):
 
     valid_extensions = (".json", ".pkl", ".mat")
     valid_address_names = {
-        "bus": ["id", "name"], "load": ["id", "name", "bus_id"], "sgen": ["id", "name", "bus_id"],
-        "gen": ["id", "name", "bus_id"], "shunt": ["id", "name", "bus_id"], "ext_grid": ["id", "name", "bus_id"],
-        "line": ["id", "name", "from_bus_id", "to_bus_id"], "trafo": ["id", "name", "hv_bus_id", "lv_bus_id"],
-        "poly_cost": ["element"]}
+        "bus": ["id"], #, "name"],
+        "load": ["bus_id"],#["id", "name", "bus_id"],
+        "sgen": ["bus_id"],#["id", "name", "bus_id"],
+        "gen": ["bus_id"],#["id", "name", "bus_id"],
+        "shunt": ["bus_id"],#["id", "name", "bus_id"],
+        "ext_grid": ["bus_id"],#["id", "name", "bus_id"],
+        "line": ["from_bus_id", "to_bus_id"],#["id", "name", "from_bus_id", "to_bus_id"],
+        "trafo": ["hv_bus_id", "lv_bus_id"],#["id", "name", "hv_bus_id", "lv_bus_id"],
+    }
     valid_feature_names = {
         "global": ["converged", "f_hz", "sn_mva"],
         "bus": ["in_service", "max_vm_pu", 'min_vm_pu', "vn_kv", "res_vm_pu", "res_va_degree", "res_p_mw",
@@ -62,101 +190,81 @@ class PandaPowerBackend(AbstractBackend):
             "tap_step_degree", "tap_step_percent", "vn_hv_kv", "vn_lv_kv", "vk_percent", "vkr_percent", "res_p_hv_mw",
             "res_q_hv_mvar", "res_p_lv_mw", "res_q_lv_mvar", "res_pl_mw", "res_ql_mvar", "res_i_hv_ka", "res_i_lv_ka",
             "res_vm_hv_pu", "res_va_hv_degree", "res_vm_lv_pu", "res_va_lv_degree", "res_loading_percent"],
-        "poly_cost": ["cp0_eur", "cp1_eur_per_mw", "cp2_eur_per_mw2", "cq0_eur", "cq1_eur_per_mvar",
-            "cq2_eur_per_mvar2"]}
+    }
 
-    def __init__(self, n_cores=0):
+    def __init__(self):
         """Initializes a PandaPower backend."""
         super().__init__()
-        self.n_cores = n_cores
-        if self.n_cores > 0:
-            self.pool = Pool(self.n_cores)
 
-    def load_network(self, file_path):
-        """Loads a pandapower power grid instance, either from a `.pkl` or from a `.json` file.
+    def load_power_grid(self, file_path):
+        """Loads a pandapower power grid instance from `.json`, `.pkl`, `.m` or `.mat`.
 
-        Overrides the abstract load_network method.
+        Object names may be stored in a companion file that has the same name with the extension `.name`.
+        Overrides the abstract `load_power_grid` method.
         """
         if file_path.endswith('.json'):
-            net = pp.from_json(file_path)
+            power_grid = pp.from_json(file_path)
         elif file_path.endswith('.pkl'):
-            net = pp.from_pickle(file_path)
+            power_grid = pp.from_pickle(file_path)
+        elif file_path.endswith('.m'):
+            power_grid = from_mpc(file_path, format='.m')
         elif file_path.endswith('.mat'):
-            try:
-                net = pc.from_mpc(file_path)
-            except NotImplementedError:
-                net = from_mpc73(file_path)
-
-            # Go search for a name file
-            name_path = os.path.splitext(file_path)[0] + '.name'
-            with open(name_path, 'r') as f:
-                name_dict = json.load(f)
-            for key, name_list in name_dict.items():
-                net.get(key).name = name_list
+            power_grid = from_mpc(file_path, format='.mat')
         else:
-            raise NotImplementedError('No support for file {}'.format(file_path))
-        net.name = os.path.basename(file_path)
-        return net
+            raise NotImplementedError('No support for extension of file {}.'.format(file_path))
+        power_grid.name = os.path.splitext(os.path.basename(file_path))[0]
+        return power_grid
 
-    def save_network(self, net, path):
+    def save_power_grid(self, power_grid, path, format='.json'):
         """Saves a power grid instance using the same name as in the initial file.
 
+        TODO : on veut pouvoir modifier le format de sauvegarde du power_grid.
+
         Useful for saving a version of a test set modified by a trained neural network.
-        Overrides the abstract `save_network` method.
+        Overrides the abstract `save_power_grid` method.
         """
-        file_name = net.name
-        file_path = os.path.join(path, file_name)
-        if file_path.endswith('.json'):
-            pp.to_json(net, file_path)
-        elif file_path.endswith('.pkl'):
-            pp.to_pickle(net, file_path)
-        elif file_path.endswith('.mat'):
-            pc.to_mpc(net, filename=file_path)
+        file_path = os.path.join(path, power_grid.name) + format
+        if format=='.json':
+            pp.to_json(power_grid, file_path)
+        elif format=='.pkl':
+            pp.to_pickle(power_grid, file_path)
+        elif format in ['.m', '.mat']:
+            to_mpc(power_grid, file_path, format=format)
         else:
-            raise NotImplementedError('No support for file {}'.format(file_path))
+            raise NotImplementedError('No support for extension of file {}'.format(file_path))
 
     @staticmethod
-    def set_data_network(net, y):
+    def set_data_power_grid(power_grid, y):
         """Updates a power grid by setting features according to `y`.
 
-        Overrides the abstract `set_feature_network` method.
+        Overrides the abstract `set_data_power_grid` method.
         """
         for k in y.keys():
             for f in y[k].keys():
                 try:
-                    net[k][f] = y[k][f]
+                    power_grid[k][f] = y[k][f]
                 except ValueError:
-                    print('Object {} and feature {} are not available with PandaPower'.format(k, f))
-
-    # def set_data_network(self, net, y):
-    #     """Updates a power grid by setting features according to `y`.
-    #
-    #     Overrides the abstract `set_feature_network` method.
-    #     """
-    #     for k in y.keys():
-    #         for f in y[k].keys():
-    #             try:
-    #                 net[k][f] = y[k][f]
-    #             except ValueError:
-    #                 print('Object {} and feature {} are not available with PandaPower'.format(k, f))
+                    print('Object class {} and feature {} are not available with PandaPower'.format(k, f))
 
     @staticmethod
-    def run_network(net, **kwargs):
+    def run_power_grid(power_grid, **kwargs):
         """Runs a power flow simulation.
 
         Pandapower `runpp` options can be passed as keyword arguments.
-        Overrides the abstract `run_network` method.
+        Overrides the abstract `run_power_grid` method.
         """
         try:
-            pp.runpp(net, **kwargs)
+            pp.runpp(power_grid, **kwargs)
         except pp.powerflow.LoadflowNotConverged:
             pass
 
     @staticmethod
-    def get_data_network(network, feature_names=None, address_names=None, address_to_int=True):
+    def get_data_power_grid(power_grid, feature_names=None, address_names=None,
+                            address_to_int=True, return_n_unique_addresses=False):
         """Extracts features from a pandapower network.
 
         If `address_to_int` is True, addresses are converted into unique integers that start at 0.
+        If `initialize_latent_variables` is True, latent variables are initialized for each address.
         Overrides the abstract `get_data_network` method.
         """
         if feature_names is None:
@@ -170,13 +278,13 @@ class PandaPowerBackend(AbstractBackend):
             if key == 'global':
                 x[key] = {}
                 table = pd.DataFrame({
-                    'converged': [network.converged * 1.], 'f_hz': [network.f_hz * 1.], 'sn_mva': [network.sn_mva * 1.]})
+                    'converged': [power_grid.converged * 1.], 'f_hz': [power_grid.f_hz * 1.], 'sn_mva': [power_grid.sn_mva * 1.]})
                 for feature_name in feature_names[key]:
                     x[key][feature_name] = table[feature_name].astype(float).values
             else:
                 x[key] = {}
-                table = network.get(key)
-                res_table = network.get('res_' + key)
+                table = power_grid.get(key)
+                res_table = power_grid.get('res_' + key)
                 for feature_name in feature_names.get(key, []):
                     if feature_name == 'tap_side':
                         x[key][feature_name] = table[feature_name].map({'hv': 0., 'lv': 1.}).astype(float).values
@@ -205,54 +313,9 @@ class PandaPowerBackend(AbstractBackend):
                         x[key][address_name] = table[address_name].values.astype(str)
         clean_dict(x)
         if address_to_int:
-            convert_addresses_to_integers(x, address_names)
-        return x
+            n_unique_addresses = convert_addresses_to_integers(x, address_names)
 
-    def set_run_get_batch(self, network_batch, mod_dict, feature_names, **kwargs):
-        """Applies a list of modifications to a batch of power grids, runs simulations, and returns features.
-
-        Args:
-            network_batch (:obj:`list` of :obj:`pandapower.Network`): Batch of `N_batch` pandapower networks.
-            mod_dict (:obj:`dict` of :obj:`dict` of :obj:`Array`): Dictionary of dictionary of 3D tensors.
-                The upper level keys corresponds to object classes and the lower level keys to feature names.
-                Tensors are of dimension `[N_batch, N_variant, N_object]`, where `N_batch` is the amount of
-                samples per batch, `N_variant` is the amount of modifications one wants to apply to each
-                sample, and `N_object` is the amount of objects of the considered class.
-            feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary of list of object features that
-                should be extracted from the results of the power flow computations.
-            **kwargs: Any keyword argument that should be passed to `pandapower.runpp`.
-        """
-
-        mod_batch_variant = [separate_dict(m) for m in separate_dict(mod_dict)]
-
-        if self.n_cores > 0:
-            # Multiprocessing implementation
-            args = [(network, mod_variant, feature_names, kwargs) for network, mod_variant in
-                zip(network_batch, mod_batch_variant)]
-            out_list = self.pool.map(PandaPowerBackend.set_run_get_single, args)
-            return collate_dict(out_list)
-
+        if return_n_unique_addresses:
+            return x, n_unique_addresses
         else:
-            # Standard implementation
-            features_batch_variant = []
-            for network, mod_variant in zip(network_batch, mod_batch_variant):
-                features_variant = []
-                for mod in mod_variant:
-                    PandaPowerBackend.set_data_network(network, mod)
-                    PandaPowerBackend.run_network(network, **kwargs)
-                    features = PandaPowerBackend.get_data_network(network, feature_names=feature_names)
-                    features_variant.append(features)
-                features_batch_variant.append(collate_dict(features_variant))
-            return collate_dict(features_batch_variant)
-
-    @staticmethod
-    def set_run_get_single(args):
-        """Applies a list of modifications to a single net, runs power flows, and returns required features."""
-        network, mod_variant, feature_names, kwargs = args
-        features_variant = []
-        for mod in mod_variant:
-            PandaPowerBackend.set_data_network(network, mod)
-            PandaPowerBackend.run_network(network, **kwargs)
-            features = PandaPowerBackend.get_data_network(network, feature_names=feature_names)
-            features_variant.append(features)
-        return collate_dict(features_variant)
+            return x

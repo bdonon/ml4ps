@@ -7,12 +7,11 @@ import os
 class AbstractBackend(ABC):
     """Abstract Power Systems backend.
 
-        Allows to load power grids, get and set features, and to interact with them through Power Flow simulations.
+        Allows to load power grids, get and set features, and interact with them through Power Flow simulations.
 
         Attributes:
             valid_extensions (:obj:`list` of :obj:`str`): List of valid file extensions that can be read by the
                 backend. Should be overridden in a proper backend implementation.
-            valid_object_names (:obj:`list` of :obj:`str`): List of object names.
             valid_address_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary that contains all the valid
                 object names as keys and valid address names for each of these keys. Should be overridden in a
                 proper backend implementation.
@@ -41,7 +40,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def load_network(self, file_path):
+    def load_power_grid(self, file_path):
         """Loads a single power grid instance.
 
         Should be overridden in a proper backend implementation.
@@ -50,19 +49,23 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def save_network(self, net, path):
+    def save_power_grid(self, power_grid, path):
         """Saves a single power grid instance in path.
 
         Should be overridden in a proper backend implementation.
         """
         pass
 
-    def save_batch(self, network_batch, path):
-        """Saves a batch of power grid instances in path."""
-        [self.save_network(net, path) for net in network_batch]
+    @abstractmethod
+    def run_power_grid(self, power_grid):
+        """Performs a single power flow computation.
+
+        Should be overridden in a proper backend implementation.
+        """
+        pass
 
     @abstractmethod
-    def set_data_network(self, net, y):
+    def set_data_power_grid(self, power_grid, y):
         """Modifies a power grid with the feature values contained in y.
 
         Should be overridden in a proper backend implementation.
@@ -70,34 +73,14 @@ class AbstractBackend(ABC):
         """
         pass
 
-    def set_data_batch(self, network_batch, y_batch):
-        """Modifies a batch of power grids with a batch of features."""
-        [self.set_data_network(network, y) for network, y in zip(network_batch, separate_dict(y_batch))]
-
     @abstractmethod
-    def run_network(self, net, **kwargs):
-        """Performs a single power flow computation.
-
-        Should be overridden in a proper backend implementation.
-        """
-        pass
-
-    def run_batch(self, network_batch, **kwargs):
-        """Performs power flow computations for a batch of power grids."""
-        [self.run_network(net, **kwargs) for net in network_batch]
-
-    @abstractmethod
-    def get_data_network(self, net, feature_names=None, address_names=None, address_to_int=True):
+    def get_data_power_grid(self, power_grid, feature_names=None, address_names=None, address_to_int=True):
         """Returns feature values from a single power grid instance.
 
         Should be overridden in a proper backend implementation.
         Should be consistent with `valid_data_structure`.
         """
         pass
-
-    def get_data_batch(self, net_batch, **kwargs):#feature_names=None, address_names=None, address_to_int=True):
-        """Returns features from a batch of power grids."""
-        return collate_dict([self.get_data_network(net, **kwargs) for net in net_batch])
 
     def assert_names(self, feature_names=None, address_names=None):
         """Asserts that `object_names`, `feature_names` and `address_names` are valid w.r.t. the backend."""

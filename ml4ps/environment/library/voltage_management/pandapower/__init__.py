@@ -6,10 +6,10 @@ from ml4ps.environment.library.voltage_management.pandapower.VoltageManagementPa
 
 register(
     id="VoltageManagementPandapowerV1",
-    entry_point="ml4ps_temp.environment.library.voltage_management.pandapower.VoltageManagementPandapowerV1:VoltageManagementPandapowerV1",
+    entry_point="ml4ps.environment.library.voltage_management.pandapower.VoltageManagementPandapowerV1:VoltageManagementPandapowerV1",
 )
 
 register(
     id="VoltageManagementPandapowerV2",
-    entry_point="ml4ps_temp.environment.library.voltage_management.pandapower.VoltageManagementPandapowerV2:VoltageManagementPandapowerV2",
+    entry_point="ml4ps.environment.library.voltage_management.pandapower.VoltageManagementPandapowerV2:VoltageManagementPandapowerV2",
 )

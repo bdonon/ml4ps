@@ -110,7 +110,6 @@ def convert_addresses_to_integers(x, address_names):
             if object_name in x.keys():
                 for object_address_name in object_address_names:
                     x[object_name][object_address_name] = converter(x[object_name][object_address_name])
-    print(len(unique_addresses))
     return len(unique_addresses)
     #
     # if initialize_latent_variables:

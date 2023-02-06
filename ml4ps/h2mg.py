@@ -108,8 +108,10 @@ def h2mg_slicer(key, obj_name, feat_name):
             return h2mg[key][obj_name][feat_name]
         elif key == H2MGCategories.GLOBAL_FEATURES.value:
             return h2mg[key][feat_name]
-        if key == H2MGCategories.LOCAL_ADDRESSES.value:
+        elif key == H2MGCategories.LOCAL_ADDRESSES.value:
             return h2mg[key][obj_name][feat_name]
+        elif key == H2MGCategories.ALL_ADDRESSES.value:
+            return h2mg[key]
         else:
             raise ValueError
     return slice
@@ -197,3 +199,30 @@ def collate_h2mgs_features(h2mgs_list):
     def collate_arrays(*args):
         return np.array(list(args))
     return map_to_features(collate_arrays, *h2mgs_list)
+
+def map_to_all(fn, *h2mgs):
+    if not all_compatible(*h2mgs):
+        raise ValueError
+    results = empty_like(h2mgs[0])
+    for key, obj_name, feat_name, value in local_features_iterator(results):
+        results[key][obj_name][feat_name] = fn(
+            *list(map(h2mg_slicer(key, obj_name, feat_name), list(h2mgs))))
+
+    for key, feat_name, value in global_features_iterator(results):
+        results[key][feat_name] = fn(
+            *list(map(h2mg_slicer(key, None, feat_name), list(h2mgs))))
+    
+    for key, obj_name, feat_name, value in local_addresses_iterator(results):
+        results[key][obj_name][feat_name] = fn(
+            *list(map(h2mg_slicer(key, obj_name, feat_name), list(h2mgs))))
+    
+    for key, value in all_addresses_iterator(results):
+        results[key] = fn(
+            *list(map(h2mg_slicer(key, None, None), list(h2mgs))))
+
+    return results
+
+def collate_h2mgs(h2mgs_list):
+    def collate_arrays(*args):
+        return np.array(list(args))
+    return map_to_all(collate_arrays, *h2mgs_list)

@@ -7,24 +7,61 @@ from ml4ps.backend.interface import AbstractBackend
 
 def pad(x, max_n_obj):
     """Pads features contained in `x` with `np.nan` to have the amount of objects specified in `max_n_obj`."""
-    for k, v in x.items():
+    for k, v in x["local_features"].items():
         for f, w in v.items():
             if len(w) > max_n_obj.get(k, 0):
                 raise ValueError("Padding impossible, maximum {} objects of class {} ".format(max_n_obj.get(k, 0), k) +\
                                  "are present in this dataset, while {} ".format(len(w)) +\
                                  "objects are present in this sample.")
-    return {k: {f: np.concatenate([w, np.full(max_n_obj.get(k,0)-len(w), np.nan)]) for f, w in v.items()} for k, v in x.items()}
-
+    for k, v in x["local_addresses"].items():
+        for f, w in v.items():
+            if len(w) > max_n_obj.get(k, 0):
+                raise ValueError("Padding impossible, maximum {} objects of class {} ".format(max_n_obj.get(k, 0), k) +\
+                                 "are present in this dataset, while {} ".format(len(w)) +\
+                                 "objects are present in this sample.")
+    r = {}
+    if "local_features" in x:
+        r["local_features"] = {k: {f: np.concatenate([w, np.full(max_n_obj.get(k,0)-len(w), np.nan)]) for f, w in v.items()}
+            for k, v in x["local_features"].items()}
+    if "local_addresses" in x:
+        r["local_addresses"] = {k: {f: np.concatenate([w, np.full(max_n_obj.get(k, 0) - len(w), np.nan)]) for f, w in v.items()} for k, v in
+            x["local_addresses"].items()}
+    if "all_addresses" in x:
+        r["all_addresses"] = np.arange(max_n_obj["max_address"])
+    if "global_features" in x:
+        r["global_features"] = x["global_features"]
+    return r
 
 def unpad(x, current_n_obj):
     """Deletes features in x to correspond to fictitious objects according to dict `current_n_obj`."""
-    for k, v in x.items():
-        for f, w in v.items():
-            if len(w) < current_n_obj.get(k, 0):
-                raise ValueError("Unpadding impossible, {} objects of class {} ".format(current_n_obj.get(k, 0), k) +\
-                                 "are available in the power grid, while only {} ".format(len(w)) +\
-                                 "numerical values are provided.")
-    return {k: {f: w[:current_n_obj.get(k, 0)] for f, w in v.items()} for k, v in x.items()}
+    r = {}
+    if "local_features" in x:
+        r["local_features"] = {}
+        for k, v in x["local_features"].items():
+            r["local_features"][k] = {}
+            for f, w in v.items():
+                if len(w) < current_n_obj.get(k, 0):
+                    raise ValueError("Unpadding impossible, {} objects of class {} ".format(current_n_obj.get(k, 0), k) + \
+                                     "are available in the power grid, while only {} ".format(len(w)) + \
+                                     "numerical values are provided.")
+                else:
+                    r["local_features"][k][f] = w[:current_n_obj.get(k, 0)]
+    if "local_addresses" in x:
+        r["local_addresses"] = {}
+        for k, v in x["local_addresses"].items():
+            r["local_addresses"][k] = {}
+            for f, w in v.items():
+                if len(w) < current_n_obj.get(k, 0):
+                    raise ValueError("Unpadding impossible, {} objects of class {} ".format(current_n_obj.get(k, 0), k) + \
+                                     "are available in the power grid, while only {} ".format(len(w)) + \
+                                     "numerical values are provided.")
+                else:
+                    r["local_addresses"][k][f] = w[:current_n_obj.get(k, 0)]
+    if "all_addresses" in x:
+        r["all_addresses"] = x["all_addresses"][:current_n_obj["max_address"]]
+    if "global_features" in x:
+        r["global_features"] = x["global_features"]
+    return r
 
 def count_max_n_obj(backend, data_dir):
     """Counts the max amount of objects of each class in the dataset located in `data_dir`, according to `backend`."""
@@ -33,9 +70,10 @@ def count_max_n_obj(backend, data_dir):
     valid_files = backend.get_valid_files(data_dir)
     for file in tqdm.tqdm(valid_files, desc='Counting maximal amount of object of each class in {}'.format(data_dir)):
         power_grid = backend.load_power_grid(file)
-        address_names = backend.valid_address_names
-        x, n_address = backend.get_data_power_grid(power_grid, address_names={k: list(v) for k, v in address_names.items()}, return_n_unique_addresses=True)
-        current_n_obj = {k: max([np.shape(w)[0] for f, w in v.items()]) for k, v in x.items()}
+        address_names = backend.valid_local_address_names
+        x = backend.get_data_power_grid(power_grid, local_address_names={k: list(v) for k, v in address_names.items()})
+        n_address = x["all_addresses"].shape[0]
+        current_n_obj = {k: max([np.shape(w)[0] for f, w in v.items()]) for k, v in x["local_addresses"].items()}
         for k, v in current_n_obj.items():
             if v > max_n_obj.get(k, 0):
                 max_n_obj[k] = v
@@ -92,12 +130,16 @@ class PaddingWrapper(AbstractBackend):
         return self.backend.valid_extensions
 
     @property
-    def valid_address_names(self):
-        return self.backend.valid_address_names
+    def valid_local_address_names(self):
+        return self.backend.valid_local_address_names
 
     @property
-    def valid_feature_names(self):
-        return self.backend.valid_feature_names
+    def valid_local_feature_names(self):
+        return self.backend.valid_local_feature_names
+
+    @property
+    def valid_global_feature_names(self):
+        return self.backend.valid_global_feature_names
 
     def load_power_grid(self, file_path, **kwargs):
         """Loads a power grid after ensuring that it belongs to the dataset considered by the wrapper."""
@@ -118,6 +160,6 @@ class PaddingWrapper(AbstractBackend):
 
     def set_data_power_grid(self, power_grid, y, **kwargs):
         """Unpads data contained in `y` to get rid of fictitious objects and apply it to the power grid instance."""
-        y_old = self.backend.get_data_power_grid(power_grid, feature_names={k: list(v) for k, v in y.items()})
-        current_n_obj = {k: np.max([len(w) for f, w in v.items()]) for k, v in y_old.items()}
+        y_old = self.backend.get_data_power_grid(power_grid, local_feature_names={k: list(v) for k, v in y["local_features"].items()})
+        current_n_obj = {k: np.max([len(w) for f, w in v.items()]) for k, v in y_old["local_features"].items()}
         self.backend.set_data_power_grid(power_grid, unpad(y, current_n_obj), **kwargs)

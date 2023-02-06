@@ -91,32 +91,19 @@ def clean_dict(data):
     return data
 
 
-def convert_addresses_to_integers(x, address_names):
-    """Converts `str` addresses into a unique integer id.
-
-    Only addresses specified in `address_names` are considered for defining the mapping from `str` address to
-    unique integer id.
-    """
-    all_addresses, unique_addresses = [], []
-    for object_name, object_address_names in address_names.items():
-        if object_name in x.keys():
-            for object_address_name in object_address_names:
-                all_addresses.append(x[object_name][object_address_name])
-    if all_addresses:
-        unique_addresses = list(np.unique(np.concatenate(all_addresses)))
-        str_to_int = {address: i for i, address in enumerate(unique_addresses)}
-        converter = np.vectorize(str_to_int.get)
-        for object_name, object_address_names in address_names.items():
-            if object_name in x.keys():
-                for object_address_name in object_address_names:
-                    x[object_name][object_address_name] = converter(x[object_name][object_address_name])
+def convert_addresses_to_integers(x):
+    """Converts `str` addresses into a unique integer id."""
+    all_addresses = []
+    for k in x["local_addresses"]:
+        for f in x["local_addresses"][k]:
+            all_addresses.append(x["local_addresses"][k][f])
+    unique_addresses = list(np.unique(np.concatenate(all_addresses)))
+    str_to_int = {address: i for i, address in enumerate(unique_addresses)}
+    converter = np.vectorize(str_to_int.get)
+    for k in x["local_addresses"]:
+        for f in x["local_addresses"][k]:
+            x["local_addresses"][k][f] = converter(x["local_addresses"][k][f])
     return len(unique_addresses)
-    #
-    # if initialize_latent_variables:
-    #     n_unique_addresses = len(unique_addresses)
-    #     x['h_g'] = np.zeros([1])
-    #     x['h_v'] = np.zeros([n_unique_addresses])
-
 
 
 def assert_substructure(a, b):

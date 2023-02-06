@@ -158,7 +158,7 @@ class PandaPowerBackend(AbstractBackend):
     """Backend implementation that uses `PandaPower <http://www.pandapower.org>`_."""
 
     valid_extensions = (".json", ".pkl", ".mat")
-    valid_address_names = {
+    valid_local_address_names = {
         "bus": ["id"], #, "name"],
         "load": ["bus_id"],#["id", "name", "bus_id"],
         "sgen": ["bus_id"],#["id", "name", "bus_id"],
@@ -168,8 +168,7 @@ class PandaPowerBackend(AbstractBackend):
         "line": ["from_bus_id", "to_bus_id"],#["id", "name", "from_bus_id", "to_bus_id"],
         "trafo": ["hv_bus_id", "lv_bus_id"],#["id", "name", "hv_bus_id", "lv_bus_id"],
     }
-    valid_feature_names = {
-        "global": ["converged", "f_hz", "sn_mva"],
+    valid_local_feature_names = {
         "bus": ["in_service", "max_vm_pu", 'min_vm_pu', "vn_kv", "res_vm_pu", "res_va_degree", "res_p_mw",
             "res_q_mvar"],
         "load": ["const_i_percent", "const_z_percent", "controllable", "in_service", "p_mw", "q_mvar", "scaling",
@@ -191,6 +190,7 @@ class PandaPowerBackend(AbstractBackend):
             "res_q_hv_mvar", "res_p_lv_mw", "res_q_lv_mvar", "res_pl_mw", "res_ql_mvar", "res_i_hv_ka", "res_i_lv_ka",
             "res_vm_hv_pu", "res_va_hv_degree", "res_vm_lv_pu", "res_va_lv_degree", "res_loading_percent"],
     }
+    valid_global_feature_names = ["converged", "f_hz", "sn_mva"]
 
     def __init__(self):
         """Initializes a PandaPower backend."""
@@ -239,10 +239,11 @@ class PandaPowerBackend(AbstractBackend):
 
         Overrides the abstract `set_data_power_grid` method.
         """
-        for k in y.keys():
-            for f in y[k].keys():
+        for k in y["local_features"].keys():
+            for f in y["local_features"][k].keys():
+                power_grid[k][f] = y["local_features"][k][f]
                 try:
-                    power_grid[k][f] = y[k][f]
+                    power_grid[k][f] = y["local_features"][k][f]
                 except ValueError:
                     print('Object class {} and feature {} are not available with PandaPower'.format(k, f))
 
@@ -259,63 +260,73 @@ class PandaPowerBackend(AbstractBackend):
             pass
 
     @staticmethod
-    def get_data_power_grid(power_grid, feature_names=None, address_names=None,
-                            address_to_int=True, return_n_unique_addresses=False):
+    def get_data_power_grid(power_grid, global_feature_names=None, local_feature_names=None, local_address_names=None):
         """Extracts features from a pandapower network.
 
-        If `address_to_int` is True, addresses are converted into unique integers that start at 0.
-        If `initialize_latent_variables` is True, latent variables are initialized for each address.
         Overrides the abstract `get_data_network` method.
         """
-        if feature_names is None:
-            feature_names = dict()
-        if address_names is None:
-            address_names = dict()
+        if global_feature_names is None:
+            global_feature_names = list()
+        if local_feature_names is None:
+            local_feature_names = dict()
+        if local_address_names is None:
+            local_address_names = dict()
 
-        object_names = list(set(list(feature_names.keys()) + list(address_names.keys())))
-        x = {}
-        for key in object_names:
-            if key == 'global':
-                x[key] = {}
-                table = pd.DataFrame({
-                    'converged': [power_grid.converged * 1.], 'f_hz': [power_grid.f_hz * 1.], 'sn_mva': [power_grid.sn_mva * 1.]})
-                for feature_name in feature_names[key]:
-                    x[key][feature_name] = table[feature_name].astype(float).values
+        x = {
+            "global_features": {k: [] for k in global_feature_names},
+            "local_features": {k: {f: [] for f in v} for k, v in local_feature_names.items()},
+            "local_addresses": {k: {f: [] for f in v} for k, v in local_address_names.items()},
+            "all_addresses": []
+        }
+
+        for k in global_feature_names:
+            if k == 'converged':
+                x["global_features"][k] = [power_grid.converged * 1.]
+            elif k == 'f_hz':
+                x["global_features"][k] = [power_grid.f_hz * 1.]
+            elif k == 'sn_mva':
+                x["global_features"][k] = [power_grid.sn_mva * 1.]
             else:
-                x[key] = {}
-                table = power_grid.get(key)
-                res_table = power_grid.get('res_' + key)
-                for feature_name in feature_names.get(key, []):
-                    if feature_name == 'tap_side':
-                        x[key][feature_name] = table[feature_name].map({'hv': 0., 'lv': 1.}).astype(float).values
-                    elif feature_name[:4] == 'res_':
-                        x[key][feature_name] = res_table[feature_name[4:]].astype(float).values
-                    else:
-                        x[key][feature_name] = table[feature_name].astype(float).values
-                    x[key][feature_name] = np.nan_to_num(x[key][feature_name], copy=False) * 1
+                raise NotImplementedError
 
-                for address_name in address_names.get(key, []):
-                    if address_name == 'id':
-                        x[key][address_name] = (key + '_' + table.index.astype(str)).values
-                    elif address_name == 'bus_id':
-                        x[key][address_name] = ('bus_' + table.bus.astype(str)).values
-                    elif address_name == 'from_bus_id':
-                        x[key][address_name] = ('bus_' + table.from_bus.astype(str)).values
-                    elif address_name == 'to_bus_id':
-                        x[key][address_name] = ('bus_' + table.to_bus.astype(str)).values
-                    elif address_name == 'hv_bus_id':
-                        x[key][address_name] = ('bus_' + table.hv_bus.astype(str)).values
-                    elif address_name == 'lv_bus_id':
-                        x[key][address_name] = ('bus_' + table.lv_bus.astype(str)).values
-                    elif address_name == 'element':
-                        x[key][address_name] = table.et.astype(str) + '_' + table.element.astype(str)
-                    else:
-                        x[key][address_name] = table[address_name].values.astype(str)
+        local_objects = list(set(list(local_feature_names) + list(local_address_names)))
+        for k in local_objects:
+            table = power_grid.get(k)
+            res_table = power_grid.get('res_' + k)
+
+            if table.empty and res_table.empty:
+                continue
+
+            for f in local_feature_names.get(k, list()):
+                if f == 'tap_side':
+                    x["local_features"][k][f] = table[f].map({'hv': 0., 'lv': 1.}).astype(float).values
+                elif f[:4] == 'res_':
+                    x["local_features"][k][f] = res_table[f[4:]].astype(float).values
+                else:
+                    x["local_features"][k][f] = table[f].astype(float).values
+                x["local_features"][k][f] = np.nan_to_num(x["local_features"][k][f], copy=False) * 1
+
+            for f in local_address_names.get(k, []):
+                if f == 'id':
+                    x["local_addresses"][k][f] = (k + '_' + table.index.astype(str)).values
+                elif f == 'bus_id':
+                    x["local_addresses"][k][f] = ('bus_' + table.bus.astype(str)).values
+                elif f == 'from_bus_id':
+                    x["local_addresses"][k][f] = ('bus_' + table.from_bus.astype(str)).values
+                elif f == 'to_bus_id':
+                    x["local_addresses"][k][f] = ('bus_' + table.to_bus.astype(str)).values
+                elif f == 'hv_bus_id':
+                    x["local_addresses"][k][f] = ('bus_' + table.hv_bus.astype(str)).values
+                elif f == 'lv_bus_id':
+                    x["local_addresses"][k][f] = ('bus_' + table.lv_bus.astype(str)).values
+                elif f == 'element':
+                    x["local_addresses"][k][f] = table.et.astype(str) + '_' + table.element.astype(str)
+                else:
+                    x["local_addresses"][k][f] = table[f].values.astype(str)
+
         clean_dict(x)
-        if address_to_int:
-            n_unique_addresses = convert_addresses_to_integers(x, address_names)
 
-        if return_n_unique_addresses:
-            return x, n_unique_addresses
-        else:
-            return x
+        if local_address_names:
+            max_address = convert_addresses_to_integers(x)
+            x["all_addresses"] = np.arange(max_address)
+        return x

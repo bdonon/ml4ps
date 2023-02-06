@@ -31,12 +31,17 @@ class AbstractBackend(ABC):
 
     @property
     @abstractmethod
-    def valid_address_names(self):
+    def valid_local_address_names(self):
         pass
 
     @property
     @abstractmethod
-    def valid_feature_names(self):
+    def valid_local_feature_names(self):
+        pass
+
+    @property
+    @abstractmethod
+    def valid_global_feature_names(self):
         pass
 
     @abstractmethod
@@ -74,7 +79,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def get_data_power_grid(self, power_grid, feature_names=None, address_names=None, address_to_int=True):
+    def get_data_power_grid(self, power_grid, global_feature_names=None, local_feature_names=None, local_address_names=None):
         """Returns feature values from a single power grid instance.
 
         Should be overridden in a proper backend implementation.

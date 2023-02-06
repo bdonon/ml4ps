@@ -226,3 +226,6 @@ def collate_h2mgs(h2mgs_list):
     def collate_arrays(*args):
         return np.array(list(args))
     return map_to_all(collate_arrays, *h2mgs_list)
+
+def apply_normalization(norm_fns_h2mg, target_h2mg):
+    return map_to_features(lambda norm_fn, feature: norm_fn(feature), norm_fns_h2mg, target_h2mg)

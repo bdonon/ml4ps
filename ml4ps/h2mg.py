@@ -120,28 +120,23 @@ def h2mg_slicer(key, obj_name, feat_name):
 def compatible(h2mg, h2mg_other):
     if not (isinstance(h2mg, dict) and isinstance(h2mg_other, dict)):
         return False
-
     if set(h2mg.keys()) != set(h2mg_other.keys()):
         return False
-
     local_key = H2MGCategories.LOCAL_FEATURES.value
-    if set(h2mg[local_key]) != set(h2mg_other[local_key]):
+    if set(h2mg.get(local_key, [])) != set(h2mg_other.get(local_key, [])):
         return False
-    for obj_name in h2mg[local_key]:
-        if set(h2mg[local_key][obj_name]) != set(h2mg_other[local_key][obj_name]):
+    for obj_name in h2mg.get(local_key, []):
+        if set(h2mg[local_key].get(obj_name, [])) != set(h2mg_other[local_key].get(obj_name, [])):
             return False
-
     local_addr_key = H2MGCategories.LOCAL_ADDRESSES.value
-    if set(h2mg[local_addr_key]) != set(h2mg_other[local_addr_key]):
+    if set(h2mg.get(local_addr_key, [])) != set(h2mg_other.get(local_addr_key, [])):
         return False
-    for feat_name in h2mg[local_addr_key]:
-        if set(h2mg[local_addr_key][feat_name]) != set(h2mg_other[local_addr_key][feat_name]):
+    for feat_name in h2mg.get(local_addr_key, []):
+        if set(h2mg[local_addr_key].get(feat_name, [])) != set(h2mg_other[local_addr_key].get(feat_name, [])):
             return False
-
     global_key = H2MGCategories.GLOBAL_FEATURES.value
-    if set(h2mg[global_key]) != set(h2mg_other[global_key]):
+    if set(h2mg.get(global_key, [])) != set(h2mg_other.get(global_key, [])):
         return False
-
     return True
 
 
@@ -176,12 +171,13 @@ def empty_like(h2mg):
         if addr_name not in new_h2mg[key][obj_name]:
             new_h2mg[key][obj_name][addr_name] = value
 
-    new_h2mg[H2MGCategories.ALL_ADDRESSES.value] = all_addresses(h2mg)
+    for key, value in all_addresses_iterator(h2mg):
+        new_h2mg[key] = value
 
     return new_h2mg
 
 
-def map_to_features(fn, *h2mgs, check_compat=False):
+def map_to_features(fn, *h2mgs, check_compat=True):
     if check_compat and not all_compatible(*h2mgs):
         raise ValueError
     results = empty_like(h2mgs[0])
@@ -200,7 +196,7 @@ def collate_h2mgs_features(h2mgs_list):
         return np.array(list(args))
     return map_to_features(collate_arrays, *h2mgs_list)
 
-def map_to_all(fn, *h2mgs, check_compat=False):
+def map_to_all(fn, *h2mgs, check_compat=True):
     if check_compat and not all_compatible(*h2mgs):
         raise ValueError
     results = empty_like(h2mgs[0])
@@ -228,4 +224,4 @@ def collate_h2mgs(h2mgs_list):
     return map_to_all(collate_arrays, *h2mgs_list)
 
 def apply_normalization(norm_fns_h2mg, target_h2mg):
-    return map_to_features(lambda norm_fn, feature: norm_fn(feature), norm_fns_h2mg, target_h2mg)
+    return map_to_features(lambda feature, norm_fn: norm_fn(feature), target_h2mg, norm_fns_h2mg)

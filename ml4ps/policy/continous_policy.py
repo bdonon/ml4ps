@@ -6,6 +6,8 @@ import numpy as np
 from gymnasium import spaces
 from ml4ps import H2MGNODE, h2mg, Normalizer
 from ml4ps.policy.base import BasePolicy
+import gymnasium
+
 
 
 def add_prefix(x, prefix):
@@ -117,7 +119,7 @@ class ContinuousPolicy(BasePolicy):
         self.log_sigma_prefix = "log_sigma_"
         self.action_space, self.observation_space = env.action_space, env.observation_space
         self.normalizer = normalizer or self.build_normalizer(
-            env, normalizer_args, data_dir=env.data_dir)
+            env, normalizer_args)
         self.nn_args = nn_args
         self.build_out_features_names_struct(env.action_space)
         # action space computes offset and scale factor
@@ -268,7 +270,15 @@ class ContinuousPolicy(BasePolicy):
         return self.postprocessor(action_params)
 
     def build_normalizer(self, env, normalizer_args=None, data_dir=None):
-        if normalizer_args is None:
-            return Normalizer(backend=env.backend, data_dir=env.data_dir)
+        if isinstance(env, gymnasium.vector.VectorEnv):
+            backend = env.get_attr("backend")[0]
+            data_dir = env.get_attr("data_dir")[0]
         else:
-            return Normalizer(backend=env.backend, data_dir=env.data_dir, **normalizer_args)
+            backend = env.backend
+            data_dir=env.data_dir
+
+        if normalizer_args is None:
+            return Normalizer(backend=backend, data_dir=data_dir)
+        else:
+            return Normalizer(backend=backend, data_dir=data_dir, **normalizer_args)
+

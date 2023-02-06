@@ -14,3 +14,4 @@ from ml4ps.utils import *
 from ml4ps.pickle import *
 from ml4ps.transform import *
 from ml4ps.environment import *
+from ml4ps import h2mg

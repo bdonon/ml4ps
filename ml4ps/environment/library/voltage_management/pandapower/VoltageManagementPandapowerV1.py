@@ -41,20 +41,20 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
         self.vhigh = 1.2
         self.ctrl_var_names = {"gen": ["vm_pu"],
                                "ext_grid": ["vm_pu"]}
-        self.action_space = spaces.Dict(
-            {"gen":      spaces.Dict({"vm_pu":
+        self.action_space = spaces.Dict({"local_features":
+            spaces.Dict({"gen":      spaces.Dict({"vm_pu":
                                       spaces.Box(low=self.vlow,
                                                  high=self.vhigh,
                                                  shape=(self.n_obj["gen"],))}),
              "ext_grid": spaces.Dict({"vm_pu":
                                       spaces.Box(low=self.vlow,
                                                  high=self.vhigh,
-                                                 shape=(self.n_obj["ext_grid"],))})})
+                                                 shape=(self.n_obj["ext_grid"],))})})})
 
     def initialize_control_variables(self) -> Dict:
         """Inits control variable with default heuristics."""
-        return {"gen": {"vm_pu": np.ones(shape=(self.n_obj["gen"],), dtype=np.float64)},
-                "ext_grid": {"vm_pu": np.ones(shape=(self.n_obj["ext_grid"],), dtype=np.float64)}}
+        return {"local_features":{"gen": {"vm_pu": np.ones(shape=(self.n_obj["gen"],), dtype=np.float64)},
+                "ext_grid": {"vm_pu": np.ones(shape=(self.n_obj["ext_grid"],), dtype=np.float64)}}}
 
     def update_ctrl_var(self, ctrl_var: Dict, action: Dict, state: VoltageManagementState) -> Dict:
         """Updates control variables with action."""

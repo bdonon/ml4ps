@@ -108,7 +108,9 @@ class VoltageManagement(PSBaseEnv, ABC):
                                                         for addr_name in obj})
                                  for obj_name, obj in address_names.items()if obj_name in max_n_obj})
 
-        return spaces.Dict({"addresses": addr_space, "features": feat_space})
+        all_addr_space = spaces.Box(low=-np.inf, high=np.inf, shape=( max_n_obj["max_address"],), dtype=np.int64)
+
+        return spaces.Dict({"local_addresses": addr_space, "local_features": feat_space, "all_addresses": all_addr_space})
 
     def random_power_grid_path(self) -> str:
         """Returns the path of a random power grid in self.data_dir"""
@@ -147,7 +149,7 @@ class VoltageManagement(PSBaseEnv, ABC):
     def dynamics(self, state: NamedTuple, action: Dict) -> NamedTuple:
         """Return new state for a given action"""
         old_ctrl_var = self.backend.get_data_power_grid(
-            state.power_grid, feature_names=self.ctrl_var_names)
+            state.power_grid, local_feature_names=self.ctrl_var_names)
         ctrl_var = self.update_ctrl_var(old_ctrl_var, action, state)
         self.backend.set_data_power_grid(state.power_grid, ctrl_var)
         self.backend.run_power_grid(state.power_grid)
@@ -185,10 +187,8 @@ class VoltageManagement(PSBaseEnv, ABC):
 
     def get_observation(self, state) -> Dict:
         """Return observation of state wrt self.observation_space."""
-        return {"features": self.backend.get_data_power_grid(state.power_grid,
-                                                             feature_names=self.obs_feature_names),
-                "addresses": self.backend.get_data_power_grid(state.power_grid,
-                                                              address_names=self.address_names)}
+        return self.backend.get_data_power_grid(state.power_grid, local_feature_names=self.obs_feature_names,
+                                                              local_address_names=self.address_names)
 
     @property
     def default_cost_hparams(self) -> Dict:

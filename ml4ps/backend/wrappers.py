@@ -7,18 +7,20 @@ from ml4ps.backend.interface import AbstractBackend
 
 def pad(x, max_n_obj):
     """Pads features contained in `x` with `np.nan` to have the amount of objects specified in `max_n_obj`."""
-    for k, v in x["local_features"].items():
-        for f, w in v.items():
-            if len(w) > max_n_obj.get(k, 0):
-                raise ValueError("Padding impossible, maximum {} objects of class {} ".format(max_n_obj.get(k, 0), k) +\
-                                 "are present in this dataset, while {} ".format(len(w)) +\
-                                 "objects are present in this sample.")
-    for k, v in x["local_addresses"].items():
-        for f, w in v.items():
-            if len(w) > max_n_obj.get(k, 0):
-                raise ValueError("Padding impossible, maximum {} objects of class {} ".format(max_n_obj.get(k, 0), k) +\
-                                 "are present in this dataset, while {} ".format(len(w)) +\
-                                 "objects are present in this sample.")
+    if "local_features" in x: # TODO check
+        for k, v in x["local_features"].items():
+            for f, w in v.items():
+                if len(w) > max_n_obj.get(k, 0):
+                    raise ValueError("Padding impossible, maximum {} objects of class {} ".format(max_n_obj.get(k, 0), k) +\
+                                    "are present in this dataset, while {} ".format(len(w)) +\
+                                    "objects are present in this sample.")
+    if "local_addresses" in x: # TODO check
+        for k, v in x["local_addresses"].items():
+            for f, w in v.items():
+                if len(w) > max_n_obj.get(k, 0):
+                    raise ValueError("Padding impossible, maximum {} objects of class {} ".format(max_n_obj.get(k, 0), k) +\
+                                    "are present in this dataset, while {} ".format(len(w)) +\
+                                    "objects are present in this sample.")
     r = {}
     if "local_features" in x:
         r["local_features"] = {k: {f: np.concatenate([w, np.full(max_n_obj.get(k,0)-len(w), np.nan)]) for f, w in v.items()}

@@ -6,6 +6,7 @@ from gymnasium import spaces
 from ..VoltageManagement import VoltageManagementState
 from .VoltageManagementPandapower import VoltageManagementPandapower
 
+from ml4ps import h2mg
 
 class VoltageManagementPandapowerV2(VoltageManagementPandapower):
     """Power system environment for voltage management problem implemented
@@ -67,6 +68,7 @@ class VoltageManagementPandapowerV2(VoltageManagementPandapower):
         ctrl_var["ext_grid"] = action["ext_grid"]
         max_step = self.backend.get_data_power_grid(
             state.power_grid, feature_names={"shunt": ["max_step"]})
+        max_step = h2mg.local_features(max_step)
         ctrl_var["shunt"]["step"] = np.clip((ctrl_var["shunt"]["step"] + action["shunt"]["delta_step"] - 1),
                                             0, max_step["shunt"]["max_step"])
         return ctrl_var

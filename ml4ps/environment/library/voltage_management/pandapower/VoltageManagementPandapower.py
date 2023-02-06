@@ -5,6 +5,7 @@ from typing import Any, Dict, Tuple
 import numpy as np
 from gymnasium import spaces
 from ml4ps import PaddingWrapper, PandaPowerBackend
+from ml4ps.h2mg import local_features
 
 from ..VoltageManagement import VoltageManagement, VoltageManagementState
 
@@ -78,17 +79,19 @@ class VoltageManagementPandapower(VoltageManagement):
         return not power_grid.converged
 
     def compute_current_cost(self, power_grid, eps_i) -> Number:
-        data = self.backend.get_data_power_grid(power_grid, feature_names={"line":  ["res_loading_percent"],
+        all_data = self.backend.get_data_power_grid(power_grid, local_feature_names={"line":  ["res_loading_percent"],
                                                                            "trafo": ["res_loading_percent"]})
+        data = local_features(all_data)
         line_loading_percent = data["line"]["res_loading_percent"]
         transfo_loading_percent = data["trafo"]["res_loading_percent"]
         loading_percent = np.concatenate([line_loading_percent, transfo_loading_percent], axis=-1)
         return self.normalized_cost(loading_percent, 0, 100, 0, eps_i)
 
     def compute_reactive_cost(self, power_grid, eps_q) -> Number:
-        data = self.backend.get_data_power_grid(power_grid,
-                                feature_names={"gen":  ["max_q_mvar", "min_q_mvar", "res_q_mvar"],
+        all_data = self.backend.get_data_power_grid(power_grid,
+                                local_feature_names={"gen":  ["max_q_mvar", "min_q_mvar", "res_q_mvar"],
                                                "ext_grid":  ["max_q_mvar", "min_q_mvar", "res_q_mvar"]})
+        data = local_features(all_data)
         q = np.concatenate(
             [data["gen"]["res_q_mvar"], data["ext_grid"]["res_q_mvar"]], axis=-1)
         qmin = np.concatenate(
@@ -98,17 +101,20 @@ class VoltageManagementPandapower(VoltageManagement):
         return self.normalized_cost(q, qmin, qmax, eps_q, eps_q)
 
     def compute_voltage_cost(self, power_grid, eps_v) -> Number:
-        data = self.backend.get_data_power_grid(
-            power_grid, feature_names={"bus": ["res_vm_pu", "max_vm_pu", "min_vm_pu"]})
+        all_data = self.backend.get_data_power_grid(
+            power_grid, local_feature_names={"bus": ["res_vm_pu", "max_vm_pu", "min_vm_pu"]})
+        data = local_features(all_data)
         v = data["bus"]["res_vm_pu"]
         vmin = data["bus"]["min_vm_pu"]
         vmax = data["bus"]["max_vm_pu"]
         return self.normalized_cost(v, vmin, vmax, eps_v, eps_v)
 
     def compute_joule_cost(self, power_grid)  -> Number:
-        data = self.backend.get_data_power_grid(power_grid,
-                                                feature_names={"line":  ["res_pl_mw"],
+        all_data = self.backend.get_data_power_grid(power_grid,
+                                                local_feature_names={"line":  ["res_pl_mw"],
                                                                "trafo": ["res_pl_mw"], "load": ["res_p_mw"]})
+        
+        data = local_features(all_data)
         line_losses = data["line"]["res_pl_mw"]
         transfo_losses = data["trafo"]["res_pl_mw"]
         loads = data["load"]["res_p_mw"]
@@ -124,16 +130,19 @@ class VoltageManagementPandapower(VoltageManagement):
     def get_information(self, state: VoltageManagementState, action: Dict = None) -> Dict:
         """Gets power grid statistics, cost decomposition, constraints violations and iteration."""
         power_grid = self.state.power_grid
-        cost = self.compute_cost(power_grid)
-        c_i = self.compute_current_cost(power_grid, self.eps_i)
-        c_q = self.compute_reactive_cost(power_grid, self.eps_q)
-        c_v = self.compute_voltage_cost(power_grid, self.eps_v)
-        c_j = self.compute_joule_cost(power_grid)
-        is_violated_dict, violated_percentage_dict = self.compute_constraint_violation(power_grid)
-        return {"diverged": self.has_diverged(self.state.power_grid),
+        if not self.has_diverged(power_grid):
+            cost = self.compute_cost(power_grid)
+            c_i = self.compute_current_cost(power_grid, self.eps_i)
+            c_q = self.compute_reactive_cost(power_grid, self.eps_q)
+            c_v = self.compute_voltage_cost(power_grid, self.eps_v)
+            c_j = self.compute_joule_cost(power_grid)
+            is_violated_dict, violated_percentage_dict = self.compute_constraint_violation(power_grid)
+            return {"diverged": self.has_diverged(self.state.power_grid),
                 "cost": cost, "c_i": c_i, "c_q": c_q, "c_v": c_v, "c_j": c_j,
                 "action": action, "iteration": self.state.iteration,
                 **is_violated_dict, **violated_percentage_dict}
+        else:
+            return {"diverged": self.has_diverged(self.state.power_grid)}
 
     def compute_constraint_violation(self, power_grid) -> Tuple[Dict, Dict]:
         """Computes constraints violation statistics
@@ -148,15 +157,16 @@ class VoltageManagementPandapower(VoltageManagement):
             The second one indicates the percentage of constraint violation 
             w.r.t the number of objects.
         """
-        data = self.backend.get_data_power_grid(power_grid,
-                                                feature_names={
-                                                    "global": ["converged"],
+        all_data = self.backend.get_data_power_grid(power_grid,
+                                                local_feature_names={
                                                     "bus": ["res_vm_pu", "max_vm_pu", "min_vm_pu"],
                                                     "line":  ["res_pl_mw", "res_loading_percent"],
                                                     "trafo": ["res_pl_mw", "res_loading_percent"],
                                                     "gen":  ["max_q_mvar", "min_q_mvar", "res_q_mvar"],
                                                     "ext_grid":  ["max_q_mvar", "min_q_mvar", "res_q_mvar"],
-                                                    "load": ["res_p_mw"]})
+                                                    "load": ["res_p_mw"]},
+                                                    global_feature_names=["converged"])
+        data= local_features(all_data)
         voltage_violated_bus = np.logical_or(data["bus"]["res_vm_pu"] > data["bus"]["max_vm_pu"],
                                              data["bus"]["res_vm_pu"] < data["bus"]["min_vm_pu"])
         voltage_violated_percentage = voltage_violated_bus.mean()

@@ -177,7 +177,7 @@ def empty_like(h2mg):
     return new_h2mg
 
 
-def map_to_features(fn, *h2mgs, check_compat=True):
+def map_to_features(fn, *h2mgs, check_compat=False):
     if check_compat and not all_compatible(*h2mgs):
         raise ValueError
     results = empty_like(h2mgs[0])
@@ -196,7 +196,7 @@ def collate_h2mgs_features(h2mgs_list):
         return np.array(list(args))
     return map_to_features(collate_arrays, *h2mgs_list)
 
-def map_to_all(fn, *h2mgs, check_compat=True):
+def map_to_all(fn, *h2mgs, check_compat=False):
     if check_compat and not all_compatible(*h2mgs):
         raise ValueError
     results = empty_like(h2mgs[0])

@@ -159,15 +159,17 @@ class ContinuousPolicy(BasePolicy):
         """Builds postprocessor that transform nn output into the proper range
             via affine transformation.
         """
-        # TODO: add global features
         post_process_h2mg = h2mg.empty_h2mg()
-        self.mu_0 = h2mg.empty_h2mg()
-        self.log_sigma_0 = h2mg.empty_h2mg()
         for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(self.action_space)):
             high = self.action_space[local_key][obj_name][feat_name].high
             low = self.action_space[local_key][obj_name][feat_name].low
             post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+np.mean(np.log((high-low)/8))
             post_process_h2mg[local_key][obj_name][self.mu_prefix + feat_name] = lambda x: x+np.mean(low + (high-low)/2)
+        for global_key, feat_name in h2mg.global_feature_names_iterator(space_to_feature_names(self.action_space)):
+            high = self.action_space[global_key][feat_name].high
+            low = self.action_space[global_key][feat_name].low
+            post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+np.mean(np.log((high-low)/8))
+            post_process_h2mg[global_key][self.mu_prefix + feat_name] = lambda x: x+np.mean(low + (high-low)/2)
 
         class PostProcessor:
             def __init__(self, post_process_h2mg) -> None:

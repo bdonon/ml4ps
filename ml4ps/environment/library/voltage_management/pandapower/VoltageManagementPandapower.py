@@ -118,14 +118,14 @@ class VoltageManagementPandapower(VoltageManagement):
         line_losses = data["line"]["res_pl_mw"]
         transfo_losses = data["trafo"]["res_pl_mw"]
         loads = data["load"]["res_p_mw"]
-        joule_losses = line_losses.sum() + transfo_losses.sum()
-        total_load = np.where(np.isnan(loads), 1e-8, loads).sum()
+        joule_losses = np.nansum(line_losses) + np.nansum(transfo_losses)
+        total_load = np.nansum(loads) # np.where(np.isnan(loads), 1e-8, loads)
         return joule_losses / total_load
 
     def normalized_cost(self, value, min_value, max_value, eps_min_threshold, eps_max_threshold)  -> Number:
         v = (value - min_value) / (max_value - min_value)
-        return (np.greater(v, 1-eps_max_threshold) * np.power(v - (1-eps_max_threshold), 2)
-                + np.greater(eps_min_threshold, v) * np.power(eps_min_threshold - v, 2)).mean()
+        return np.nanmean(np.greater(v, 1-eps_max_threshold) * np.power(v - (1-eps_max_threshold), 2)
+                + np.greater(eps_min_threshold, v) * np.power(eps_min_threshold - v, 2))
 
     def get_information(self, state: VoltageManagementState, action: Dict = None) -> Dict:
         """Gets power grid statistics, cost decomposition, constraints violations and iteration."""

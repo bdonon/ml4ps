@@ -214,13 +214,13 @@ class ContinuousPolicy(BasePolicy):
     def feature_log_prob(self, action, mu, log_sigma):
         return jnp.nansum(- log_sigma - 0.5 * jnp.exp(-2 * log_sigma) * (action - mu)**2)
 
-    def sample(self, params, observation: spaces.Space, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
+    def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
         # n_action = 1, no list, n_action > 1 list
         """Sample an action and return it together with the corresponding log probability."""
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)
         distrib_params = self.postprocessor(distrib_params)
-        action = self.sample_from_params(distrib_params)
+        action = self.sample_from_params(rng, distrib_params)
         info = {"info": 0}
         return action, self.normal_log_prob(action, distrib_params), info
 
@@ -229,10 +229,10 @@ class ContinuousPolicy(BasePolicy):
         sigma = slice_with_prefix(out_dict, self.log_sigma_prefix)
         return mu, sigma
 
-    def sample_from_params(self, distrib_params: Dict) -> Dict:
+    def sample_from_params(self, rng, distrib_params: Dict) -> Dict:
         """Sample an action from the parameter of the continuous distribution."""
         mu, sigma = self.get_params(distrib_params)
-        return h2mg.map_to_features(lambda mu, sigma: mu + self.np_random.normal(sigma.shape) * sigma, mu, sigma)
+        return h2mg.map_to_features(lambda mu, sigma: mu + jax.random.normal(key=rng, shape=sigma.shape) * sigma, mu, sigma)
 
     def build_normalizer(self, env, normalizer_args=None, data_dir=None):
         if isinstance(env, gymnasium.vector.VectorEnv):

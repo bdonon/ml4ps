@@ -126,8 +126,6 @@ class ContinuousPolicy(BasePolicy):
         self.postprocessor = self.build_postprocessor(env.action_space)
         # address names ? INiti in init
         self.nn = self.build_nn(nn_type, self.out_feature_struct, **nn_args)
-        obs = self.observation_space.sample()
-        self.params = self.init(jax.random.PRNGKey(0), obs)
 
     @property
     def normalizer(self):
@@ -146,7 +144,8 @@ class ContinuousPolicy(BasePolicy):
         self._nn_args = value
 
     def init(self, rng, obs):
-        return self.nn.init(rng, obs)
+        self.params = self.nn.init(rng, obs)
+        return self.params
 
     def build_out_features_names_struct(self, space: spaces.Space) -> Dict:
         """Builds output feature names structure from power system space.
@@ -240,10 +239,10 @@ class ContinuousPolicy(BasePolicy):
     def feature_log_prob(self, action, mu, log_sigma, mu_0=0, log_sigma_0=1):
         return np.sum(- log_sigma - 2 / np.exp(2*log_sigma*log_sigma_0) * (action - mu_0 - np.exp(log_sigma_0)/2 * mu)**2)
 
-    def sample(self, observation: spaces.Space, seed, deterministic=False) -> Tuple[spaces.Space, float]:
+    def sample(self, params, observation: spaces.Space, seed, deterministic=False) -> Tuple[spaces.Space, float]:
         """Sample an action and return it together with the corresponding log probability."""
         observation = self.normalizer(observation)
-        action_params = self.nn.apply(self.params, observation)
+        action_params = self.nn.apply(params, observation)
         action_params = self.post_process_params(action_params)
         action = self.sample_from_params(
             action_params, np.random.default_rng(seed))  # TODO rng

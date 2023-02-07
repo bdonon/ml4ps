@@ -113,7 +113,7 @@ class ContinuousPolicy(BasePolicy):
             nn produce ditribution parameters from observation input.
     """
 
-    def __init__(self, env=None, normalizer=None, normalizer_args=None, nn_type="h2mgnode", **nn_args) -> None:
+    def __init__(self, env=None, normalizer=None, normalizer_args=None, nn_type="h2mgnode", np_random=None, **nn_args) -> None:
         # TODO save normalizer, action, obs space, nn args
         self.mu_prefix = "mu_"
         self.log_sigma_prefix = "log_sigma_"
@@ -123,6 +123,7 @@ class ContinuousPolicy(BasePolicy):
         self.build_out_features_names_struct(env.action_space)
         self.postprocessor = self.build_postprocessor(env.action_space)
         self.nn = self.build_nn(nn_type, self.out_feature_struct, **nn_args)
+        self.np_random = np_random or np.random.default_rng()
     
     def init(self, rng, obs):
         return self.nn.init(rng, obs)
@@ -156,25 +157,23 @@ class ContinuousPolicy(BasePolicy):
                              max_steps=4096)
 
     def build_postprocessor(self, action_space: spaces.Space):
-        """Builds postprocessor that transform nn output into the proper range
-            via affine transformation.
+        """Builds postprocessor that transform nn output into the proper range via affine transformation.
         """
         post_process_h2mg = h2mg.empty_h2mg()
-        for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(self.action_space)):
-            high = self.action_space[local_key][obj_name][feat_name].high
-            low = self.action_space[local_key][obj_name][feat_name].low
+        for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(action_space)):
+            high = action_space[local_key][obj_name][feat_name].high
+            low = action_space[local_key][obj_name][feat_name].low
             post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+np.mean(np.log((high-low)/8))
             post_process_h2mg[local_key][obj_name][self.mu_prefix + feat_name] = lambda x: x+np.mean(low + (high-low)/2)
-        for global_key, feat_name in h2mg.global_feature_names_iterator(space_to_feature_names(self.action_space)):
-            high = self.action_space[global_key][feat_name].high
-            low = self.action_space[global_key][feat_name].low
+        for global_key, feat_name in h2mg.global_feature_names_iterator(space_to_feature_names(action_space)):
+            high = action_space[global_key][feat_name].high
+            low = action_space[global_key][feat_name].low
             post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+np.mean(np.log((high-low)/8))
             post_process_h2mg[global_key][self.mu_prefix + feat_name] = lambda x: x+np.mean(low + (high-low)/2)
 
         class PostProcessor:
             def __init__(self, post_process_h2mg) -> None:
                 self.post_process_h2mg = post_process_h2mg
-
             def __call__(self, x):
                 return h2mg.map_to_features(lambda target, fn: fn(target), x, self.post_process_h2mg)
         return PostProcessor(post_process_h2mg)
@@ -186,7 +185,7 @@ class ContinuousPolicy(BasePolicy):
     def log_prob(self, params, observation, action):
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)
-        distrib_params = self.post_process_params(distrib_params)
+        distrib_params = self.postprocessor(distrib_params)
         return self.normal_log_prob(action, distrib_params)
 
     def normal_log_prob(self, action: Dict, distrib_params: Dict) -> float:
@@ -214,14 +213,13 @@ class ContinuousPolicy(BasePolicy):
     def feature_log_prob(self, action, mu, log_sigma):
         return np.nansum(- log_sigma - 0.5 * np.exp(-2 * log_sigma) * (action - mu)**2)
 
-    def sample(self, params, observation: spaces.Space, seed=0, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
+    def sample(self, params, observation: spaces.Space, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
         # n_action = 1, no list, n_action > 1 list
         """Sample an action and return it together with the corresponding log probability."""
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)
-        distrib_params = self.post_process_params(distrib_params)
-        action = self.sample_from_params(
-            distrib_params, np.random.default_rng(seed))  # TODO rng
+        distrib_params = self.postprocessor(distrib_params)
+        action = self.sample_from_params(distrib_params)
         info = {"info": 0}
         return action, self.normal_log_prob(action, distrib_params), info
 
@@ -230,19 +228,12 @@ class ContinuousPolicy(BasePolicy):
         sigma = slice_with_prefix(out_dict, self.log_sigma_prefix)
         return mu, sigma
 
-    def sample_from_params(self, action_params: Dict, np_random) -> Dict:
+    def sample_from_params(self, distrib_params: Dict) -> Dict:
         """Sample an action from the parameter of the continuous distribution."""
-        mu, sigma = self.get_params(action_params)
-        mu_flat, sigma_flat = spaces.flatten(
-            self.action_space, mu), spaces.flatten(self.action_space, sigma)
-        action_flat = mu_flat + \
-            np_random.normal(size=sigma_flat.shape) * sigma_flat
-        action = spaces.unflatten(self.action_space, action_flat)
-        return action
-
-    def post_process_params(self, action_params: Dict) -> Dict:
-        """Apply post processing to the nn output."""
-        return self.postprocessor(action_params)
+        mu, sigma = self.get_params(distrib_params)
+        mu_flat, sigma_flat = spaces.flatten(self.action_space, mu), spaces.flatten(self.action_space, sigma)
+        action_flat = mu_flat + self.np_random.normal(size=sigma_flat.shape) * sigma_flat
+        return spaces.unflatten(self.action_space, action_flat)
 
     def build_normalizer(self, env, normalizer_args=None, data_dir=None):
         if isinstance(env, gymnasium.vector.VectorEnv):
@@ -255,4 +246,4 @@ class ContinuousPolicy(BasePolicy):
         if normalizer_args is None:
             return Normalizer(backend=backend, data_dir=data_dir)
         else:
-            return Normalizer(backend=backend, data_dir=data_dir, **normalizer_args)
+            return Normalizer(backend=backend, data_dir=data_dir, **normalizer_args) # TODO kwargs.get("normalizer_args", {})

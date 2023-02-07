@@ -113,7 +113,8 @@ class ContinuousPolicy(BasePolicy):
             nn produce ditribution parameters from observation input.
     """
 
-    def __init__(self, env=None, normalizer=None, normalizer_args=None, nn_type=None, **nn_args) -> None:
+    def __init__(self, env=None, normalizer=None, normalizer_args=None, nn_type="h2mgnode", **nn_args) -> None:
+        # TODO save normalizer, action, obs space, nn args
         self.mu_prefix = "mu_"
         self.log_sigma_prefix = "log_sigma_"
         self.action_space, self.observation_space = env.action_space, env.observation_space
@@ -122,26 +123,9 @@ class ContinuousPolicy(BasePolicy):
         self.build_out_features_names_struct(env.action_space)
         self.postprocessor = self.build_postprocessor(env.action_space)
         self.nn = self.build_nn(nn_type, self.out_feature_struct, **nn_args)
-
-    @property
-    def normalizer(self):
-        return self._normalizer
-
-    @normalizer.setter
-    def normalizer(self, value):
-        self._normalizer = value
-
-    @property
-    def nn_args(self):
-        return self._nn_args
-
-    @nn_args.setter
-    def nn_args(self, value):
-        self._nn_args = value
-
+    
     def init(self, rng, obs):
-        self.params = self.nn.init(rng, obs)
-        return self.params
+        return self.nn.init(rng, obs)
 
     def build_out_features_names_struct(self, space: spaces.Space) -> Dict:
         """Builds output feature names structure from power system space.
@@ -154,9 +138,10 @@ class ContinuousPolicy(BasePolicy):
         self.mu_feature_names = add_prefix(feat_names, self.mu_prefix)
         self.out_feature_struct = combine_feature_names(
             self.sigma_feat_names, self.mu_feature_names)
-        return
 
     def build_nn(self, nn_type: str, out_feature_struct: Dict, **kwargs):
+        # TODO nn_type and kwargs
+        # return ml4ps.get(nn_type, kwargs)
         return H2MGNODE.make(output_feature_names=out_feature_struct, local_dynamics_hidden_size=[16],
                              global_dynamics_hidden_size=[16],
                              local_decoder_hidden_size=[16],
@@ -181,18 +166,8 @@ class ContinuousPolicy(BasePolicy):
         for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(self.action_space)):
             high = self.action_space[local_key][obj_name][feat_name].high
             low = self.action_space[local_key][obj_name][feat_name].low
-            mu_0_value = np.mean(low + (high-low)/2)  # TODO add checks
-            self.mu_0[local_key][obj_name][self.mu_prefix +
-                                           feat_name] = mu_0_value
-            sigma_0_value = (high-low)/8
-            log_sigma_0_value = np.mean(
-                np.log(sigma_0_value))  # TODO add checks
-            self.log_sigma_0[local_key][obj_name][self.log_sigma_prefix +
-                                                  feat_name] = log_sigma_0_value
-            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix +
-                                                   feat_name] = lambda x: x+log_sigma_0_value
-            post_process_h2mg[local_key][obj_name][self.mu_prefix +
-                                                   feat_name] = lambda x: x+mu_0_value
+            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+np.mean(np.log((high-low)/8))
+            post_process_h2mg[local_key][obj_name][self.mu_prefix + feat_name] = lambda x: x+np.mean(low + (high-low)/2)
 
         class PostProcessor:
             def __init__(self, post_process_h2mg) -> None:
@@ -224,16 +199,12 @@ class ContinuousPolicy(BasePolicy):
                     action_kf = action["local_features"][k][f]
                     mu_kf = distrib_params["local_features"][k][self.mu_prefix+f]
                     log_sigma_kf = distrib_params["local_features"][k][self.log_sigma_prefix+f]
-                    mu0_kf = self.mu_0["local_features"][k][f]
-                    log_sigma0_kf = self.log_sigma_0["local_features"][k][f]
                     log_probs += self.feature_log_prob(action_kf, mu_kf, log_sigma_kf)
         if "global_features" in action:
             for k in action["global_features"]:
                 action_kf = action["global_features"][k]
                 mu_kf = distrib_params["global_features"][self.mu_prefix+k]
                 log_sigma_kf = distrib_params["global_features"][self.log_sigma_prefix+k]
-                mu0_kf = self.mu_0["global_features"][k]
-                log_sigma0_kf = self.log_sigma_0["global_features"][k]
                 log_probs += self.feature_log_prob(action_kf,mu_kf, log_sigma_kf)
 
         return log_probs

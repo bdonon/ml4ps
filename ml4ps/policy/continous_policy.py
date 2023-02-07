@@ -164,12 +164,12 @@ class ContinuousPolicy(BasePolicy):
         for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(action_space)):
             high = action_space[local_key][obj_name][feat_name].high
             low = action_space[local_key][obj_name][feat_name].low
-            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/8))
+            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/32))
             post_process_h2mg[local_key][obj_name][self.mu_prefix + feat_name] = lambda x: x+jnp.mean(low + (high-low)/2)
         for global_key, feat_name in h2mg.global_feature_names_iterator(space_to_feature_names(action_space)):
             high = action_space[global_key][feat_name].high
             low = action_space[global_key][feat_name].low
-            post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/8))
+            post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/32))
             post_process_h2mg[global_key][self.mu_prefix + feat_name] = lambda x: x+jnp.mean(low + (high-low)/2)
 
         class PostProcessor:

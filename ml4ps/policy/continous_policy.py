@@ -161,21 +161,27 @@ class ContinuousPolicy(BasePolicy):
         """Builds postprocessor that transform nn output into the proper range via affine transformation.
         """
         post_process_h2mg = h2mg.empty_h2mg()
+        mu_prefix = self.mu_prefix
+        self.sigma_factor = 32
         for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(action_space)):
             high = action_space[local_key][obj_name][feat_name].high
             low = action_space[local_key][obj_name][feat_name].low
-            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/32))
+            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/self.sigma_factor))
             post_process_h2mg[local_key][obj_name][self.mu_prefix + feat_name] = lambda x: x+jnp.mean(low + (high-low)/2)
         for global_key, feat_name in h2mg.global_feature_names_iterator(space_to_feature_names(action_space)):
             high = action_space[global_key][feat_name].high
             low = action_space[global_key][feat_name].low
-            post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/32))
+            post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/self.sigma_factor))
             post_process_h2mg[global_key][self.mu_prefix + feat_name] = lambda x: x+jnp.mean(low + (high-low)/2)
 
         class PostProcessor:
             def __init__(self, post_process_h2mg) -> None:
                 self.post_process_h2mg = post_process_h2mg
             def __call__(self, x):
+                for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(action_space)):
+                    x[local_key][obj_name][mu_prefix + feat_name] /= 10
+                for global_key, feat_name in h2mg.global_feature_names_iterator(space_to_feature_names(action_space)):
+                    x[global_key][feat_name][mu_prefix + feat_name] /= 10
                 return h2mg.map_to_features(lambda target, fn: fn(target), x, self.post_process_h2mg)
         return PostProcessor(post_process_h2mg)
 

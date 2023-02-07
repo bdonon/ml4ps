@@ -226,13 +226,13 @@ class ContinuousPolicy(BasePolicy):
 
     def get_params(self, out_dict):
         mu = slice_with_prefix(out_dict, self.mu_prefix)
-        sigma = slice_with_prefix(out_dict, self.log_sigma_prefix)
-        return mu, sigma
+        log_sigma = slice_with_prefix(out_dict, self.log_sigma_prefix)
+        return mu, log_sigma
 
     def sample_from_params(self, rng, distrib_params: Dict) -> Dict:
         """Sample an action from the parameter of the continuous distribution."""
-        mu, sigma = self.get_params(distrib_params)
-        return h2mg.map_to_features(lambda mu, sigma: mu + jax.random.normal(key=rng, shape=sigma.shape) * sigma, mu, sigma)
+        mu, log_sigma = self.get_params(distrib_params)
+        return h2mg.map_to_features(lambda mu, log_sigma: mu + jax.random.normal(key=rng, shape=log_sigma.shape) * jnp.exp(log_sigma), mu, log_sigma)
 
     def build_normalizer(self, env, normalizer_args=None, data_dir=None):
         if isinstance(env, gymnasium.vector.VectorEnv):

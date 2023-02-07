@@ -9,7 +9,6 @@ from ml4ps.policy.base import BasePolicy
 import gymnasium
 
 
-
 def add_prefix(x, prefix):
     return transform_feature_names(x, lambda feat_name: prefix+feat_name)
 
@@ -66,7 +65,7 @@ def combine_space(a, b):
     return x
 
 
-def comvbine_feature_names(feat_a, feat_b):
+def combine_feature_names(feat_a, feat_b):
     new_feat_a = defaultdict(lambda: defaultdict(list))
     for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(feat_a):
         new_feat_a[local_key][obj_name].append(feat_name)
@@ -118,13 +117,10 @@ class ContinuousPolicy(BasePolicy):
         self.mu_prefix = "mu_"
         self.log_sigma_prefix = "log_sigma_"
         self.action_space, self.observation_space = env.action_space, env.observation_space
-        self.normalizer = normalizer or self.build_normalizer(
-            env, normalizer_args)
+        self.normalizer = normalizer or self.build_normalizer(env, normalizer_args)
         self.nn_args = nn_args
         self.build_out_features_names_struct(env.action_space)
-        # action space computes offset and scale factor
         self.postprocessor = self.build_postprocessor(env.action_space)
-        # address names ? INiti in init
         self.nn = self.build_nn(nn_type, self.out_feature_struct, **nn_args)
 
     @property
@@ -156,7 +152,7 @@ class ContinuousPolicy(BasePolicy):
         self.sigma_feat_names = add_prefix(
             feat_names, self.log_sigma_prefix)  # save this
         self.mu_feature_names = add_prefix(feat_names, self.mu_prefix)
-        self.out_feature_struct = comvbine_feature_names(
+        self.out_feature_struct = combine_feature_names(
             self.sigma_feat_names, self.mu_feature_names)
         return
 
@@ -178,6 +174,7 @@ class ContinuousPolicy(BasePolicy):
         """Builds postprocessor that transform nn output into the proper range
             via affine transformation.
         """
+        # TODO: add global features
         post_process_h2mg = h2mg.empty_h2mg()
         self.mu_0 = h2mg.empty_h2mg()
         self.log_sigma_0 = h2mg.empty_h2mg()
@@ -209,7 +206,14 @@ class ContinuousPolicy(BasePolicy):
         # TODO
         pass
 
-    def log_prob(self, action: Dict, distrib_params: Dict) -> float:
+    def log_prob(self, params, observation, action):
+        observation = self.normalizer(observation)
+        distrib_params = self.nn.apply(params, observation)
+        distrib_params = self.post_process_params(distrib_params)
+        return self.normal_log_prob(action, distrib_params)
+
+    def normal_log_prob(self, action: Dict, distrib_params: Dict) -> float:
+        # use onlymu and sigma and not mu_0 and sigma_0
         """Return the log probability of an action"""
         self._check_valid_action(action)
         log_probs = 0
@@ -222,8 +226,7 @@ class ContinuousPolicy(BasePolicy):
                     log_sigma_kf = distrib_params["local_features"][k][self.log_sigma_prefix+f]
                     mu0_kf = self.mu_0["local_features"][k][f]
                     log_sigma0_kf = self.log_sigma_0["local_features"][k][f]
-                    log_probs += self.feature_log_prob(
-                        action_kf, mu_kf, log_sigma_kf, mu0_kf, log_sigma0_kf)
+                    log_probs += self.feature_log_prob(action_kf, mu_kf, log_sigma_kf)
         if "global_features" in action:
             for k in action["global_features"]:
                 action_kf = action["global_features"][k]
@@ -231,23 +234,23 @@ class ContinuousPolicy(BasePolicy):
                 log_sigma_kf = distrib_params["global_features"][self.log_sigma_prefix+k]
                 mu0_kf = self.mu_0["global_features"][k]
                 log_sigma0_kf = self.log_sigma_0["global_features"][k]
-                log_probs += self.feature_log_prob(action_kf,
-                                                   mu_kf, log_sigma_kf, mu0_kf, log_sigma0_kf)
+                log_probs += self.feature_log_prob(action_kf,mu_kf, log_sigma_kf)
 
         return log_probs
 
-    def feature_log_prob(self, action, mu, log_sigma, mu_0=0, log_sigma_0=1):
-        return np.sum(- log_sigma - 2 / np.exp(2*log_sigma*log_sigma_0) * (action - mu_0 - np.exp(log_sigma_0)/2 * mu)**2)
+    def feature_log_prob(self, action, mu, log_sigma):
+        return np.nansum(- log_sigma - 0.5 * np.exp(-2 * log_sigma) * (action - mu)**2)
 
-    def sample(self, params, observation: spaces.Space, seed, deterministic=False) -> Tuple[spaces.Space, float]:
+    def sample(self, params, observation: spaces.Space, seed=0, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
+        # n_action = 1, no list, n_action > 1 list
         """Sample an action and return it together with the corresponding log probability."""
         observation = self.normalizer(observation)
-        action_params = self.nn.apply(params, observation)
-        action_params = self.post_process_params(action_params)
+        distrib_params = self.nn.apply(params, observation)
+        distrib_params = self.post_process_params(distrib_params)
         action = self.sample_from_params(
-            action_params, np.random.default_rng(seed))  # TODO rng
+            distrib_params, np.random.default_rng(seed))  # TODO rng
         info = {"info": 0}
-        return action, self.log_prob(action, action_params), info
+        return action, self.normal_log_prob(action, distrib_params), info
 
     def get_params(self, out_dict):
         mu = slice_with_prefix(out_dict, self.mu_prefix)
@@ -274,10 +277,9 @@ class ContinuousPolicy(BasePolicy):
             data_dir = env.get_attr("data_dir")[0]
         else:
             backend = env.backend
-            data_dir=env.data_dir
+            data_dir = env.data_dir
 
         if normalizer_args is None:
             return Normalizer(backend=backend, data_dir=data_dir)
         else:
             return Normalizer(backend=backend, data_dir=data_dir, **normalizer_args)
-

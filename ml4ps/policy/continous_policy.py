@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import Any, Callable, Dict, Tuple
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 from gymnasium import spaces
 from ml4ps import H2MGNODE, h2mg, Normalizer
@@ -163,13 +164,13 @@ class ContinuousPolicy(BasePolicy):
         for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(action_space)):
             high = action_space[local_key][obj_name][feat_name].high
             low = action_space[local_key][obj_name][feat_name].low
-            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+np.mean(np.log((high-low)/8))
-            post_process_h2mg[local_key][obj_name][self.mu_prefix + feat_name] = lambda x: x+np.mean(low + (high-low)/2)
+            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/8))
+            post_process_h2mg[local_key][obj_name][self.mu_prefix + feat_name] = lambda x: x+jnp.mean(low + (high-low)/2)
         for global_key, feat_name in h2mg.global_feature_names_iterator(space_to_feature_names(action_space)):
             high = action_space[global_key][feat_name].high
             low = action_space[global_key][feat_name].low
-            post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+np.mean(np.log((high-low)/8))
-            post_process_h2mg[global_key][self.mu_prefix + feat_name] = lambda x: x+np.mean(low + (high-low)/2)
+            post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/8))
+            post_process_h2mg[global_key][self.mu_prefix + feat_name] = lambda x: x+jnp.mean(low + (high-low)/2)
 
         class PostProcessor:
             def __init__(self, post_process_h2mg) -> None:
@@ -211,7 +212,7 @@ class ContinuousPolicy(BasePolicy):
         return log_probs
 
     def feature_log_prob(self, action, mu, log_sigma):
-        return np.nansum(- log_sigma - 0.5 * np.exp(-2 * log_sigma) * (action - mu)**2)
+        return jnp.nansum(- log_sigma - 0.5 * jnp.exp(-2 * log_sigma) * (action - mu)**2)
 
     def sample(self, params, observation: spaces.Space, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
         # n_action = 1, no list, n_action > 1 list

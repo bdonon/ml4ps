@@ -231,9 +231,7 @@ class ContinuousPolicy(BasePolicy):
     def sample_from_params(self, distrib_params: Dict) -> Dict:
         """Sample an action from the parameter of the continuous distribution."""
         mu, sigma = self.get_params(distrib_params)
-        mu_flat, sigma_flat = spaces.flatten(self.action_space, mu), spaces.flatten(self.action_space, sigma)
-        action_flat = mu_flat + self.np_random.normal(size=sigma_flat.shape) * sigma_flat
-        return spaces.unflatten(self.action_space, action_flat)
+        return h2mg.map_to_features(lambda mu, sigma: mu + self.np_random.normal(sigma.shape) * sigma, mu, sigma)
 
     def build_normalizer(self, env, normalizer_args=None, data_dir=None):
         if isinstance(env, gymnasium.vector.VectorEnv):

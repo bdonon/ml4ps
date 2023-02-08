@@ -125,7 +125,7 @@ class VoltageManagement(PSBaseEnv, ABC):
                 self.random_power_grid_path())
         ctrl_var = self.initialize_control_variables()
         self.backend.set_data_power_grid(power_grid, ctrl_var)
-        self.backend.run_power_grid(power_grid)
+        self.run_power_grid(power_grid)
         iteration = 0
         cost = self.compute_cost(power_grid)
         stop = False
@@ -152,7 +152,7 @@ class VoltageManagement(PSBaseEnv, ABC):
             state.power_grid, local_feature_names=self.ctrl_var_names)
         ctrl_var = self.update_ctrl_var(old_ctrl_var, action, state)
         self.backend.set_data_power_grid(state.power_grid, ctrl_var)
-        self.backend.run_power_grid(state.power_grid)
+        self.run_power_grid(state.power_grid)
         cost = self.compute_cost(state.power_grid)
         iteration = state.iteration + 1
         stop = self.is_stop(action)
@@ -194,6 +194,10 @@ class VoltageManagement(PSBaseEnv, ABC):
     def default_cost_hparams(self) -> Dict:
         return {"lmb_i": 1.0, "lmb_q": 1.0, "lmb_v": 1.0,
                 "eps_i": .0, "eps_q": 0.0, "eps_v": 0.0, "c_div": 1.0}
+    
+    @abstractmethod
+    def run_power_grid(self, power_grid):
+        self.backend.run_power_grid(power_grid)
 
     @abstractmethod
     def has_diverged(self, power_grid) -> bool:

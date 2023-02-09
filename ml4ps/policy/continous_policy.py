@@ -134,12 +134,8 @@ class ContinuousPolicy(BasePolicy):
                                 global_decoder_hidden_size=[16],
                                 local_latent_dimension=4,
                                 global_latent_dimension=4,
-                                solver_name="Euler",
-                                dt0=0.005,
                                 stepsize_controller_name="ConstantStepSize",
-                                stepsize_controller_kwargs={},
-                                adjoint_name="RecursiveCheckpointAdjoint",
-                                max_steps=4096)
+                                stepsize_controller_kwargs={})
         
     def init(self, rng, obs):
         return self.nn.init(rng, obs)
@@ -149,9 +145,9 @@ class ContinuousPolicy(BasePolicy):
             The output feature correspond to the parameter of the continuous distribution.
         """
         feat_names = space_to_feature_names(action_space)
-        self.sigma_feat_names = add_prefix(feat_names, self.log_sigma_prefix)
-        self.mu_feature_names = add_prefix(feat_names, self.mu_prefix)
-        output_feature_names = combine_feature_names(self.sigma_feat_names, self.mu_feature_names)
+        sigma_feat_names = add_prefix(feat_names, self.log_sigma_prefix)
+        mu_feature_names = add_prefix(feat_names, self.mu_prefix)
+        output_feature_names = combine_feature_names(sigma_feat_names, mu_feature_names)
         return output_feature_names
 
     def build_nn(self, nn_type: str, output_feature_names: Dict, **kwargs):
@@ -196,23 +192,9 @@ class ContinuousPolicy(BasePolicy):
     def normal_log_prob(self, action: Dict, distrib_params: Dict) -> float:
         """Return the log probability of an action"""
         self._check_valid_action(action)
-        log_probs = 0
-        # log_probs = h2mg.map_to_features(self.feature_log_prob, action, mu, sigma, mu_0, sigma_0)
-        if "local_features" in action:
-            for k in action["local_features"]:
-                for f in action["local_features"][k]:
-                    action_kf = action["local_features"][k][f]
-                    mu_kf = distrib_params["local_features"][k][self.mu_prefix+f]
-                    log_sigma_kf = distrib_params["local_features"][k][self.log_sigma_prefix+f]
-                    log_probs += self.feature_log_prob(action_kf, mu_kf, log_sigma_kf)
-        if "global_features" in action:
-            for k in action["global_features"]:
-                action_kf = action["global_features"][k]
-                mu_kf = distrib_params["global_features"][self.mu_prefix+k]
-                log_sigma_kf = distrib_params["global_features"][self.log_sigma_prefix+k]
-                log_probs += self.feature_log_prob(action_kf,mu_kf, log_sigma_kf)
-
-        return log_probs
+        mu, sigma = self.split_params(distrib_params)
+        log_probs = h2mg.map_to_features(self.feature_log_prob, [action, mu, sigma])
+        return sum(h2mg.features_iterator(log_probs))
 
     def feature_log_prob(self, action, mu, log_sigma):
         return jnp.nansum(- log_sigma - 0.5 * jnp.exp(-2 * log_sigma) * (action - mu)**2)
@@ -229,14 +211,14 @@ class ContinuousPolicy(BasePolicy):
         info = {"info": 0}
         return action, self.normal_log_prob(action, distrib_params), info
 
-    def get_params(self, out_dict):
+    def split_params(self, out_dict):
         mu = slice_with_prefix(out_dict, self.mu_prefix)
         log_sigma = slice_with_prefix(out_dict, self.log_sigma_prefix)
         return mu, log_sigma
 
     def sample_from_params(self, rng, distrib_params: Dict) -> Dict:
         """Sample an action from the parameter of the continuous distribution."""
-        mu, log_sigma = self.get_params(distrib_params)
+        mu, log_sigma = self.split_params(distrib_params)
         return h2mg.map_to_features(lambda mu, log_sigma: mu + jax.random.normal(key=rng, shape=log_sigma.shape) * jnp.exp(log_sigma), [mu, log_sigma])
 
     def build_normalizer(self, env, normalizer_args=None, data_dir=None):

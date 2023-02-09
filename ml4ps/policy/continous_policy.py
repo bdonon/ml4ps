@@ -1,13 +1,15 @@
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Tuple
 
+import gymnasium
 import jax
 import jax.numpy as jnp
+import ml4ps
 import numpy as np
 from gymnasium import spaces
-from ml4ps import H2MGNODE, h2mg, Normalizer
+from ml4ps import Normalizer, h2mg
 from ml4ps.policy.base import BasePolicy
-import gymnasium
 
 
 def add_prefix(x, prefix):
@@ -114,75 +116,71 @@ class ContinuousPolicy(BasePolicy):
             nn produce ditribution parameters from observation input.
     """
 
-    def __init__(self, env=None, normalizer=None, normalizer_args=None, nn_type="h2mgnode", np_random=None, **nn_args) -> None:
+    def __init__(self, env=None, normalizer=None, normalizer_args=None, nn_type="h2mgnode", np_random=None, box_to_sigma_ratio=8, **nn_args) -> None:
         # TODO save normalizer, action, obs space, nn args
         self.mu_prefix = "mu_"
         self.log_sigma_prefix = "log_sigma_"
+        self.box_to_sigma_ratio = box_to_sigma_ratio
+        self.nn_args = nn_args
+        self.np_random = np_random or np.random.default_rng()
         self.action_space, self.observation_space = env.action_space, env.observation_space
         self.normalizer = normalizer or self.build_normalizer(env, normalizer_args)
-        self.nn_args = nn_args
-        self.build_out_features_names_struct(env.action_space)
-        self.postprocessor = self.build_postprocessor(env.action_space)
-        self.nn = self.build_nn(nn_type, self.out_feature_struct, **nn_args)
-        self.np_random = np_random or np.random.default_rng()
-    
+        output_feature_names = self.build_output_feature_names(env.action_space)
+        self.postprocessor =  self.build_postprocessor(env.action_space)
+        self.nn = self.build_nn(nn_type, output_feature_names,
+                                local_dynamics_hidden_size=[16],
+                                global_dynamics_hidden_size=[16],
+                                local_decoder_hidden_size=[16],
+                                global_decoder_hidden_size=[16],
+                                local_latent_dimension=4,
+                                global_latent_dimension=4,
+                                solver_name="Euler",
+                                dt0=0.005,
+                                stepsize_controller_name="ConstantStepSize",
+                                stepsize_controller_kwargs={},
+                                adjoint_name="RecursiveCheckpointAdjoint",
+                                max_steps=4096)
+        
     def init(self, rng, obs):
         return self.nn.init(rng, obs)
 
-    def build_out_features_names_struct(self, space: spaces.Space) -> Dict:
+    def build_output_feature_names(self, action_space: spaces.Space) -> Dict:
         """Builds output feature names structure from power system space.
             The output feature correspond to the parameter of the continuous distribution.
         """
-
-        feat_names = space_to_feature_names(self.action_space)
-        self.sigma_feat_names = add_prefix(
-            feat_names, self.log_sigma_prefix)  # save this
+        feat_names = space_to_feature_names(action_space)
+        self.sigma_feat_names = add_prefix(feat_names, self.log_sigma_prefix)
         self.mu_feature_names = add_prefix(feat_names, self.mu_prefix)
-        self.out_feature_struct = combine_feature_names(
-            self.sigma_feat_names, self.mu_feature_names)
+        output_feature_names = combine_feature_names(self.sigma_feat_names, self.mu_feature_names)
+        return output_feature_names
 
-    def build_nn(self, nn_type: str, out_feature_struct: Dict, **kwargs):
-        # TODO nn_type and kwargs
-        # return ml4ps.get(nn_type, kwargs)
-        return H2MGNODE.make(output_feature_names=out_feature_struct, local_dynamics_hidden_size=[16],
-                             global_dynamics_hidden_size=[16],
-                             local_decoder_hidden_size=[16],
-                             global_decoder_hidden_size=[16],
-                             local_latent_dimension=4,
-                             global_latent_dimension=4,
-                             solver_name="Euler",
-                             dt0=0.005,
-                             stepsize_controller_name="ConstantStepSize",
-                             stepsize_controller_kwargs={},
-                             adjoint_name="RecursiveCheckpointAdjoint",
-                             max_steps=4096)
+    def build_nn(self, nn_type: str, output_feature_names: Dict, **kwargs):
+        return ml4ps.neural_network.get(nn_type, {"output_feature_names":output_feature_names, **kwargs})
 
     def build_postprocessor(self, action_space: spaces.Space):
         """Builds postprocessor that transform nn output into the proper range via affine transformation.
         """
         post_process_h2mg = h2mg.empty_h2mg()
-        mu_prefix = self.mu_prefix
-        self.sigma_factor = 32
         for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(action_space)):
             high = action_space[local_key][obj_name][feat_name].high
             low = action_space[local_key][obj_name][feat_name].low
-            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/self.sigma_factor))
-            post_process_h2mg[local_key][obj_name][self.mu_prefix + feat_name] = lambda x: x+jnp.mean(low + (high-low)/2)
+            sigma = jnp.mean((high-low)/self.box_to_sigma_ratio)
+            post_process_h2mg[local_key][obj_name][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.log(sigma)
+            post_process_h2mg[local_key][obj_name][self.mu_prefix + feat_name] = lambda x: x*sigma+jnp.mean(low + (high-low)/2)
         for global_key, feat_name in h2mg.global_feature_names_iterator(space_to_feature_names(action_space)):
             high = action_space[global_key][feat_name].high
             low = action_space[global_key][feat_name].low
-            post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.mean(jnp.log((high-low)/self.sigma_factor))
-            post_process_h2mg[global_key][self.mu_prefix + feat_name] = lambda x: x+jnp.mean(low + (high-low)/2)
+            sigma = jnp.mean((high-low)/self.box_to_sigma_ratio)
+            post_process_h2mg[global_key][self.log_sigma_prefix + feat_name] = lambda x: x+jnp.log(sigma)
+            post_process_h2mg[global_key][self.mu_prefix + feat_name] = lambda x: x*sigma+jnp.mean(low + (high-low)/2)
 
-        class PostProcessor:
-            def __init__(self, post_process_h2mg) -> None:
-                self.post_process_h2mg = post_process_h2mg
-            def __call__(self, x):
-                for local_key, obj_name, feat_name in h2mg.local_feature_names_iterator(space_to_feature_names(action_space)):
-                    x[local_key][obj_name][mu_prefix + feat_name] /= 10
-                for global_key, feat_name in h2mg.global_feature_names_iterator(space_to_feature_names(action_space)):
-                    x[global_key][feat_name][mu_prefix + feat_name] /= 10
-                return h2mg.map_to_features(lambda target, fn: fn(target), x, self.post_process_h2mg)
+
+        @dataclass
+        class PostProcessor():
+            post_process_h2mg: Dict
+            def __call__(self, distrib_params) -> Any:
+                return h2mg.map_to_features(lambda target, fn: fn(target), distrib_params, self.post_process_h2mg)
+        
         return PostProcessor(post_process_h2mg)
 
     def _check_valid_action(self, action):
@@ -196,7 +194,6 @@ class ContinuousPolicy(BasePolicy):
         return self.normal_log_prob(action, distrib_params)
 
     def normal_log_prob(self, action: Dict, distrib_params: Dict) -> float:
-        # use onlymu and sigma and not mu_0 and sigma_0
         """Return the log probability of an action"""
         self._check_valid_action(action)
         log_probs = 0
@@ -222,6 +219,8 @@ class ContinuousPolicy(BasePolicy):
 
     def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
         # n_action = 1, no list, n_action > 1 list
+        if n_action > 1:
+            raise NotImplementedError
         """Sample an action and return it together with the corresponding log probability."""
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)

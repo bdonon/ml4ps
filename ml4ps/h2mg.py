@@ -84,7 +84,7 @@ def all_addresses_iterator(h2mg) -> Iterator:
 
 
 def features_iterator(h2mg) -> Iterator:
-    for _, _, _, value in local_addresses_iterator(h2mg):
+    for _, _, _, value in local_features_iterator(h2mg):
         yield value
     for _,  _, value in global_features_iterator(h2mg):
         yield value

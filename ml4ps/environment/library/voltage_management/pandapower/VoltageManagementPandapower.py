@@ -171,10 +171,11 @@ class VoltageManagementPandapower(VoltageManagement):
                                              data["bus"]["res_vm_pu"] < data["bus"]["min_vm_pu"])
         voltage_violated_percentage = voltage_violated_bus.mean()
         voltage_violated = voltage_violated_bus.any()
-        loading_violated_connexion = np.concatenate(
+        loading_connexion = np.concatenate(
             [data["line"]["res_loading_percent"], data["trafo"]["res_loading_percent"]], axis=-1)
+        loading_violated_connexion = loading_connexion > 100
         loading_violated_percentage = loading_violated_connexion.mean()
-        loading_violated = loading_violated_connexion.any()
+        loading_violated = (loading_violated_connexion>1).any()
         q = np.concatenate(
             [data["gen"]["res_q_mvar"], data["ext_grid"]["res_q_mvar"]], axis=-1)
         qmin = np.concatenate(
@@ -190,6 +191,10 @@ class VoltageManagementPandapower(VoltageManagement):
                {"voltage_violated_percentage": voltage_violated_percentage,
                "loading_violated_percentage": loading_violated_percentage,
                "reactive_power_violated_percentage": reactive_power_violated_percentage}
+    
+    def run_power_grid(self, power_grid):
+        return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0.,
+                                           recycle={"bus_pq":False, "gen":True, "trafo": False})
 
     @abstractmethod
     def update_ctrl_var(self, ctrl_var: Dict, action: Dict) -> Dict:

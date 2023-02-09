@@ -1,6 +1,6 @@
 from collections import defaultdict
 from enum import Enum
-from typing import Callable, Iterator
+from typing import Callable, Iterator, List, Dict
 
 import numpy as np
 
@@ -90,14 +90,6 @@ def features_iterator(h2mg) -> Iterator:
         yield value
 
 
-def apply_on_features(fn: Callable, h2mg):
-    for key, obj_name, feat_name, value in local_features_iterator(h2mg):
-        h2mg[key][obj_name][feat_name] = fn(value)
-
-    for key, feat_name, value in global_features_iterator(h2mg):
-        h2mg[key][feat_name] = fn(value)
-
-
 def empty_h2mg():
     return defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
 
@@ -176,52 +168,42 @@ def empty_like(h2mg):
 
     return new_h2mg
 
-
-def map_to_features(fn, *h2mgs, check_compat=False):
-    if check_compat and not all_compatible(*h2mgs):
-        raise ValueError
-    results = empty_like(h2mgs[0])
-    for key, obj_name, feat_name, value in local_features_iterator(results):
-        results[key][obj_name][feat_name] = fn(
-            *list(map(h2mg_slicer(key, obj_name, feat_name), list(h2mgs))))
-
-    for key, feat_name, value in global_features_iterator(results):
-        results[key][feat_name] = fn(
-            *list(map(h2mg_slicer(key, None, feat_name), list(h2mgs))))
-
-    return results
-
 def collate_h2mgs_features(h2mgs_list):
     def collate_arrays(*args):
         return np.array(list(args))
-    return map_to_features(collate_arrays, *h2mgs_list)
+    return map_to_features(collate_arrays, h2mgs_list)
 
-def map_to_all(fn, *h2mgs, check_compat=False):
-    if check_compat and not all_compatible(*h2mgs):
+def h2mg_map(fn: Callable, args_h2mg: List=None, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False, check_compat: bool=False) -> Dict:
+    if not args_h2mg:
         raise ValueError
-    results = empty_like(h2mgs[0])
-    for key, obj_name, feat_name, value in local_features_iterator(results):
-        results[key][obj_name][feat_name] = fn(
-            *list(map(h2mg_slicer(key, obj_name, feat_name), list(h2mgs))))
-
-    for key, feat_name, value in global_features_iterator(results):
-        results[key][feat_name] = fn(
-            *list(map(h2mg_slicer(key, None, feat_name), list(h2mgs))))
-    
-    for key, obj_name, feat_name, value in local_addresses_iterator(results):
-        results[key][obj_name][feat_name] = fn(
-            *list(map(h2mg_slicer(key, obj_name, feat_name), list(h2mgs))))
-    
-    for key, value in all_addresses_iterator(results):
-        results[key] = fn(
-            *list(map(h2mg_slicer(key, None, None), list(h2mgs))))
+    if check_compat and not all_compatible(args_h2mg):
+        raise ValueError
+    results = empty_like(args_h2mg[0])
+    if local_features:
+        for key, obj_name, feat_name, value in local_features_iterator(results):
+            results[key][obj_name][feat_name] = fn(*list(map(h2mg_slicer(key, obj_name, feat_name), args_h2mg)))
+    if global_features:
+        for key, feat_name, value in global_features_iterator(results):
+            results[key][feat_name] = fn(*list(map(h2mg_slicer(key, None, feat_name), args_h2mg)))
+    if local_addresses:
+        for key, obj_name, feat_name, value in local_addresses_iterator(results):
+            results[key][obj_name][feat_name] = fn(*list(map(h2mg_slicer(key, obj_name, feat_name), args_h2mg)))
+    if all_addresses:
+        for key, value in all_addresses_iterator(results):
+            results[key] = fn(*list(map(h2mg_slicer(key, None, None), args_h2mg)))
 
     return results
+
+def map_to_features(fn, args_h2mg, check_compat=False):
+    return h2mg_map(fn=fn, args_h2mg=args_h2mg, check_compat=check_compat)
+
+def map_to_all(fn: Callable, args_h2mg: List, check_compat=False):
+    return h2mg_map(fn, args_h2mg=args_h2mg, local_features=True, global_features=True, local_addresses=True, all_addresses=True, check_compat=check_compat)
 
 def collate_h2mgs(h2mgs_list):
     def collate_arrays(*args):
         return np.array(list(args))
-    return map_to_all(collate_arrays, *h2mgs_list)
+    return map_to_all(collate_arrays, h2mgs_list)
 
-def apply_normalization(norm_fns_h2mg, target_h2mg):
-    return map_to_features(lambda feature, norm_fn: norm_fn(feature), target_h2mg, norm_fns_h2mg)
+def h2mg_apply(norm_fns_h2mg, target_h2mg):
+    return map_to_features(lambda feature, norm_fn: norm_fn(feature), args_h2mg=[target_h2mg, norm_fns_h2mg])

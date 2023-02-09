@@ -179,7 +179,7 @@ class ContinuousPolicy(BasePolicy):
         class PostProcessor():
             post_process_h2mg: Dict
             def __call__(self, distrib_params) -> Any:
-                return h2mg.map_to_features(lambda target, fn: fn(target), distrib_params, self.post_process_h2mg)
+                return h2mg.map_to_features(lambda target, fn: fn(target), [distrib_params, self.post_process_h2mg])
         
         return PostProcessor(post_process_h2mg)
 
@@ -237,7 +237,7 @@ class ContinuousPolicy(BasePolicy):
     def sample_from_params(self, rng, distrib_params: Dict) -> Dict:
         """Sample an action from the parameter of the continuous distribution."""
         mu, log_sigma = self.get_params(distrib_params)
-        return h2mg.map_to_features(lambda mu, log_sigma: mu + jax.random.normal(key=rng, shape=log_sigma.shape) * jnp.exp(log_sigma), mu, log_sigma)
+        return h2mg.map_to_features(lambda mu, log_sigma: mu + jax.random.normal(key=rng, shape=log_sigma.shape) * jnp.exp(log_sigma), [mu, log_sigma])
 
     def build_normalizer(self, env, normalizer_args=None, data_dir=None):
         if isinstance(env, gymnasium.vector.VectorEnv):

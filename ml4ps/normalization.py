@@ -5,7 +5,7 @@ import tqdm
 from scipy import interpolate
 
 from ml4ps.backend.interface import collate_dict
-from ml4ps.h2mg import collate_h2mgs, local_features_iterator, global_features_iterator, empty_like, apply_normalization
+from ml4ps.h2mg import collate_h2mgs, local_features_iterator, global_features_iterator, empty_like, h2mg_apply
 
 
 class Normalizer:
@@ -97,7 +97,7 @@ class Normalizer:
             If one feature and/or one object present in the input has no corresponding normalization function,
             then it is returned as is.
         """
-        return apply_normalization(self.functions, x)
+        return h2mg_apply(self.functions, x)
 
 
 #def apply_normalization(x, functions):

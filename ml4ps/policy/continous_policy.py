@@ -127,15 +127,7 @@ class ContinuousPolicy(BasePolicy):
         self.normalizer = normalizer or self.build_normalizer(env, normalizer_args)
         output_feature_names = self.build_output_feature_names(env.action_space)
         self.postprocessor =  self.build_postprocessor(env.action_space)
-        self.nn = self.build_nn(nn_type, output_feature_names,
-                                local_dynamics_hidden_size=[16],
-                                global_dynamics_hidden_size=[16],
-                                local_decoder_hidden_size=[16],
-                                global_decoder_hidden_size=[16],
-                                local_latent_dimension=4,
-                                global_latent_dimension=4,
-                                stepsize_controller_name="ConstantStepSize",
-                                stepsize_controller_kwargs={})
+        self.nn = self.build_nn(nn_type, output_feature_names, **nn_args)
         
     def init(self, rng, obs):
         return self.nn.init(rng, obs)
@@ -200,9 +192,6 @@ class ContinuousPolicy(BasePolicy):
         return jnp.nansum(- log_sigma - 0.5 * jnp.exp(-2 * log_sigma) * (action - mu)**2)
 
     def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
-        # n_action = 1, no list, n_action > 1 list
-        if n_action > 1:
-            raise NotImplementedError
         """Sample an action and return it together with the corresponding log probability."""
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)

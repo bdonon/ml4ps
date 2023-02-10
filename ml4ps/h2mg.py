@@ -17,26 +17,26 @@ class H2MGCategories(Enum):
 
 
 def h2mg(local_features, global_features, local_addresses, all_addresses):
-    return {"local_features": local_features,
-            "global_features": global_features,
-            "local_addresses": local_addresses,
-            "all_addresses": all_addresses}
+    return {H2MGCategories.LOCAL_FEATURES.value: local_features,
+            H2MGCategories.GLOBAL_FEATURES.value: global_features,
+            H2MGCategories.LOCAL_ADDRESSES.value: local_addresses,
+            H2MGCategories.ALL_ADDRESSES.value: all_addresses}
 
 
-def local_features(h2mg):
-    return h2mg["local_features"]
+def local_features(h2mg: Dict) -> Dict:
+    return h2mg.get(H2MGCategories.LOCAL_FEATURES.value, {})
 
 
 def global_features(h2mg):
-    return h2mg["global_features"]
+    return h2mg.get(H2MGCategories.GLOBAL_FEATURES.value, {})
 
 
 def local_addresses(h2mg):
-    return h2mg["local_addresses"]
+    return h2mg.get(H2MGCategories.LOCAL_ADDRESSES.value, {})
 
 
 def all_addresses(h2mg):
-    return h2mg["all_addresses"]
+    return h2mg.get(H2MGCategories.ALL_ADDRESSES.value, [])
 
 
 def local_feature_names_iterator(feature_names):

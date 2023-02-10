@@ -207,3 +207,19 @@ def collate_h2mgs(h2mgs_list):
 
 def h2mg_apply(norm_fns_h2mg, target_h2mg):
     return map_to_features(lambda feature, norm_fn: norm_fn(feature), args_h2mg=[target_h2mg, norm_fns_h2mg])
+
+def shallow_repr(h2mg, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False):
+    results = {}
+    if local_features:
+        for key, obj_name, feat_name, value in local_features_iterator(h2mg):
+            results[obj_name+"_"+feat_name] = value
+    if global_features:
+        for key, feat_name, value in global_features_iterator(h2mg):
+            results[feat_name] = value
+    if local_addresses:
+        for key, obj_name, feat_name, value in local_addresses_iterator(h2mg):
+            results[obj_name+"_"+feat_name] = value
+    if all_addresses:
+        for key, value in all_addresses_iterator(h2mg):
+            results[key] = value
+    return results

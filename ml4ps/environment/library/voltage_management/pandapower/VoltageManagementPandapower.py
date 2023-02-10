@@ -193,8 +193,7 @@ class VoltageManagementPandapower(VoltageManagement):
                "reactive_power_violated_percentage": reactive_power_violated_percentage}
     
     def run_power_grid(self, power_grid):
-        return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0.,
-                                           recycle={"bus_pq":False, "gen":True, "trafo": False})
+        return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0.)
 
     @abstractmethod
     def update_ctrl_var(self, ctrl_var: Dict, action: Dict) -> Dict:

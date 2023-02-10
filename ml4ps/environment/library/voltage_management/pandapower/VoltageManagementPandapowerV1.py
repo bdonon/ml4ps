@@ -59,3 +59,7 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
     def update_ctrl_var(self, ctrl_var: Dict, action: Dict, state: VoltageManagementState) -> Dict:
         """Updates control variables with action."""
         return action
+    
+    def run_power_grid(self, power_grid):
+        return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0.,
+                                           recycle={"bus_pq":False, "gen":True, "trafo": False})

@@ -213,7 +213,7 @@ class ContinuousPolicy(BasePolicy):
         else:
             action = [self.sample_from_params(rng, distrib_params, deterministic=deterministic) for _ in range(n_action)]
             log_prob = [self.normal_log_prob(a, distrib_params) for a in action]
-        info= {"info": 0}
+        info = h2mg.shallow_repr(h2mg.map_to_features(lambda x: np.asarray(np.mean(x)), [distrib_params]))
         return action, log_prob, info
 
     def split_params(self, out_dict):

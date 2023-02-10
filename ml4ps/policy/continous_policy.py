@@ -145,9 +145,9 @@ class ContinuousPolicy(BasePolicy):
             The output feature correspond to the parameter of the continuous distribution.
         """
         feat_names = space_to_feature_names(action_space)
-        sigma_feat_names = add_prefix(feat_names, self.log_sigma_prefix)
+        log_sigma_feat_names = add_prefix(feat_names, self.log_sigma_prefix)
         mu_feature_names = add_prefix(feat_names, self.mu_prefix)
-        output_feature_names = combine_feature_names(sigma_feat_names, mu_feature_names)
+        output_feature_names = combine_feature_names(log_sigma_feat_names, mu_feature_names)
         return output_feature_names
 
     def build_nn(self, nn_type: str, output_feature_names: Dict, **kwargs):
@@ -192,8 +192,8 @@ class ContinuousPolicy(BasePolicy):
     def normal_log_prob(self, action: Dict, distrib_params: Dict) -> float:
         """Return the log probability of an action"""
         self._check_valid_action(action)
-        mu, sigma = self.split_params(distrib_params)
-        log_probs = h2mg.map_to_features(self.feature_log_prob, [action, mu, sigma])
+        mu, log_sigma = self.split_params(distrib_params)
+        log_probs = h2mg.map_to_features(self.feature_log_prob, [action, mu, log_sigma])
         return sum(h2mg.features_iterator(log_probs))
 
     def feature_log_prob(self, action, mu, log_sigma):
@@ -207,9 +207,14 @@ class ContinuousPolicy(BasePolicy):
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)
         distrib_params = self.postprocessor(distrib_params)
-        action = self.sample_from_params(rng, distrib_params, deterministic=deterministic)
-        info = {"info": 0}
-        return action, self.normal_log_prob(action, distrib_params), info
+        if n_action <= 1:
+            action = self.sample_from_params(rng, distrib_params, deterministic=deterministic)
+            log_prob = self.normal_log_prob(action, distrib_params)
+        else:
+            action = [self.sample_from_params(rng, distrib_params, deterministic=deterministic) for _ in range(n_action)]
+            log_prob = [self.normal_log_prob(a, distrib_params) for a in action]
+        info= {"info": 0}
+        return action, log_prob, info
 
     def split_params(self, out_dict):
         mu = slice_with_prefix(out_dict, self.mu_prefix)

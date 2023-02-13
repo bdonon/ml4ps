@@ -2,9 +2,8 @@ import numpy as np
 import pickle
 import tqdm
 
-from scipy import interpolate
+import jax.numpy as jnp
 
-from ml4ps.backend.interface import collate_dict
 from ml4ps.h2mg import collate_h2mgs, local_features_iterator, global_features_iterator, empty_like, h2mg_apply
 
 
@@ -38,7 +37,8 @@ class Normalizer:
                 objects (e.g. 'load'), and values are lists of features that should be normalized (e.g. ['p_mw',
                 'q_mvar']).
         """
-        self.functions = {}
+        self.inverse_functions = None
+        self.functions = None
 
         if filename is not None:
             self.load(filename)
@@ -69,13 +69,15 @@ class Normalizer:
                   for net in self.tqdm(net_batch, desc='Building normalizer: Extracting features.')]
         h2mg = collate_h2mgs(h2mgs)
         self.functions = self.build_function_tree(h2mg)
+        self.inverse_functions = self.build_function_tree(h2mg, inverse=True)
 
-    def build_function_tree(self, h2mg):
+
+    def build_function_tree(self, h2mg, inverse=False):
         r = empty_like(h2mg)
         for local_key, obj_name, feat_name, value in local_features_iterator(h2mg):
-            r[local_key][obj_name][feat_name] = NormalizationFunction(value, self.n_breakpoints)
+            r[local_key][obj_name][feat_name] = NormalizationFunction(value, self.n_breakpoints, inverse=inverse)
         for global_key, feat_name, value in global_features_iterator(h2mg):
-            r[global_key][feat_name] = NormalizationFunction(value, self.n_breakpoints)
+            r[global_key][feat_name] = NormalizationFunction(value, self.n_breakpoints, inverse=inverse)
         return r
 
     def save(self, filename):
@@ -91,38 +93,19 @@ class Normalizer:
         file.close()
 
     def __call__(self, x):
-        """Normalizes input data by applying .
-
-            **Note**
-            If one feature and/or one object present in the input has no corresponding normalization function,
-            then it is returned as is.
-        """
+        """Normalizes input data."""
         return h2mg_apply(self.functions, x)
 
 
-#def apply_normalization(x, functions):
-#    r = {}
-#    for k in x.keys():
-#        if k in functions.keys():
-#            r[k] = {}
-#            for f in x[k].keys():
-#                if f in functions[k].keys():
-#                    r[k][f] = functions[k][f](x[k][f])
-#                else:
-#                    r[k][f] = x[k][f]
-#        else:
-#            r[k] = x[k]
-#    return r
+    def inverse(self, x):
+        """De-normalizes input data by applying the inverse of normalization functions."""
+        return h2mg_apply(self.inverse_functions, x)
 
 
 class NormalizationFunction:
-    """Normalization function that applies an approximation of the Cumulative Distribution Function.
+    """Normalization function that applies an approximation of the Cumulative Distribution Function."""
 
-        Attributes:
-            interp_func : Piecewise linear function that will serve to normalize data.
-    """
-
-    def __init__(self, x, n_breakpoints):
+    def __init__(self, x, n_breakpoints, inverse=False):
         """Initializes a normalization function.
 
             **Note**
@@ -139,18 +122,25 @@ class NormalizationFunction:
                 n_breakpoints (:obj:`int`): Amount of breakpoints that should be present in the piecewise linear
                     approximation of the Cumulative Distribution Function.
         """
+        self.inverse = inverse
         self.p, self.q = get_proba_quantiles(x, n_breakpoints)
         self.p_merged, self.q_merged = merge_equal_quantiles(self.p, self.q)
-        self.interp_func = None
-        if len(self.q_merged) > 1:
-            self.interp_func = interpolate.interp1d(self.q_merged, -1 + 2 * self.p_merged, fill_value="extrapolate")
+        if inverse:
+            self.xp, self.fp = -1 + 2 * self.p_merged, self.q_merged
+        else:
+            self.fp, self.xp = -1 + 2 * self.p_merged , self.q_merged
 
     def __call__(self, x):
         """Normalizes input by applying an approximation of the CDF of values provided at initialization."""
-        if self.interp_func is None:
-            return x - self.q_merged
+        if len(self.fp) == 1 and not self.inverse:
+            return x - self.fp
+        elif len(self.fp) == 1 and self.inverse:
+            return x + self.xp
         else:
-            return self.interp_func(x)
+            interp_term = jnp.interp(x, self.xp, self.fp)
+            left_term = jnp.minimum(x - self.xp[0], 0) * (self.fp[1] - self.fp[0]) / (self.xp[1] - self.xp[0])
+            right_term = jnp.maximum(x - self.xp[-1], 0) * (self.fp[-1] - self.fp[-2]) / (self.xp[-1] - self.xp[-2])
+            return interp_term + left_term + right_term
 
 
 def get_proba_quantiles(x, n_breakpoints):

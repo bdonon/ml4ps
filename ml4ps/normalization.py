@@ -12,8 +12,9 @@ class Normalizer:
 
     Attributes:
         functions (:obj:`dict` of :obj:`dict` of :obj:`ml4ps.normalization.NormalizationFunction`): Nested dict of
-            single normalizing functions.
-            Normalizing functions take scalar inputs and return scalar inputs.
+            single normalizing functions. Normalizing functions take scalar inputs and return scalar inputs.
+        inverse_functions (:obj:`dict` of :obj:`dict` of :obj:`ml4ps.normalization.NormalizationFunction`) : Nested
+            dict of the inverse of normalizing functions.
     """
 
     def __init__(self, filename=None, **kwargs):
@@ -57,9 +58,10 @@ class Normalizer:
     def build_functions(self):
         """Builds normalization functions.
 
-            At first, it fetches filenames that have a valid extension, shuffling them if desired, and returning
-            exactly `n_samples` of them. Then, those files are imported, and their features are extracted. Then,
-            based on the obtained data, a separate normalizing function is built for each feature of each object.
+        At first, it fetches filenames that have a valid extension, shuffling them if desired, and returning
+        exactly `n_samples` of them. Then, those files are imported, and their features are extracted. Then,
+        based on the obtained data, a separate normalizing function is built for each feature of each object.
+        The inverse of normalizing functions is also provided.
         """
         data_files = self.backend.get_valid_files(self.data_dir, n_samples=self.n_samples, shuffle=self.shuffle)
         net_batch = [self.backend.load_power_grid(file)
@@ -73,6 +75,7 @@ class Normalizer:
 
 
     def build_function_tree(self, h2mg, inverse=False):
+        """Builds a dict structure of normalization functions, mimicking the structure of `h2mg`."""
         r = empty_like(h2mg)
         for local_key, obj_name, feat_name, value in local_features_iterator(h2mg):
             r[local_key][obj_name][feat_name] = NormalizationFunction(value, self.n_breakpoints, inverse=inverse)

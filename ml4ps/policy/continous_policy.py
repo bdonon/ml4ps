@@ -189,7 +189,7 @@ class ContinuousPolicy(BasePolicy):
         return sum(h2mg.features_iterator(log_probs))
 
     def feature_log_prob(self, action, mu, log_sigma):
-        return jnp.nansum(- log_sigma - 0.5 * jnp.exp(-2 * log_sigma) * (action - mu)**2)
+        return jnp.nansum(- log_sigma - 0.5 * jnp.exp(-2 * log_sigma) * (jax.lax.stop_gradient(action) - mu)**2)
 
     def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
         """Sample an action and return it together with the corresponding log probability."""

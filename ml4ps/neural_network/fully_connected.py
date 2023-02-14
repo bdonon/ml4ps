@@ -1,138 +1,68 @@
-import pickle
 import jax.numpy as jnp
-import jax.nn as jnn
-from jax import vmap, jit, random
-from functools import partial
-from ml4ps.utils import get_n_obj
+from flax import linen as nn
+from dataclasses import field
+from typing import Sequence
+from jax.tree_util import tree_flatten
 
 
-def initialize_params(random_key, dimensions):
-    """Initializes parameters of the neural network."""
-    def initialize_layer(m, n, key, scale=1e-2):
-        w_key, b_key = random.split(key)
-        return scale * random.normal(w_key, (n, m)), scale * random.normal(b_key, (n,))
-    keys = random.split(random_key, len(dimensions))
-    return [initialize_layer(m, n, k) for m, n, k in zip(dimensions[:-1], dimensions[1:], keys)]
+def build_output_dim(x, output_feature_names):
+    """Counts the output dimensions by combining the amount of objects in `x`, and the corresponding output features."""
+    out_dim = 0
+    if "global_features" in output_feature_names:
+        for _ in output_feature_names["global_features"]:
+            out_dim += 1
+    if "local_features" in output_feature_names:
+        for k in output_feature_names["local_features"]:
+            n_obj = jnp.shape(list(x["local_addresses"][k].values())[0])[0]
+            for _ in output_feature_names["local_features"][k]:
+                out_dim += n_obj
+    return out_dim
 
 
-def get_dim(feature_names, n_obj):
-    """Counts the input / output dimensions based on `feature_names` and the object counts `n_obj`."""
-    r = 0
-    for object_name, object_input_feature_names in feature_names.items():
-        r += len(object_input_feature_names) * n_obj.get(object_name, 0)
-    return r
+def unflatten(h, x, output_feature_names):
+    """Transforms h into a h2mg with features defined in `output_feature_names` and amount of objects defined in `x`.
 
-
-def flatten_input(x, input_feature_names):
-    """Flattens the H2MG input, and filters out features that are not in `input_feature_names`."""
-    x_flat = []
-    for object_name, object_input_feature_names in input_feature_names.items():
-        if object_name in x.keys():
-            for input_feature_name in object_input_feature_names:
-                x_flat.append(x[object_name][input_feature_name])
-    return jnp.concatenate(x_flat)
-
-
-def build_out_dict(h, output_feature_names, n_obj):
-    """Converts the flat output of the neural network into a nested dictionnary.
-
-    It follows the structure defined in `output_feature_names`, and only outputs something for objects that exist
-    in the input (as defined in `n_obj`).
+    Note:
+        Replaces fictitious objects with nan, while allowing to back-propagate.
     """
     y = {}
     i = 0
-    for object_name, object_output_feature_names in output_feature_names.items():
-        a = n_obj[object_name]
-        if a > 0:
-            y[object_name] = {}
-            for output_feature_name in object_output_feature_names:
-                y[object_name][output_feature_name] = h[i:i + a]
-                i += a
+    if "global_features" in output_feature_names:
+        y["global_features"] = {}
+        for k in output_feature_names["global_features"]:
+            y["global_features"][k] = h[i:i + 1]
+            i += 1
+    if "local_features" in output_feature_names:
+        y["local_features"] = {}
+        for k in output_feature_names["local_features"]:
+            y["local_features"][k] = {}
+            n_obj = jnp.shape(list(x["local_addresses"][k].values())[0])[0]
+            mask = jnp.isnan(list(x["local_addresses"][k].values())[0])
+            for f in output_feature_names["local_features"][k]:
+                y["local_features"][k][f] = jnp.where(mask, jnp.nan, h[i:i + n_obj])
+                i += n_obj
     return y
 
 
-class FullyConnected:
-    """Default implementation of a Fully Connected Neural Network (MLP), compatible with H2MG data.
+class FullyConnected(nn.Module):
+    """Fully Connected Neural Network.
 
-    Non-linearities are all Leaky-ReLU, and the last layer is indeed linear.
+    Attributes:
+        hidden_size (:obj:`typing.Sequence` of :obj:`int`): List of hidden sizes of the MLP.
+        output_feature_names (:obj:`dict`): Dictionary of features that the Fully Connected should output.
     """
 
-    def __init__(self, file=None, **kwargs):
-        """Initializes a Fully Connected Neural Network.
+    hidden_size: Sequence[int] = field(default_factory=lambda: [128])
+    output_feature_names: dict = None
 
-        Args:
-            file (:obj:`str`): Path to a saved FullyConnected instance. If `None`, then a new model is initialized.
-            x (:obj:`dict` of :obj:`dict` of :obj:`np.Array`): Batch of data. Required to define the input and output
-                dimensions, and thus for the weight initialization.
-            local_input_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary of local object
-                classes and feature names that should be taken as numerical inputs.
-            local_output_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`): Dictionary of local object
-                classes and feature names for which the model should produce a numerical output.
-            global_input_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`, optional): Dictionary of
-                global object classes and global feature names that should be taken as input of the model.
-            global_output_feature_names (:obj:`dict` of :obj:`list` of :obj:`str`, optional): Dictionary of
-                global object classes and global feature names that should be returned by the model.
-            hidden_dim (:obj:`list` of :obj:`int`, optional): List of hidden dimensions.
-            random_key (:obj:`jax.random.PRNGKey`, optional): Random key for parameters initialization
-        """
-        if file is not None:
-            self.load(file)
-        else:
-            self.x = kwargs.get('x')
-            self.n_obj = get_n_obj(self.x)
-
-            self.local_input_feature_names = kwargs.get('local_input_feature_names', {})
-            self.global_input_feature_names = kwargs.get('global_input_feature_names', {})
-            self.input_feature_names = self.local_input_feature_names | self.global_input_feature_names
-            self.in_dim = get_dim(self.input_feature_names, self.n_obj)
-
-            self.local_output_feature_names = kwargs.get('local_output_feature_names', {})
-            self.global_output_feature_names = kwargs.get('global_output_feature_names', {})
-            self.output_feature_names = self.local_output_feature_names | self.global_output_feature_names
-            self.out_dim = get_dim(self.output_feature_names, self.n_obj)
-
-            self.hidden_dimensions = kwargs.get('hidden_dim', [8])
-            self.dimensions = [self.in_dim, *self.hidden_dimensions, self.out_dim]
-            self.random_key = kwargs.get('random_key', random.PRNGKey(1))
-            self.params = initialize_params(self.random_key, self.dimensions)
-        self.forward_batch = vmap(self.forward_pass, in_axes=(None, 0), out_axes=0)
-
-    def save(self, filename):
-        """Saves a FC instance."""
-        file = open(filename, 'wb')
-        pickle.dump(self.n_obj, file)
-        pickle.dump(self.input_feature_names, file)
-        pickle.dump(self.in_dim, file)
-        pickle.dump(self.output_feature_names, file)
-        pickle.dump(self.out_dim, file)
-        pickle.dump(self.hidden_dimensions, file)
-        pickle.dump(self.dimensions, file)
-        pickle.dump(self.params, file)
-        file.close()
-
-    def load(self, filename):
-        """Reloads an FC instance."""
-        file = open(filename, 'rb')
-        self.n_obj = pickle.load(file)
-        self.input_feature_names = pickle.load(file)
-        self.in_dim = pickle.load(file)
-        self.output_feature_names = pickle.load(file)
-        self.out_dim = pickle.load(file)
-        self.hidden_dimensions = pickle.load(file)
-        self.dimensions = pickle.load(file)
-        self.params = pickle.load(file)
-        file.close()
-
-    def forward_pass(self, params, x):
-        """Forward pass through """
-        h = flatten_input(x, self.input_feature_names)
-        for w, b in params[:-1]:
-            h = jnn.leaky_relu(jnp.dot(w, h) + b)
-        final_w, final_b = params[-1]
-        h = jnp.dot(final_w, h) + final_b
-        return build_out_dict(h, self.output_feature_names, self.n_obj)
-
-    @partial(jit, static_argnums=(0,))
-    def apply(self, params, x):
-        """Jitted forward pass for a batch of data."""
-        return self.forward_batch(params, x)
+    @nn.compact
+    def __call__(self, x):
+        out_dim = build_output_dim(x, self.output_feature_names)
+        h = jnp.concatenate(tree_flatten(x)[0])
+        h = jnp.nan_to_num(h, nan=-1)
+        for i, d in enumerate(self.hidden_size):
+            h = nn.Dense(d)(h)
+            h = nn.tanh(h)
+        h = nn.Dense(out_dim)(h)
+        y = unflatten(h, x, self.output_feature_names)
+        return y

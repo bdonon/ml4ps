@@ -1,1 +1,2 @@
 from ml4ps.policy.continous_policy import ContinuousPolicy
+from ml4ps.policy.one_hot_delta_discrete import OneHotDeltaDiscrete

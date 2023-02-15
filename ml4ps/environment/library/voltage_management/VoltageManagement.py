@@ -6,6 +6,7 @@ from typing import Any, Dict, NamedTuple, Optional, Tuple
 import numpy as np
 from gymnasium import spaces
 from ml4ps.environment.ps_environment import PSBaseEnv
+from ml4ps import h2mg
 
 VoltageManagementState = namedtuple("VoltageSetPointManagementState",
                                     ["power_grid",
@@ -165,8 +166,8 @@ class VoltageManagement(PSBaseEnv, ABC):
         return False
 
     def is_stop(self, action) -> bool:
-        if "stop" in action:
-            return bool(action["stop"])
+        if "stop" in h2mg.global_features(action):
+            return bool(h2mg.global_features(action)["stop"])
         else:
             return True
 

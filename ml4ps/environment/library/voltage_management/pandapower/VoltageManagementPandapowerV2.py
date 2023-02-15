@@ -57,6 +57,12 @@ class VoltageManagementPandapowerV2(VoltageManagementPandapower):
         """Updates control variables with action."""
         max_step = self.backend.get_data_power_grid(
             state.power_grid, local_feature_names={"shunt": ["max_step"]})
-        ctrl_var["local_features"]["shunt"]["step"] = np.clip((ctrl_var["local_features"]["shunt"]["step"] + action["local_features"]["shunt"]["delta_step"] - 1),
-                                            0, max_step["local_features"]["shunt"]["max_step"]-1)
+        ctrl_var["local_features"]["shunt"]["step"] = np.clip((ctrl_var["local_features"]["shunt"]["step"] \
+                                                            + action["local_features"]["shunt"]["delta_step"] - 1),
+                                                            0,
+                                                            max_step["local_features"]["shunt"]["max_step"])
         return ctrl_var
+
+    def run_power_grid(self, power_grid):
+        return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0., init="result",
+                                           recycle={"bus_pq":False, "gen":True, "trafo": False})

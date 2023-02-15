@@ -58,11 +58,13 @@ class OneHotDeltaDiscrete(BasePolicy):
         return PostProcessor()
 
     def _check_valid_action(self, action):
-        return h2mg.map_to_features(self._check_valid_action_feature, [action])
+        pass
+        # return h2mg.map_to_features(self._check_valid_action_feature, [action])
 
     def _check_valid_action_feature(self, action_feature):
-        if jnp.any((action_feature != 0) * (action_feature!= 1) * (action_feature!= 2)):
-            raise ValueError
+        pass
+        # if jnp.any((action_feature != 0) * (action_feature!= 1) * (action_feature!= 2)):
+        #     raise ValueError
 
     def log_prob(self, params, observation, action):
         self._check_valid_action(action)
@@ -73,11 +75,11 @@ class OneHotDeltaDiscrete(BasePolicy):
     
     def categorical_log_prob(self, action, distrib_params):
         self._check_valid_action(action)
-        action_scores = self.action_to_scores(action)
-        flat_scores = flatten_dict(action_scores)
+        action_onehot = self.action_to_onehot(action)
+        flat_onehot = flatten_dict(action_onehot)
         flat_logits = flatten_dict(distrib_params)
         logits = jax.nn.log_softmax(flat_logits)
-        logits_selected= logits*flat_scores
+        logits_selected= logits*jax.lax.stop_gradient(flat_onehot)
         return jnp.sum(logits_selected)
 
     def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1) -> Tuple[spaces.Space, float]:
@@ -91,7 +93,7 @@ class OneHotDeltaDiscrete(BasePolicy):
         else:
             action = [self.sample_from_params(rng, distrib_params, deterministic=deterministic) for rng, _ in zip(jax.random.split(rng), range(n_action))]
             log_prob = [self.categorical_log_prob(a, distrib_params) for a in action]
-        info = h2mg.shallow_repr(h2mg.map_to_features(lambda x: np.asarray(np.mean(x)), [distrib_params]))
+        info = h2mg.shallow_repr(h2mg.map_to_features(lambda x: jnp.asarray(jnp.mean(x)), [distrib_params]))
         return action, log_prob, info
     
     def split_params(self, out_dict):
@@ -111,10 +113,10 @@ class OneHotDeltaDiscrete(BasePolicy):
         flat_res_action = jnp.zeros_like(flat_action)
         flat_res_action = flat_res_action.at[idx].set(1)
         res_action = unflatten_like(flat_res_action, distrib_params)
-        res_action = self.scores_to_action(res_action)
+        res_action = self.onehot_to_action(res_action)
         return res_action
     
-    def action_to_scores(self, action):
+    def action_to_onehot(self, action):
         res = h2mg.empty_h2mg()
         for local_key, obj_name, feat_name, value in h2mg.local_features_iterator(action):
             res[local_key][obj_name][self.minus_prefix+feat_name] = jnp.float32(value == 0)
@@ -127,13 +129,13 @@ class OneHotDeltaDiscrete(BasePolicy):
         res["global_features"]["stop"] = action["global_features"]["stop"]
         return res
     
-    def scores_to_action(self, scores):
-        minus, plus = self.split_params(scores)
-        res = h2mg.map_to_features(self.scores_to_action_feature, [minus, plus])
+    def onehot_to_action(self, onehot):
+        minus, plus = self.split_params(onehot)
+        res = h2mg.map_to_features(self.onehot_to_action_feature, [minus, plus])
         res["global_features"]["stop"] = minus["global_features"]["stop"] * plus["global_features"]["stop"]
         return res
     
-    def scores_to_action_feature(self, minus, plus):
+    def onehot_to_action_feature(self, minus, plus):
         res = jnp.ones_like(minus)
         res = jnp.where(minus == 1, 0, res)
         res = jnp.where(plus == 1, 2, res)

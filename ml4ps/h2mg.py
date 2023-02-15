@@ -2,7 +2,7 @@ from collections import defaultdict
 from enum import Enum
 from typing import Callable, Iterator, List, Dict
 
-import numpy as np
+import jax.numpy as jnp
 
 
 class H2MGCategories(Enum):
@@ -147,13 +147,13 @@ def empty_like(h2mg):
         if obj_name not in new_h2mg[key]:
             new_h2mg[key][obj_name] = {}
         if feat_name not in new_h2mg[key][obj_name]:
-            new_h2mg[key][obj_name][feat_name] = np.empty_like(value)
+            new_h2mg[key][obj_name][feat_name] = jnp.empty_like(jnp.array(value))
 
     for key, feat_name, value in global_features_iterator(h2mg):
         if key not in new_h2mg:
             new_h2mg[key] = {}
         if feat_name not in new_h2mg[key]:
-            new_h2mg[key][feat_name] = np.empty_like(value)
+            new_h2mg[key][feat_name] = jnp.empty_like(jnp.array(value))
 
     for key, obj_name, addr_name, value in local_addresses_iterator(h2mg):
         if key not in new_h2mg:
@@ -170,7 +170,7 @@ def empty_like(h2mg):
 
 def collate_h2mgs_features(h2mgs_list):
     def collate_arrays(*args):
-        return np.array(list(args))
+        return jnp.array(list(args))
     return map_to_features(collate_arrays, h2mgs_list)
 
 def h2mg_map(fn: Callable, args_h2mg: List=None, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False, check_compat: bool=False) -> Dict:
@@ -202,7 +202,7 @@ def map_to_all(fn: Callable, args_h2mg: List, check_compat=False):
 
 def collate_h2mgs(h2mgs_list):
     def collate_arrays(*args):
-        return np.array(list(args))
+        return jnp.array(list(args))
     return map_to_all(collate_arrays, h2mgs_list)
 
 def h2mg_apply(norm_fns_h2mg, target_h2mg):

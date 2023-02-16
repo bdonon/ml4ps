@@ -5,6 +5,7 @@ from gymnasium import spaces
 
 from ..VoltageManagement import VoltageManagementState
 from .VoltageManagementPandapower import VoltageManagementPandapower
+from ml4ps.reinforcement import H2MGSpace
 
 
 class VoltageManagementPandapowerV1(VoltageManagementPandapower):
@@ -41,7 +42,7 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
         self.vhigh = 1.2
         self.ctrl_var_names = {"gen": ["vm_pu"],
                                "ext_grid": ["vm_pu"]}
-        self.action_space = spaces.Dict({"local_features":
+        self.action_space = H2MGSpace({"local_features":
             spaces.Dict({"gen":      spaces.Dict({"vm_pu":
                                       spaces.Box(low=self.vlow,
                                                  high=self.vhigh,

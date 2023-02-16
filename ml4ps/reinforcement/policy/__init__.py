@@ -1,0 +1,3 @@
+from ml4ps.reinforcement.policy.continous_policy import ContinuousPolicy
+from ml4ps.reinforcement.policy.one_hot_delta_discrete import OneHotDeltaDiscrete
+from ml4ps.reinforcement.policy.factorized_delta_discrete import FactorizedDeltaDiscrete

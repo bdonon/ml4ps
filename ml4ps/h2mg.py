@@ -1,14 +1,11 @@
 from collections import defaultdict
 from enum import Enum
-from typing import Callable, Iterator, List, Dict
+from typing import Callable, Iterator, List, Dict, Any
 
 import jax.numpy as jnp
 
 from gymnasium import spaces
 
-class H2MGSpace(spaces.Dict):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
     
 class H2MG(dict):
 
@@ -30,6 +27,129 @@ class H2MG(dict):
     @property
     def all_addresses(self):
         return self.get(H2MGCategories.ALL_ADDRESSES.value, {})
+    
+    @local_features.setter
+    def local_features(self, value):
+        self[H2MGCategories.LOCAL_FEATURES.value] = value
+    
+    @global_features.setter
+    def global_features(self, value):
+        self[H2MGCategories.GLOBAL_FEATURES.value] = value
+
+    @local_addresses.setter
+    def local_addresses(self, value):
+        self[H2MGCategories.LOCAL_ADDRESSES.value] = value
+
+    @all_addresses.setter
+    def all_addresses(self, value):
+        self[H2MGCategories.LOCAL_ADDRESSES.value] = value
+    
+    def __add__(self, other):
+        if isinstance(other, H2MG):
+            return map_to_features(lambda a, b: a + b, [self, other])
+        else:
+            return map_to_features(lambda a: a + other, [self])
+    
+    def __sub__(self, other):
+        if isinstance(other, H2MG):
+            return map_to_features(lambda a, b: a - b, [self, other])
+        else:
+            return map_to_features(lambda a: a - other, [self])
+    
+    def __mul__(self, other):
+        if isinstance(other, H2MG):
+            return map_to_features(lambda a, b: a * b, [self, other])
+        else:
+            return map_to_features(lambda a: a * other, [self])
+    
+    def __div__(self, other):
+        if isinstance(other, H2MG):
+            return map_to_features(lambda a, b: a / b, [self, other])
+        else:
+            return map_to_features(lambda a: a / other, [self])
+    
+    def __pow__(self, exponent: int):
+        if isinstance(exponent, H2MG):
+            return map_to_features(lambda a, b: a / b, [self, exponent])
+        return map_to_features(lambda a: a ** exponent, [self])
+    
+    def log(self):
+        return map_to_features(jnp.log, [self])
+    
+    def exp(self):
+        return map_to_features(jnp.exp, [self])
+        
+    def __repr__(self) -> str:
+        return super().__repr__()
+    
+    def __str__(self) -> str:
+        return str(shallow_repr(self))
+    
+    def __getitem__(self, __key: Any) -> Any:
+        if isinstance(__key, str):
+            return super().__getitem__(__key)
+        return map_to_features(lambda a: a.__getitem__(__key), [self])
+    
+    def apply(self, fn: Callable[[Dict], Dict]):
+        return map_to_features(fn, [self])
+    
+    def apply_h2mg_fn(self, h2mg_fn: Dict):
+        return h2mg_apply(h2mg_fn, self)
+    
+    def __iter__(self) -> Iterator:
+        return features_iterator(self)
+    
+    def sum(self):
+        return sum(features_iterator(self.apply(jnp.sum)))
+
+    def nansum(self):
+        return sum(features_iterator(self.apply(jnp.nansum)))
+    
+    def combine(self, other):
+        return combine_space(self, other)
+    
+    def plot(self):
+        raise NotImplementedError
+    
+    def shallow_repr(self):
+        return shallow_repr(self)
+    
+    @property
+    def local_features_iterator(self) -> Iterator:
+        return local_features_iterator(self)
+    @property
+    def local_addresses_iterator(self) -> Iterator:
+        return local_addresses_iterator(self)
+
+    @property
+    def global_features_iterator(self) -> Iterator:
+        return global_features_iterator(self)
+
+    @property
+    def all_addresses_iterator(self) -> Iterator:
+        return all_addresses_iterator(self)
+    
+
+def combine_space(a, b):
+    x = empty_h2mg()
+    for local_key, obj_name, feat_name, value in local_features_iterator(a):
+        x[local_key][obj_name][feat_name] = value
+    for local_key, obj_name, feat_name, value in local_features_iterator(b):
+        x[local_key][obj_name][feat_name] = value
+
+    for global_key,  feat_name, value in global_features_iterator(a):
+        x[global_key][feat_name] = value
+    for global_key,  feat_name, value in global_features_iterator(b):
+        x[global_key][feat_name] = value
+
+    for local_key, obj_name, addr_name, value in local_addresses_iterator(a):
+        x[local_key][obj_name][addr_name] = value
+    for local_key, obj_name, addr_name, value in local_addresses_iterator(b):
+        x[local_key][obj_name][addr_name] = value
+
+    for all_addr_key, value in all_addresses_iterator(a):
+        x[all_addr_key] = value
+    return H2MG(x)
 
 class H2MGCategories(Enum):
 
@@ -218,7 +338,7 @@ def h2mg_map(fn: Callable, args_h2mg: List=None, local_features: bool=True, glob
         for key, value in all_addresses_iterator(results):
             results[key] = fn(*list(map(h2mg_slicer(key, None, None), args_h2mg)))
 
-    return results
+    return H2MG(results)
 
 def map_to_features(fn, args_h2mg, check_compat=False):
     return h2mg_map(fn=fn, args_h2mg=args_h2mg, check_compat=check_compat)

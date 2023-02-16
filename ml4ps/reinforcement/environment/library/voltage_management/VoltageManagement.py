@@ -6,7 +6,7 @@ from typing import Any, Dict, NamedTuple, Optional, Tuple
 import numpy as np
 from gymnasium import spaces
 from ml4ps.reinforcement.environment.ps_environment import PSBaseEnv
-from ml4ps import h2mg
+from ml4ps.reinforcement import H2MGSpace
 
 VoltageManagementState = namedtuple("VoltageSetPointManagementState",
                                     ["power_grid",
@@ -96,7 +96,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         feat_space = spaces.Dict({obj_name: spaces.Dict({feat_name: spaces.Box(-np.inf,
                                                                                np.inf,
                                                                                shape=(
-                                                                                   max_n_obj[obj_name],),
+                                                                                   max_n_obj[obj_name],24),
                                                                                dtype=np.float64)
                                                         for feat_name in obj})
                                  for obj_name, obj in obs_feature_names.items() if obj_name in max_n_obj})
@@ -104,14 +104,14 @@ class VoltageManagement(PSBaseEnv, ABC):
         addr_space = spaces.Dict({obj_name: spaces.Dict({addr_name: spaces.Box(-np.inf,
                                                                                np.inf,
                                                                                shape=(
-                                                                                   max_n_obj[obj_name],),
+                                                                                   max_n_obj[obj_name],24),
                                                                                dtype=np.float64)
                                                         for addr_name in obj})
                                  for obj_name, obj in address_names.items()if obj_name in max_n_obj})
 
         all_addr_space = spaces.Box(low=-np.inf, high=np.inf, shape=( max_n_obj["max_address"],), dtype=np.int64)
 
-        return h2mg.H2MGSpace({"local_addresses": addr_space, "local_features": feat_space, "all_addresses": all_addr_space})
+        return H2MGSpace({"local_addresses": addr_space, "local_features": feat_space, "all_addresses": all_addr_space})
 
     def random_power_grid_path(self) -> str:
         """Returns the path of a random power grid in self.data_dir"""

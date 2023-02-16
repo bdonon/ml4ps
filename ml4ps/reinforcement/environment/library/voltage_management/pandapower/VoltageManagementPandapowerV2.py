@@ -6,7 +6,7 @@ from gymnasium import spaces
 from ..VoltageManagement import VoltageManagementState
 from .VoltageManagementPandapower import VoltageManagementPandapower
 
-from ml4ps import h2mg
+from ml4ps.reinforcement import H2MGSpace
 
 # TODO: How to use delta and instantaneous action forlulation with the same environment.
 class VoltageManagementPandapowerV2(VoltageManagementPandapower):
@@ -42,7 +42,7 @@ class VoltageManagementPandapowerV2(VoltageManagementPandapower):
     def __init__(self, data_dir, n_obj=None, max_steps=None, cost_hparams=None):
         super().__init__(data_dir, n_obj=n_obj, max_steps=max_steps, cost_hparams=cost_hparams)
         self.ctrl_var_names = {"shunt": ["step"]}
-        self.action_space = spaces.Dict({"local_features": spaces.Dict(
+        self.action_space = H2MGSpace({"local_features": spaces.Dict(
             {"shunt": spaces.Dict(
                 {"delta_step": spaces.MultiDiscrete(nvec=np.full(shape=(self.n_obj["shunt"],), fill_value=3))})
              }),

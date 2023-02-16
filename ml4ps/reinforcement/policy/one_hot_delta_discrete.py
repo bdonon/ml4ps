@@ -8,7 +8,7 @@ import ml4ps
 import numpy as np
 from gymnasium import spaces
 from ml4ps import Normalizer, h2mg
-from ml4ps.policy.base import BasePolicy
+from ml4ps.reinforcement.policy.base import BasePolicy
 
 from .utils import (add_prefix, combine_feature_names, flatten_dict,
                     slice_with_prefix, space_to_feature_names, unflatten_like)

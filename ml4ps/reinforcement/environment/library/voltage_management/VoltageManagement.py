@@ -5,7 +5,7 @@ from typing import Any, Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
 from gymnasium import spaces
-from ml4ps.environment.ps_environment import PSBaseEnv
+from ml4ps.reinforcement.environment.ps_environment import PSBaseEnv
 from ml4ps import h2mg
 
 VoltageManagementState = namedtuple("VoltageSetPointManagementState",

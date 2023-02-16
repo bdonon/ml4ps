@@ -9,7 +9,7 @@ import ml4ps
 import numpy as np
 from gymnasium import spaces
 from ml4ps import Normalizer, h2mg
-from ml4ps.policy.base import BasePolicy
+from ml4ps.reinforcement.policy.base import BasePolicy
 
 
 def add_prefix(x, prefix):

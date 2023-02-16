@@ -3,14 +3,28 @@ from enum import Enum
 from typing import Callable, Iterator, List, Dict, Any
 
 import jax.numpy as jnp
+import jax
+from jax.tree_util import register_pytree_node_class
 
 from gymnasium import spaces
+from functools import partial
 
-    
+
+
+@register_pytree_node_class
 class H2MG(dict):
 
     def __init__(self, data):
         super().__init__(data)
+    
+    def tree_flatten(self):
+        children = self.values()
+        aux = self.keys()
+        return (children, aux)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return H2MG({k:f for k, f in zip(aux_data, children)})
     
     @property
     def local_features(self):
@@ -62,6 +76,12 @@ class H2MG(dict):
         else:
             return map_to_features(lambda a: a * other, [self])
     
+    def __rmul__(self, other):
+        if isinstance(other, H2MG):
+            return map_to_features(lambda a, b: a * b, [self, other])
+        else:
+            return map_to_features(lambda a: a * other, [self])
+    
     def __truediv__(self, other):
         if isinstance(other, H2MG):
             return map_to_features(lambda a, b: a / b, [self, other])
@@ -72,6 +92,9 @@ class H2MG(dict):
         if isinstance(exponent, H2MG):
             return map_to_features(lambda a, b: a / b, [self, exponent])
         return map_to_features(lambda a: a ** exponent, [self])
+    
+    def __neg__(self):
+        return self*(-1)
     
     def log(self):
         return map_to_features(jnp.log, [self])
@@ -130,8 +153,34 @@ class H2MG(dict):
         return all_addresses_iterator(self)
     
     @property
+    def features(self) -> Iterator:
+        return features_iterator(self)
+    
+    @property
     def shape(self):
         return map_to_features(lambda a: a.shape, [self])
+    
+    def flatten(self):
+        flat_dim = sum(v.size for v in self.features)
+        flat_action = jnp.zeros(shape=flat_dim)
+        i=0
+        for v in self.features:
+            flat_action = flat_action.at[i:i+v.size].set(v.flatten())
+            i+=v.size
+        return flat_action
+
+    def unflatten_like(self, x):
+        res = empty_like(self)
+        i = 0
+        for key, obj_name, feat_name, value in self.local_features_iterator:
+            res[key][obj_name][feat_name] = x[i:i+value.size].reshape(value.shape)
+            i+=value.size
+        for key, feat_name, value in self.global_features_iterator:
+            res[key][feat_name] = x[i:i+value.size].reshape(value.shape)
+            i+=value.size
+        if i != x.size:
+            raise ValueError(f"{i}!= {x.size}")
+        return res
     
 
 def combine_space(a, b):
@@ -316,7 +365,7 @@ def empty_like(h2mg):
     for key, value in all_addresses_iterator(h2mg):
         new_h2mg[key] = None #value
 
-    return new_h2mg
+    return H2MG(new_h2mg)
 
 def collate_h2mgs_features(h2mgs_list):
     def collate_arrays(*args):
@@ -373,3 +422,57 @@ def shallow_repr(h2mg, local_features: bool=True, global_features: bool=True, lo
         for key, value in all_addresses_iterator(h2mg):
             results[key] = value
     return results
+
+
+def uniform_like(h2mg: H2MG, rng):
+    pass
+
+def normal_like(rng, h2mg: H2MG) -> H2MG:
+    flat_h2mg = h2mg.flatten()
+    x = jax.random.normal(rng, flat_h2mg.shape)
+    return h2mg.unflatten_like(x)
+
+def normal_logprob(x: H2MG, mu: H2MG, log_sigma: H2MG) -> float:
+    return (- log_sigma - 0.5 * (-2 * log_sigma).exp() * (jax.lax.stop_gradient(x) - mu)**2).nansum()
+
+def categorical(rng, logits: H2MG) -> H2MG:
+    flat_logits = logits.flatten()
+    idx = jax.random.categorical(key=rng, logits=flat_logits)
+    flat_res_action = jnp.zeros_like(flat_logits)
+    flat_res_action = flat_res_action.at[idx].set(1)
+    res_action = logits.unflatten_like(flat_res_action)
+    return res_action
+    # res_action = self.onehot_to_action(res_action)
+
+def categorical_logprob(x_onehot: H2MG, logits: H2MG) -> float:
+    flat_onehot = x_onehot.flatten()
+    flat_logits = logits.flatten()
+    logits = jax.nn.log_softmax(flat_logits)
+    logits_selected= logits*jax.lax.stop_gradient(flat_onehot)
+    return jnp.nansum(logits_selected)
+
+def categorical_per_feature(rng, logits:H2MG) -> H2MG:
+    # TODO: check addr
+    flat_tree, tree_strcut = jax.tree_util.tree_flatten(logits)
+    f_idx = []
+    for v in flat_tree:
+        rng, subkey = jax.random.split(rng, 2)
+        f_idx.append(jax.random.categorical(key=subkey, logits=v))
+    # flat_idx = map(jax.random.categorical, list(zip(flat_tree, jax.random.split(rng, len(flat_tree))))) # categorical axis=-1==1
+    return jax.tree_util.tree_unflatten(tree_strcut, f_idx)
+
+def categorical_per_feature_logprob(x_idx: H2MG, logits: H2MG) -> float:
+    logits= logits.apply(jax.nn.log_softmax)# jax.nn.log_softmax(logits, axis=-1)
+    # selected_logits = map_to_features(lambda logits, x_i: jnp.take_along_axis(logits, jnp.expand_dims(x_idx,1), axis=-1), logits, x_idx)
+    # selected_logits = jnp.take_along_axis(logits, jnp.expand_dims(x_idx,1), axis=-1)
+    flat_logits_tree, tree__logits_strcut = jax.tree_util.tree_flatten(logits)
+    flat_x_tree, tree_x_strcut = jax.tree_util.tree_flatten(x_idx)
+    res = []
+    for l, x_i in zip(flat_logits_tree, flat_x_tree):
+        tmp = jnp.take_along_axis(l, jnp.expand_dims(x_i,1), axis=-1)
+        res.append(tmp)
+
+    selected_logits = jax.tree_util.tree_unflatten(tree__logits_strcut, res)
+
+    return selected_logits.nansum()
+

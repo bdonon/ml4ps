@@ -4,6 +4,32 @@ from typing import Callable, Iterator, List, Dict
 
 import jax.numpy as jnp
 
+from gymnasium import spaces
+
+class H2MGSpace(spaces.Dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+class H2MG(dict):
+
+    def __init__(self, data):
+        super().__init__(data)
+    
+    @property
+    def local_features(self):
+        return self.get(H2MGCategories.LOCAL_FEATURES.value, {})
+    
+    @property
+    def global_features(self):
+        return self.get(H2MGCategories.GLOBAL_FEATURES.value, {})
+    
+    @property
+    def local_addresses(self):
+        return self.get(H2MGCategories.LOCAL_ADDRESSES.value, {})
+    
+    @property
+    def all_addresses(self):
+        return self.get(H2MGCategories.ALL_ADDRESSES.value, {})
 
 class H2MGCategories(Enum):
 

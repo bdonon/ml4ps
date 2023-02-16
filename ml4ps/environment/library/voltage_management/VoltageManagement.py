@@ -111,7 +111,7 @@ class VoltageManagement(PSBaseEnv, ABC):
 
         all_addr_space = spaces.Box(low=-np.inf, high=np.inf, shape=( max_n_obj["max_address"],), dtype=np.int64)
 
-        return spaces.Dict({"local_addresses": addr_space, "local_features": feat_space, "all_addresses": all_addr_space})
+        return h2mg.H2MGSpace({"local_addresses": addr_space, "local_features": feat_space, "all_addresses": all_addr_space})
 
     def random_power_grid_path(self) -> str:
         """Returns the path of a random power grid in self.data_dir"""
@@ -188,8 +188,8 @@ class VoltageManagement(PSBaseEnv, ABC):
 
     def get_observation(self, state) -> Dict:
         """Return observation of state wrt self.observation_space."""
-        return self.backend.get_data_power_grid(state.power_grid, local_feature_names=self.obs_feature_names,
-                                                              local_address_names=self.address_names)
+        return h2mg.H2MG(self.backend.get_data_power_grid(state.power_grid, local_feature_names=self.obs_feature_names,
+                                                              local_address_names=self.address_names))
 
     @property
     def default_cost_hparams(self) -> Dict:

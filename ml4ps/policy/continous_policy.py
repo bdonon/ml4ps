@@ -215,6 +215,7 @@ class ContinuousPolicy(BasePolicy):
         mu, log_sigma = self.split_params(distrib_params)
         if deterministic:
             return mu
+            # TODO= update epsilon
         return h2mg.map_to_features(lambda mu, log_sigma: mu + jax.random.normal(key=rng, shape=log_sigma.shape) * jnp.exp(log_sigma), [mu, log_sigma])
 
     def build_normalizer(self, env, normalizer_args=None, data_dir=None):

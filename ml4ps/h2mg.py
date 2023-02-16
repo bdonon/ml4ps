@@ -62,7 +62,7 @@ class H2MG(dict):
         else:
             return map_to_features(lambda a: a * other, [self])
     
-    def __div__(self, other):
+    def __truediv__(self, other):
         if isinstance(other, H2MG):
             return map_to_features(lambda a, b: a / b, [self, other])
         else:
@@ -128,6 +128,10 @@ class H2MG(dict):
     @property
     def all_addresses_iterator(self) -> Iterator:
         return all_addresses_iterator(self)
+    
+    @property
+    def shape(self):
+        return map_to_features(lambda a: a.shape, [self])
     
 
 def combine_space(a, b):
@@ -202,7 +206,7 @@ def global_feature_names_iterator(feature_names):
 
 def local_features_iterator(h2mg) -> Iterator:
     local_key = H2MGCategories.LOCAL_FEATURES.value
-    if local_key in h2mg:
+    if h2mg.get(local_key, None) is not None:
         for obj_name in h2mg[local_key]:
             for feat_name, value in h2mg[local_key][obj_name].items():
                 yield local_key, obj_name, feat_name, value
@@ -210,14 +214,14 @@ def local_features_iterator(h2mg) -> Iterator:
 
 def global_features_iterator(h2mg) -> Iterator:
     global_key = H2MGCategories.GLOBAL_FEATURES.value
-    if H2MGCategories.GLOBAL_FEATURES.value in h2mg:
+    if h2mg.get(global_key, None) is not None:
         for feat_name, value in h2mg[global_key].items():
             yield global_key,  feat_name, value
 
 
 def local_addresses_iterator(h2mg) -> Iterator:
     local_key = H2MGCategories.LOCAL_ADDRESSES.value
-    if local_key in h2mg:
+    if h2mg.get(local_key, None) is not None:
         for obj_name in h2mg[local_key]:
             for addr_name, value in h2mg[local_key][obj_name].items():
                 yield local_key, obj_name, addr_name, value
@@ -225,7 +229,7 @@ def local_addresses_iterator(h2mg) -> Iterator:
 
 def all_addresses_iterator(h2mg) -> Iterator:
     all_addr_key = H2MGCategories.ALL_ADDRESSES.value
-    if all_addr_key in h2mg:
+    if h2mg.get(all_addr_key, None) is not None:
         yield all_addr_key, h2mg[all_addr_key]
 
 
@@ -293,13 +297,13 @@ def empty_like(h2mg):
         if obj_name not in new_h2mg[key]:
             new_h2mg[key][obj_name] = {}
         if feat_name not in new_h2mg[key][obj_name]:
-            new_h2mg[key][obj_name][feat_name] = jnp.empty_like(jnp.array(value))
+            new_h2mg[key][obj_name][feat_name] = None #jnp.empty_like(jnp.array(value))
 
     for key, feat_name, value in global_features_iterator(h2mg):
         if key not in new_h2mg:
             new_h2mg[key] = {}
         if feat_name not in new_h2mg[key]:
-            new_h2mg[key][feat_name] = jnp.empty_like(jnp.array(value))
+            new_h2mg[key][feat_name] = None # jnp.empty_like(jnp.array(value))
 
     for key, obj_name, addr_name, value in local_addresses_iterator(h2mg):
         if key not in new_h2mg:
@@ -307,10 +311,10 @@ def empty_like(h2mg):
         if obj_name not in new_h2mg[key]:
             new_h2mg[key][obj_name] = {}
         if addr_name not in new_h2mg[key][obj_name]:
-            new_h2mg[key][obj_name][addr_name] = value
+            new_h2mg[key][obj_name][addr_name] = None # value
 
     for key, value in all_addresses_iterator(h2mg):
-        new_h2mg[key] = value
+        new_h2mg[key] = None #value
 
     return new_h2mg
 
@@ -319,7 +323,7 @@ def collate_h2mgs_features(h2mgs_list):
         return jnp.array(list(args))
     return map_to_features(collate_arrays, h2mgs_list)
 
-def h2mg_map(fn: Callable, args_h2mg: List=None, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False, check_compat: bool=False) -> Dict:
+def h2mg_map(fn: Callable, args_h2mg: List=None, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False, check_compat: bool=False, in_place=False) -> Dict:
     if not args_h2mg:
         raise ValueError
     if check_compat and not all_compatible(args_h2mg):
@@ -340,10 +344,10 @@ def h2mg_map(fn: Callable, args_h2mg: List=None, local_features: bool=True, glob
 
     return H2MG(results)
 
-def map_to_features(fn, args_h2mg, check_compat=False):
-    return h2mg_map(fn=fn, args_h2mg=args_h2mg, check_compat=check_compat)
+def map_to_features(fn, args_h2mg, check_compat=False, in_place=False) -> H2MG:
+    return h2mg_map(fn=fn, args_h2mg=args_h2mg, check_compat=check_compat, in_place=in_place)
 
-def map_to_all(fn: Callable, args_h2mg: List, check_compat=False):
+def map_to_all(fn: Callable, args_h2mg: List, check_compat=False) -> H2MG:
     return h2mg_map(fn, args_h2mg=args_h2mg, local_features=True, global_features=True, local_addresses=True, all_addresses=True, check_compat=check_compat)
 
 def collate_h2mgs(h2mgs_list):

@@ -97,13 +97,13 @@ class H2MG(dict):
     
     def exp(self) -> 'H2MG':
         return map_to_features(jnp.exp, [self])
-        
+
     def __repr__(self) -> str:
         return super().__repr__()
-    
+
     def __str__(self) -> str:
         return str(shallow_repr(self))
-    
+
     def __getitem__(self, __key: Any) -> Any:
         if isinstance(__key, str):
             return super().__getitem__(__key)
@@ -157,9 +157,9 @@ class H2MG(dict):
     def size(self) -> 'H2MG':
         return map_to_features(lambda a: a.size, [self])
     
-    def __len__(self) -> int:
-        return len(self.features)
-    
+    # def __len__(self) -> int:
+    #     return len(self.features)
+
     def flatten(self) -> jnp.ndarray:
         flat_dim = sum(v.size for v in self.features)
         flat_action = jnp.zeros(shape=flat_dim)

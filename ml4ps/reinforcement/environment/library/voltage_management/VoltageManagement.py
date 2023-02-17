@@ -7,6 +7,8 @@ import numpy as np
 from gymnasium import spaces
 from ml4ps.reinforcement.environment.ps_environment import PSBaseEnv
 from ml4ps.reinforcement import H2MGSpace
+from ml4ps.h2mg import H2MG
+from ml4ps import h2mg
 
 VoltageManagementState = namedtuple("VoltageSetPointManagementState",
                                     ["power_grid",
@@ -96,7 +98,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         feat_space = spaces.Dict({obj_name: spaces.Dict({feat_name: spaces.Box(-np.inf,
                                                                                np.inf,
                                                                                shape=(
-                                                                                   max_n_obj[obj_name],24),
+                                                                                   max_n_obj[obj_name],),
                                                                                dtype=np.float64)
                                                         for feat_name in obj})
                                  for obj_name, obj in obs_feature_names.items() if obj_name in max_n_obj})
@@ -104,7 +106,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         addr_space = spaces.Dict({obj_name: spaces.Dict({addr_name: spaces.Box(-np.inf,
                                                                                np.inf,
                                                                                shape=(
-                                                                                   max_n_obj[obj_name],24),
+                                                                                   max_n_obj[obj_name],),
                                                                                dtype=np.float64)
                                                         for addr_name in obj})
                                  for obj_name, obj in address_names.items()if obj_name in max_n_obj})

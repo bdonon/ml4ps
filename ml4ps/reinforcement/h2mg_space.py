@@ -137,7 +137,6 @@ class H2MGSpace(spaces.Dict):
 
 @gym.vector.utils.spaces.batch_space.register(H2MGSpace)
 def _my_batch(space, n=1):
-        print('batching')
         return H2MGSpace(
             OrderedDict(
                 [
@@ -149,7 +148,6 @@ def _my_batch(space, n=1):
         )
 @gym.vector.utils.shared_memory.create_shared_memory.register(H2MGSpace)
 def _create_dict_shared_memory(space, n=1, ctx=None):
-    print("Creating shared memory")
     return H2MG(
         [
             (key, gym.vector.utils.shared_memory.create_shared_memory(subspace, n=n, ctx=ctx))
@@ -159,7 +157,6 @@ def _create_dict_shared_memory(space, n=1, ctx=None):
 
 @gym.vector.utils.shared_memory.read_from_shared_memory.register(H2MGSpace)
 def _my_read(space, shared_memory, n: int = 1):
-        print("read_from_shared_memory h2mg")
         return H2MG(
         [
             (key, gym.vector.utils.shared_memory.read_from_shared_memory(subspace, shared_memory[key], n=n))

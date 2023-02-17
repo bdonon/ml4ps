@@ -190,7 +190,7 @@ class VoltageManagement(PSBaseEnv, ABC):
 
     def get_observation(self, state) -> Dict:
         """Return observation of state wrt self.observation_space."""
-        return h2mg.H2MG(self.backend.get_data_power_grid(state.power_grid, local_feature_names=self.obs_feature_names,
+        return H2MG(self.backend.get_data_power_grid(state.power_grid, local_feature_names=self.obs_feature_names,
                                                               local_address_names=self.address_names))
 
     @property

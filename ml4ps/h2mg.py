@@ -343,6 +343,26 @@ def compatible(h2mg, h2mg_other):
         return False
     return True
 
+def h2mg_apply(fns_h2mg: H2MG, target_h2mg: H2MG, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False) -> H2MG:
+    if local_features:
+        for key, obj_name, feat_name, value in local_features_iterator(target_h2mg):
+            fn = fns_h2mg.get(key, {}).get(obj_name, {}).get(feat_name, lambda x: x)
+            target_h2mg[key][obj_name][feat_name] = fn(value)
+    if global_features:
+        for key, feat_name, value in global_features_iterator(target_h2mg):
+            fn = fns_h2mg.get(key, {}).get(feat_name, lambda x: x)
+            target_h2mg[key][feat_name] = fn(value)
+    if local_addresses:
+        for key, obj_name, feat_name, value in local_addresses_iterator(target_h2mg):
+            fn = fns_h2mg.get(key, {}).get(obj_name, {}).get(feat_name, lambda x: x)
+            target_h2mg[key][obj_name][feat_name] = fn(value)
+    if all_addresses:
+        for key, value in all_addresses_iterator(target_h2mg):
+            fn = fns_h2mg.get(key, lambda x: x)
+            target_h2mg[key] = fn(value)
+
+    return H2MG(target_h2mg)
+
 
 def all_compatible(*h2mgs):
     if len(h2mgs) < 2:
@@ -418,9 +438,6 @@ def collate_h2mgs(h2mgs_list):
     def collate_arrays(*args):
         return jnp.array(list(args))
     return map_to_all(collate_arrays, h2mgs_list)
-
-def h2mg_apply(norm_fns_h2mg, target_h2mg):
-    return map_to_features(lambda feature, norm_fn: norm_fn(feature), args_h2mg=[target_h2mg, norm_fns_h2mg])
 
 def shallow_repr(h2mg, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False):
     results = {}

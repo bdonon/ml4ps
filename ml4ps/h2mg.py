@@ -100,6 +100,15 @@ class H2MG(dict):
     def exp(self) -> 'H2MG':
         return map_to_features(jnp.exp, [self])
 
+    def maximum(self, other):
+        if isinstance(other, H2MG):
+            return map_to_features(lambda a, b: jnp.maximum(a, b), [self, other])
+        else:
+            return map_to_features(lambda a: jnp.maximum(a, other), [self])
+
+    def stack(self, other):
+        return map_to_features(lambda a, b: jnp.stack([a,b], axis=-1), [self, other])
+
     def __repr__(self) -> str:
         return super().__repr__()
 
@@ -164,8 +173,7 @@ class H2MG(dict):
 
     def extract_like(self, other: 'H2MG') -> 'H2MG':
         build_dict = dict
-        if output_h2mg is None:
-            output_h2mg = dict()
+        output_h2mg = dict()
         for local_key, obj_name, feat_name, value in other.local_features_iterator:
             if local_key not in output_h2mg:
                 output_h2mg[local_key] = build_dict()
@@ -517,19 +525,22 @@ def normal_like(rng, h2mg: H2MG) -> H2MG:
 def normal_logprob(x: H2MG, mu: H2MG, log_sigma: H2MG) -> float:
     return (- log_sigma - 0.5 * (-2 * log_sigma).exp() * (jax.lax.stop_gradient(x) - mu)**2).nansum()
 
-def categorical(rng, logits: H2MG) -> H2MG:
+def categorical(rng, logits: H2MG, deterministic=False) -> H2MG:
     flat_logits = logits.flatten()
-    idx = jax.random.categorical(key=rng, logits=flat_logits)
+    if deterministic:
+        idx = jnp.argmax(jnp.nan_to_num(flat_logits, nan=-jnp.inf))
+    else:
+        idx = jax.random.categorical(key=rng, logits=jnp.nan_to_num(flat_logits, nan=-jnp.inf))
     flat_res_action = jnp.zeros_like(flat_logits)
-    flat_res_action = flat_res_action.at[idx].set(1)
+    flat_res_action = flat_res_action.at[idx].set(1) + flat_logits * 0.
     res_action = logits.unflatten_like(flat_res_action)
     return res_action
 
 def categorical_logprob(x_onehot: H2MG, logits: H2MG) -> float:
-    flat_onehot = x_onehot.flatten()
-    flat_logits = logits.flatten()
-    logits = jax.nn.log_softmax(flat_logits)
-    logits_selected= logits*jax.lax.stop_gradient(flat_onehot)
+    flat_onehot = jax.lax.stop_gradient(x_onehot.flatten())
+    flat_logits = jnp.nan_to_num(logits.flatten(), nan=-jnp.inf)
+    logits = jnp.nan_to_num(jax.nn.log_softmax(flat_logits), neginf=0.)
+    logits_selected = jnp.where(jnp.isnan(flat_onehot), jnp.nan, logits * jnp.nan_to_num(flat_onehot, nan=0.))
     return jnp.nansum(logits_selected)
 
 def categorical_per_feature(rng, logits:H2MG) -> H2MG:

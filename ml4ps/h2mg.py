@@ -545,12 +545,14 @@ def categorical_logprob(x_onehot: H2MG, logits: H2MG) -> float:
 
 def categorical_per_feature(rng, logits:H2MG, deterministic=False) -> H2MG:
     rng_h2mg = rng_like(rng, logits)
+    logits_clean = logits.apply(lambda x: jnp.nan_to_num(x, nan=-jnp.inf))
     if deterministic:
-        return map_to_features(jnp.argmax, [logits])
-    return map_to_features(jax.random.categorical, [rng_h2mg, logits])
+        return map_to_features(jnp.argmax, [logits_clean])
+    r = map_to_features(jax.random.categorical, [rng_h2mg, logits_clean])
+    return r + logits[:, 0] * 0
 
 def categorical_per_feature_logprob(x_idx: H2MG, logits: H2MG) -> float:
-    logits= logits.apply(jax.nn.log_softmax)
-    selected_logits = map_to_features(lambda logits, x_i: jnp.take_along_axis(logits, jnp.expand_dims(x_i,1), axis=-1), [logits, x_idx])
+    logits= (logits).apply(jax.nn.log_softmax)
+    selected_logits = map_to_features(lambda logits, x_i: jnp.take_along_axis(jnp.nan_to_num(logits, nan=0), jnp.expand_dims(x_i.astype(jnp.int32),1), axis=-1), [logits, x_idx])
     return selected_logits.nansum()
 

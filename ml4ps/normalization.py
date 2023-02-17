@@ -97,12 +97,12 @@ class Normalizer:
 
     def __call__(self, x):
         """Normalizes input data."""
-        return h2mg_apply(self.functions, x)
+        return x.apply_h2mg_fn(self.functions)
 
 
     def inverse(self, x):
         """De-normalizes input data by applying the inverse of normalization functions."""
-        return h2mg_apply(self.inverse_functions, x)
+        return x.apply_h2mg_fn(self.functions)
 
 
 class NormalizationFunction:

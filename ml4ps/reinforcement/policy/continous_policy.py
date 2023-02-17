@@ -61,8 +61,7 @@ class ContinuousPolicy(BasePolicy):
         return h2mg.normal_logprob(action, mu_norm, log_sigma_norm)
 
 
-    def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1) -> tuple[
-        list[Any] | Any, float | list[float], Any]:
+    def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1):
         """Sample an action and return it together with the corresponding log probability."""
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)

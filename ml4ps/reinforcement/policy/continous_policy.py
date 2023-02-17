@@ -98,8 +98,8 @@ def space_to_feature_names(space: spaces.Space):
         feat_names |= {"local_features": {
             k: list(v) for k, v in space["local_features"].items()}}
     if "global_features" in list(space.keys()):
-        feat_names |= {"global_features": {
-            list(k) for k, _ in space["global_features"].items()}}
+        feat_names |= {"global_features": 
+            list(k) for k, _ in space["global_features"].items()}
     return feat_names
 
 # TODO handle nan in observation ?

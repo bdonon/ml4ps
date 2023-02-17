@@ -29,10 +29,9 @@ class ContinuousPolicy(BasePolicy):
         self.box_to_sigma_ratio = box_to_sigma_ratio
         self.nn_args = nn_args
         self.np_random = np_random or np.random.default_rng()
-        self.action_space, self.observation_space = env.action_space, env.observation_space
         self.normalizer = normalizer or self._build_normalizer(env, normalizer_args)
-        self.nn = ml4ps.neural_network.get(nn_type, {"feature_dimension":env.action_space.feature_dimension * 2, **nn_args})
-        self.mu_0, self.log_sigma_0 = self._build_postprocessor(env.action_space)
+        self.nn = ml4ps.neural_network.get(nn_type, {"feature_dimension":env.action_space.continuous.feature_dimension * 2, **nn_args})
+        self.mu_0, self.log_sigma_0 = self._build_postprocessor(env.action_space.continuous)
 
 
     def _build_postprocessor(self, space):

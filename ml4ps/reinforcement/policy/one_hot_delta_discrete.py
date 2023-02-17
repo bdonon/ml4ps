@@ -41,7 +41,7 @@ class OneHotDeltaDiscrete(BasePolicy):
             one_hot = [h2mg.categorical(rng, logits, deterministic=deterministic) for rng in
                 jax.random.split(rng, n_action)]
             action = [self._one_hot_to_action(one_hot) for o in one_hot]
-            log_prob = [h2mg.categorical_logprob(one_hot, logits) for o in one_hot]
+            log_prob = [h2mg.categorical_logprob(o, logits) for o in one_hot]
         info = h2mg.shallow_repr(h2mg.map_to_features(lambda x: jnp.asarray(jnp.mean(x)), [logits]))
         return action, log_prob, info
 

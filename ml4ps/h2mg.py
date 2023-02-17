@@ -185,6 +185,19 @@ class H2MG(dict):
             raise ValueError(f"{i}!= {x.size}")
         return res
     
+    def _check_data(self, data):
+        pass
+    
+    @staticmethod
+    def make(local_features, global_features, local_addresses, all_addresses):
+        data = {H2MGCategories.LOCAL_FEATURES.value: local_features,
+                    H2MGCategories.GLOBAL_FEATURES.value: global_features, 
+                    H2MGCategories.LOCAL_ADDRESSES.value: local_addresses,
+                    H2MGCategories.ALL_ADDRESSES.value: all_addresses}
+        H2MG._check_data(data)
+        return H2MG(data)
+
+    
 
 def combine_space(a, b):
     x = empty_h2mg()

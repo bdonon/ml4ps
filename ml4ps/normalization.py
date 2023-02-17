@@ -102,7 +102,7 @@ class Normalizer:
 
     def inverse(self, x):
         """De-normalizes input data by applying the inverse of normalization functions."""
-        return x.apply_h2mg_fn(self.functions)
+        return x.apply_h2mg_fn(self.inverse_functions)
 
 
 class NormalizationFunction:
@@ -135,10 +135,11 @@ class NormalizationFunction:
 
     def __call__(self, x):
         """Normalizes input by applying an approximation of the CDF of values provided at initialization."""
-        if len(self.fp) == 1 and not self.inverse:
-            return x - self.fp
-        elif len(self.fp) == 1 and self.inverse:
-            return x + self.xp
+        if len(self.fp) == 1 and self.inverse:
+            return x + self.fp
+        elif len(self.fp) == 1 and not self.inverse:
+            return x - self.xp
+
         else:
             interp_term = jnp.interp(x, self.xp, self.fp)
             left_term = jnp.minimum(x - self.xp[0], 0) * (self.fp[1] - self.fp[0]) / (self.xp[1] - self.xp[0])

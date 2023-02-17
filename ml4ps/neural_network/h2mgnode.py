@@ -6,15 +6,20 @@ import diffrax
 from dataclasses import field
 import flax
 from typing import Sequence
-from ml4ps.h2mg import local_addresses_iterator
+from ml4ps.h2mg import local_addresses_iterator, H2MG
 
 def gather_x_v(x, k):
     """Gets local input from `x` for object class `k`."""
     x_v = []
     for v in x["local_features"].get(k, {}).values():
-        x_v.append(v)
+        if len(jnp.shape(v)) == 1:
+            x_v.append(jnp.expand_dims(v, axis=1))
+        elif len(jnp.shape(v)) == 2:
+            x_v.append(v)
+        else:
+            raise ValueError("Hyper-edge {} features have too many dimensions.".format(k))
     if x_v:
-        return jnp.stack(x_v, axis=1)
+        return jnp.concatenate(x_v, axis=1)
     else:
         return jnp.array([[]])
 
@@ -39,6 +44,12 @@ def gather_x_g(x):
     """Gathers global input features in `x`."""
     x_g = []
     for v in x.get("global_features", {}).values():
+        if len(jnp.shape(v)) == 1:
+            x_g.append(jnp.expand_dims(v, axis=1))
+        elif len(jnp.shape(v)) == 2:
+            x_g.append(v)
+        else:
+            raise ValueError("Global features have too many dimensions.")
         x_g.append(v)
     if x_g:
         return jnp.stack(x_g, axis=1)
@@ -78,14 +89,19 @@ def local_output_filter(y_local, x):
     """Reduces the output dimensionality, and replaces fictitious objects with NaN, while allowing to back-propagate."""
     for k in y_local:
         values = list(x["local_addresses"][k].values())[0]
+        values = jnp.expand_dims(values, axis=1)
         for f in y_local[k]:
-            y_local[k][f] = jnp.where(jnp.isnan(values), jnp.nan, y_local[k][f][:,0])
+            y_local[k][f] = jnp.where(jnp.isnan(values+0.*y_local[k][f]), jnp.nan, y_local[k][f]) # TODO : c'est pas trivial ...
+            if jnp.shape(y_local[k][f])[1] == 1:
+                y_local[k][f] = y_local[k][f][:,0]
     return y_local
 
 def global_output_filter(y_global):
     """Reduces the global output dimensionality."""
     for f in y_global:
-        y_global[f] = y_global[f][:,0]
+        y_global[f] = y_global[f]
+        if jnp.shape(y_global[f])[1] == 1:
+            y_global[f] = y_global[f][:,0]
     return y_global
 
 
@@ -151,13 +167,14 @@ class LocalDecoder(nn.Module):
     """
 
     hidden_size: Sequence[int]
-    out_size: int
-    local_output_feature_names: dict
+    #out_size: int
+    #local_output_feature_names: dict
+    local_output_feature_dimensions: dict
 
     @nn.compact
     def __call__(self, x, h):
-        return {k: {f: MLP(self.hidden_size, self.out_size, name="{}-{}".format(k,f))(gather_local_input(x, h, 0., k)) for f in v} for k, v in
-            self.local_output_feature_names.items()}
+        return {k: {f: MLP(self.hidden_size, dim, name="{}-{}".format(k,f))(gather_local_input(x, h, 0., k))
+            for f, dim in v.items()} for k, v in self.local_output_feature_dimensions.items()}
 
 
 class GlobalDynamics(nn.Module):
@@ -188,12 +205,14 @@ class GlobalDecoder(nn.Module):
     """
 
     hidden_size: Sequence[int]
-    out_size: int
-    global_output_feature_names: list
+    #out_size: int
+    #global_output_feature_names: list
+    local_output_feature_dimensions: dict
 
     @nn.compact
     def __call__(self, x, h):
-        return {k: MLP(self.hidden_size, self.out_size, name="{}".format(k))(gather_global_input(x, h, 0.)) for k in self.global_output_feature_names}
+        return {k: MLP(self.hidden_size, dim, name="{}".format(k))(gather_global_input(x, h, 0.))
+            for k, dim in self.local_output_feature_dimensions.items()}
 
 
 class H2MGNODE(flax.struct.PyTreeNode):
@@ -237,7 +256,7 @@ class H2MGNODE(flax.struct.PyTreeNode):
 
     @classmethod
     def make(cls,
-             output_feature_names: dict,
+             feature_dimension: H2MG,
              local_dynamics_hidden_size: Sequence[int] = None,
              global_dynamics_hidden_size: Sequence[int] = None,
              local_decoder_hidden_size: Sequence[int] = None,
@@ -268,8 +287,8 @@ class H2MGNODE(flax.struct.PyTreeNode):
 
         local_dynamics = LocalDynamics(local_dynamics_hidden_size, local_latent_dimension)
         global_dynamics = GlobalDynamics(global_dynamics_hidden_size, global_latent_dimension)
-        local_decoder = LocalDecoder(local_decoder_hidden_size, 1, output_feature_names["local_features"])
-        global_decoder = GlobalDecoder(global_decoder_hidden_size, 1, output_feature_names["global_features"])
+        local_decoder = LocalDecoder(local_decoder_hidden_size, feature_dimension.local_features)#output_feature_names["local_features"])
+        global_decoder = GlobalDecoder(global_decoder_hidden_size, feature_dimension.global_features)#output_feature_names["global_features"])
         solver = eval("diffrax.{}()".format(solver_name))
         stepsize_controller = eval("diffrax.{}".format(stepsize_controller_name))(**stepsize_controller_kwargs)
         adjoint = eval("diffrax.{}()".format(adjoint_name))
@@ -315,7 +334,7 @@ class H2MGNODE(flax.struct.PyTreeNode):
         y_local = local_output_filter(y_local, x)
         y_global = global_output_filter(y_global)
 
-        return {"global_features": y_global, "local_features": y_local}
+        return H2MG({"global_features": y_global, "local_features": y_local})
 
     def _initialize_latent_variables(self, x):
         return {"global": jnp.zeros([1, self.global_latent_dimension]),

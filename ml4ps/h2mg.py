@@ -52,7 +52,7 @@ class H2MG(dict):
 
     @all_addresses.setter
     def all_addresses(self, value):
-        self[H2MGCategories.LOCAL_ADDRESSES.value] = value
+        self[H2MGCategories.ALL_ADDRESSES.value] = value
     
     def __add__(self, other) -> 'H2MG':
         if isinstance(other, H2MG):
@@ -373,10 +373,10 @@ def empty_like(h2mg):
         if obj_name not in new_h2mg[key]:
             new_h2mg[key][obj_name] = {}
         if addr_name not in new_h2mg[key][obj_name]:
-            new_h2mg[key][obj_name][addr_name] = None # value
+            new_h2mg[key][obj_name][addr_name] = value
 
     for key, value in all_addresses_iterator(h2mg):
-        new_h2mg[key] = None #value
+        new_h2mg[key] = value
 
     return H2MG(new_h2mg)
 

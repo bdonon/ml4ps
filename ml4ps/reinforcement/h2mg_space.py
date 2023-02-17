@@ -37,97 +37,27 @@ class H2MGSpace(spaces.Dict):
         return map_to_features(self._feature_dimension, [self])
     
     @property
-    def continuous(self):
+    def continuous(self) -> 'H2MGSpace':
         mask = map_to_features(lambda x: isinstance(x, spaces.Box), [self])
-        x = dict()
-        for local_key, obj_name, feat_name, value in mask.local_features_iterator:
-            if value:
-                if local_key not in x:
-                    x[local_key] = spaces.Dict()
-                if obj_name not in x[local_key]:
-                    x[local_key][obj_name] = spaces.Dict()
-                x[local_key][obj_name][feat_name] = self[local_key][obj_name][feat_name]
-
-        for global_key,  feat_name, value in mask.global_features_iterator:
-            if value:
-                if global_key not in x:
-                    x[global_key] = spaces.Dict()
-                x[global_key][feat_name] = self[global_key][feat_name]
-
-        for local_key, obj_name, addr_name, value in mask.local_addresses_iterator:
-            if value:
-                if local_key not in x:
-                    x[local_key] = spaces.Dict()
-                if obj_name not in x[local_key]:
-                    x[local_key][obj_name] = spaces.Dict()
-                x[local_key][obj_name][addr_name] = self[local_key][obj_name][addr_name]
-
-        for all_addr_key, value in mask.all_addresses_iterator:
-            if value:
-                x[all_addr_key] = self[all_addr_key]
-        return H2MGSpace(x)
+        return _fill_on_mask(self, mask)
     
     @property
-    def multi_discrete(self):
+    def multi_discrete(self) -> 'H2MGSpace':
         mask = map_to_features(lambda x: isinstance(x, spaces.MultiDiscrete), [self])
-        x = dict()
-        for local_key, obj_name, feat_name, value in mask.local_features_iterator:
-            if value:
-                if local_key not in x:
-                    x[local_key] = spaces.Dict()
-                if obj_name not in x[local_key]:
-                    x[local_key][obj_name] = spaces.Dict()
-                x[local_key][obj_name][feat_name] = self[local_key][obj_name][feat_name]
-
-        for global_key,  feat_name, value in mask.global_features_iterator:
-            if value:
-                if global_key not in x:
-                    x[global_key] = spaces.Dict()
-                x[global_key][feat_name] = self[global_key][feat_name]
-
-        for local_key, obj_name, addr_name, value in mask.local_addresses_iterator:
-            if value:
-                if local_key not in x:
-                    x[local_key] = spaces.Dict()
-                if obj_name not in x[local_key]:
-                    x[local_key][obj_name] = spaces.Dict()
-                x[local_key][obj_name][addr_name] = self[local_key][obj_name][addr_name]
-
-        for all_addr_key, value in mask.all_addresses_iterator:
-            if value:
-                x[all_addr_key] = self[all_addr_key]
-        return H2MGSpace(x)
+        return _fill_on_mask(self, mask)
 
     @property
-    def multi_binary(self):
+    def multi_binary(self) -> 'H2MGSpace':
         mask = map_to_features(lambda x: isinstance(x, spaces.MultiBinary), [self])
-        x = dict()
-        for local_key, obj_name, feat_name, value in mask.local_features_iterator:
-            if value:
-                if local_key not in x:
-                    x[local_key] = spaces.Dict()
-                if obj_name not in x[local_key]:
-                    x[local_key][obj_name] = spaces.Dict()
-                x[local_key][obj_name][feat_name] = self[local_key][obj_name][feat_name]
+        return _fill_on_mask(self, mask)
 
-        for global_key,  feat_name, value in mask.global_features_iterator:
-            if value:
-                if global_key not in x:
-                    x[global_key] = spaces.Dict()
-                x[global_key][feat_name] = self[global_key][feat_name]
-
-        for local_key, obj_name, addr_name, value in mask.local_addresses_iterator:
-            if value:
-                if local_key not in x:
-                    x[local_key] = spaces.Dict()
-                if obj_name not in x[local_key]:
-                    x[local_key][obj_name] = spaces.Dict()
-                x[local_key][obj_name][addr_name] = self[local_key][obj_name][addr_name]
-
-        for all_addr_key, value in mask.all_addresses_iterator:
-            if value:
-                x[all_addr_key] = self[all_addr_key]
-        return H2MGSpace(x)
+    
+    def combine(self, other: 'H2MGSpace') -> 'H2MGSpace':
+        mask = map_to_features(lambda _: True, [self])
+        other_mask = map_to_features(lambda _: True, [other])
+        x = _fill_on_mask(self, mask)
+        x = _fill_on_mask(other, other_mask, x)
+        return x
 
     @property
     def h2mg_struct(self):
@@ -163,3 +93,34 @@ def _my_read(space, shared_memory, n: int = 1):
             for (key, subspace) in space.spaces.items()
         ]
     )
+
+
+def _fill_on_mask(fill_h2mg: H2MG, mask: H2MG, output_h2mg=None):
+    if output_h2mg is None:
+        output_h2mg = dict()
+    for local_key, obj_name, feat_name, value in mask.local_features_iterator:
+        if value:
+            if local_key not in output_h2mg:
+                output_h2mg[local_key] = spaces.Dict()
+            if obj_name not in output_h2mg[local_key]:
+                output_h2mg[local_key][obj_name] = spaces.Dict()
+            output_h2mg[local_key][obj_name][feat_name] = fill_h2mg[local_key][obj_name][feat_name]
+
+    for global_key,  feat_name, value in mask.global_features_iterator:
+        if value:
+            if global_key not in output_h2mg:
+                output_h2mg[global_key] = spaces.Dict()
+            output_h2mg[global_key][feat_name] = fill_h2mg[global_key][feat_name]
+
+    for local_key, obj_name, addr_name, value in mask.local_addresses_iterator:
+        if value:
+            if local_key not in output_h2mg:
+                output_h2mg[local_key] = spaces.Dict()
+            if obj_name not in output_h2mg[local_key]:
+                output_h2mg[local_key][obj_name] = spaces.Dict()
+            output_h2mg[local_key][obj_name][addr_name] = fill_h2mg[local_key][obj_name][addr_name]
+
+    for all_addr_key, value in mask.all_addresses_iterator:
+        if value:
+            output_h2mg[all_addr_key] = fill_h2mg[all_addr_key]
+    return H2MGSpace(output_h2mg)

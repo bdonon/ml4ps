@@ -114,10 +114,7 @@ class H2MG(dict):
     
     def apply_h2mg_fn(self, h2mg_fn: Dict) -> 'H2MG':
         return h2mg_apply(h2mg_fn, self)
-    
-    def __iter__(self) -> Iterator:
-        return features_iterator(self)
-    
+        
     def sum(self) -> float:
         return sum(features_iterator(self.apply(jnp.sum)))
 

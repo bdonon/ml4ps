@@ -1,5 +1,8 @@
 from gymnasium import spaces
+import gymnasium as gym
 from ml4ps.h2mg import map_to_features, H2MG, empty_h2mg
+from copy import deepcopy
+from collections import OrderedDict
 
 class H2MGSpace(spaces.Dict):
     def __init__(self, *args, **kwargs):
@@ -129,3 +132,37 @@ class H2MGSpace(spaces.Dict):
     @property
     def h2mg_struct(self):
         return self.feature_dimension
+
+
+
+@gym.vector.utils.spaces.batch_space.register(H2MGSpace)
+def _my_batch(space, n=1):
+        print('batching')
+        return H2MGSpace(
+            OrderedDict(
+                [
+                    (key, gym.vector.utils.spaces.batch_space(subspace, n=n))
+                    for (key, subspace) in space.spaces.items()
+                ]
+            ),
+            seed=deepcopy(space.np_random),
+        )
+@gym.vector.utils.shared_memory.create_shared_memory.register(H2MGSpace)
+def _create_dict_shared_memory(space, n=1, ctx=None):
+    print("Creating shared memory")
+    return H2MG(
+        [
+            (key, gym.vector.utils.shared_memory.create_shared_memory(subspace, n=n, ctx=ctx))
+            for (key, subspace) in space.spaces.items()
+        ]
+    )
+
+@gym.vector.utils.shared_memory.read_from_shared_memory.register(H2MGSpace)
+def _my_read(space, shared_memory, n: int = 1):
+        print("read_from_shared_memory h2mg")
+        return H2MG(
+        [
+            (key, gym.vector.utils.shared_memory.read_from_shared_memory(subspace, shared_memory[key], n=n))
+            for (key, subspace) in space.spaces.items()
+        ]
+    )

@@ -1,14 +1,10 @@
 from collections import defaultdict
 from enum import Enum
-from typing import Callable, Iterator, List, Dict, Any
+from typing import Any, Callable, Dict, Iterator, List
 
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
-
-from gymnasium import spaces
-from functools import partial
-
 
 
 @register_pytree_node_class
@@ -27,15 +23,15 @@ class H2MG(dict):
         return H2MG({k:f for k, f in zip(aux_data, children)})
     
     @property
-    def local_features(self):
+    def local_features(self) -> Dict:
         return self.get(H2MGCategories.LOCAL_FEATURES.value, {})
     
     @property
-    def global_features(self):
+    def global_features(self) -> Dict:
         return self.get(H2MGCategories.GLOBAL_FEATURES.value, {})
     
     @property
-    def local_addresses(self):
+    def local_addresses(self) -> Dict:
         return self.get(H2MGCategories.LOCAL_ADDRESSES.value, {})
     
     @property
@@ -58,48 +54,48 @@ class H2MG(dict):
     def all_addresses(self, value):
         self[H2MGCategories.LOCAL_ADDRESSES.value] = value
     
-    def __add__(self, other):
+    def __add__(self, other) -> 'H2MG':
         if isinstance(other, H2MG):
             return map_to_features(lambda a, b: a + b, [self, other])
         else:
             return map_to_features(lambda a: a + other, [self])
     
-    def __sub__(self, other):
+    def __sub__(self, other) -> 'H2MG':
         if isinstance(other, H2MG):
             return map_to_features(lambda a, b: a - b, [self, other])
         else:
             return map_to_features(lambda a: a - other, [self])
     
-    def __mul__(self, other):
+    def __mul__(self, other) -> 'H2MG':
         if isinstance(other, H2MG):
             return map_to_features(lambda a, b: a * b, [self, other])
         else:
             return map_to_features(lambda a: a * other, [self])
     
-    def __rmul__(self, other):
+    def __rmul__(self, other) -> 'H2MG':
         if isinstance(other, H2MG):
             return map_to_features(lambda a, b: a * b, [self, other])
         else:
             return map_to_features(lambda a: a * other, [self])
     
-    def __truediv__(self, other):
+    def __truediv__(self, other) -> 'H2MG':
         if isinstance(other, H2MG):
             return map_to_features(lambda a, b: a / b, [self, other])
         else:
             return map_to_features(lambda a: a / other, [self])
     
-    def __pow__(self, exponent: int):
+    def __pow__(self, exponent: int) -> 'H2MG':
         if isinstance(exponent, H2MG):
             return map_to_features(lambda a, b: a / b, [self, exponent])
         return map_to_features(lambda a: a ** exponent, [self])
     
-    def __neg__(self):
+    def __neg__(self) -> 'H2MG':
         return self*(-1)
     
-    def log(self):
+    def log(self) -> 'H2MG':
         return map_to_features(jnp.log, [self])
     
-    def exp(self):
+    def exp(self) -> 'H2MG':
         return map_to_features(jnp.exp, [self])
         
     def __repr__(self) -> str:
@@ -113,22 +109,22 @@ class H2MG(dict):
             return super().__getitem__(__key)
         return map_to_features(lambda a: a.__getitem__(__key), [self])
     
-    def apply(self, fn: Callable[[Dict], Dict]):
+    def apply(self, fn: Callable[[Dict], Dict]) -> 'H2MG':
         return map_to_features(fn, [self])
     
-    def apply_h2mg_fn(self, h2mg_fn: Dict):
+    def apply_h2mg_fn(self, h2mg_fn: Dict) -> 'H2MG':
         return h2mg_apply(h2mg_fn, self)
     
     def __iter__(self) -> Iterator:
         return features_iterator(self)
     
-    def sum(self):
+    def sum(self) -> float:
         return sum(features_iterator(self.apply(jnp.sum)))
 
-    def nansum(self):
+    def nansum(self) -> float:
         return sum(features_iterator(self.apply(jnp.nansum)))
     
-    def combine(self, other):
+    def combine(self, other) -> 'H2MG':
         return combine_space(self, other)
     
     def plot(self):
@@ -157,10 +153,17 @@ class H2MG(dict):
         return features_iterator(self)
     
     @property
-    def shape(self):
+    def shape(self) -> 'H2MG':
         return map_to_features(lambda a: a.shape, [self])
     
-    def flatten(self):
+    @property
+    def size(self) -> 'H2MG':
+        return map_to_features(lambda a: a.size, [self])
+    
+    def __len__(self) -> int:
+        return len(self.features)
+    
+    def flatten(self) -> jnp.ndarray:
         flat_dim = sum(v.size for v in self.features)
         flat_action = jnp.zeros(shape=flat_dim)
         i=0
@@ -169,7 +172,7 @@ class H2MG(dict):
             i+=v.size
         return flat_action
 
-    def unflatten_like(self, x):
+    def unflatten_like(self, x) -> 'H2MG':
         res = empty_like(self)
         i = 0
         for key, obj_name, feat_name, value in self.local_features_iterator:
@@ -372,7 +375,7 @@ def collate_h2mgs_features(h2mgs_list):
         return jnp.array(list(args))
     return map_to_features(collate_arrays, h2mgs_list)
 
-def h2mg_map(fn: Callable, args_h2mg: List=None, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False, check_compat: bool=False, in_place=False) -> Dict:
+def h2mg_map(fn: Callable, args_h2mg: List=None, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False, check_compat: bool=False) -> Dict:
     if not args_h2mg:
         raise ValueError
     if check_compat and not all_compatible(args_h2mg):
@@ -393,8 +396,10 @@ def h2mg_map(fn: Callable, args_h2mg: List=None, local_features: bool=True, glob
 
     return H2MG(results)
 
-def map_to_features(fn, args_h2mg, check_compat=False, in_place=False) -> H2MG:
-    return h2mg_map(fn=fn, args_h2mg=args_h2mg, check_compat=check_compat, in_place=in_place)
+def map_to_features(fn: Callable, args_h2mg: List[H2MG], check_compat=False) -> H2MG:
+    if not isinstance(args_h2mg,list):
+        raise ValueError
+    return h2mg_map(fn=fn, args_h2mg=args_h2mg, check_compat=check_compat)
 
 def map_to_all(fn: Callable, args_h2mg: List, check_compat=False) -> H2MG:
     return h2mg_map(fn, args_h2mg=args_h2mg, local_features=True, global_features=True, local_addresses=True, all_addresses=True, check_compat=check_compat)
@@ -423,9 +428,22 @@ def shallow_repr(h2mg, local_features: bool=True, global_features: bool=True, lo
             results[key] = value
     return results
 
+# Random H2MG methods
 
-def uniform_like(h2mg: H2MG, rng):
-    pass
+def rng_like(rng, h2mg: H2MG) -> H2MG:
+    rng_h2mg = empty_like(h2mg)
+    for key, obj_name, feat_name, value in local_features_iterator(h2mg):
+        rng, subkey = jax.random.split(rng)
+        rng_h2mg[key][obj_name][feat_name] = subkey
+    for key, feat_name, value in global_features_iterator(h2mg):
+        rng, subkey = jax.random.split(rng)
+        rng_h2mg[key][feat_name] = subkey
+    return rng_h2mg
+
+def uniform_like(h2mg: H2MG, rng) -> H2MG:
+    flat_h2mg = h2mg.flatten()
+    x = jax.random.uniform(rng, flat_h2mg.shape)
+    return h2mg.unflatten_like(x)
 
 def normal_like(rng, h2mg: H2MG) -> H2MG:
     flat_h2mg = h2mg.flatten()
@@ -442,7 +460,6 @@ def categorical(rng, logits: H2MG) -> H2MG:
     flat_res_action = flat_res_action.at[idx].set(1)
     res_action = logits.unflatten_like(flat_res_action)
     return res_action
-    # res_action = self.onehot_to_action(res_action)
 
 def categorical_logprob(x_onehot: H2MG, logits: H2MG) -> float:
     flat_onehot = x_onehot.flatten()
@@ -452,27 +469,11 @@ def categorical_logprob(x_onehot: H2MG, logits: H2MG) -> float:
     return jnp.nansum(logits_selected)
 
 def categorical_per_feature(rng, logits:H2MG) -> H2MG:
-    # TODO: check addr
-    flat_tree, tree_strcut = jax.tree_util.tree_flatten(logits)
-    f_idx = []
-    for v in flat_tree:
-        rng, subkey = jax.random.split(rng, 2)
-        f_idx.append(jax.random.categorical(key=subkey, logits=v))
-    # flat_idx = map(jax.random.categorical, list(zip(flat_tree, jax.random.split(rng, len(flat_tree))))) # categorical axis=-1==1
-    return jax.tree_util.tree_unflatten(tree_strcut, f_idx)
+    rng_h2mg = rng_like(rng, logits)
+    return map_to_features(jax.random.categorical, [rng_h2mg, logits])
 
 def categorical_per_feature_logprob(x_idx: H2MG, logits: H2MG) -> float:
-    logits= logits.apply(jax.nn.log_softmax)# jax.nn.log_softmax(logits, axis=-1)
-    # selected_logits = map_to_features(lambda logits, x_i: jnp.take_along_axis(logits, jnp.expand_dims(x_idx,1), axis=-1), logits, x_idx)
-    # selected_logits = jnp.take_along_axis(logits, jnp.expand_dims(x_idx,1), axis=-1)
-    flat_logits_tree, tree__logits_strcut = jax.tree_util.tree_flatten(logits)
-    flat_x_tree, tree_x_strcut = jax.tree_util.tree_flatten(x_idx)
-    res = []
-    for l, x_i in zip(flat_logits_tree, flat_x_tree):
-        tmp = jnp.take_along_axis(l, jnp.expand_dims(x_i,1), axis=-1)
-        res.append(tmp)
-
-    selected_logits = jax.tree_util.tree_unflatten(tree__logits_strcut, res)
-
+    logits= logits.apply(jax.nn.log_softmax)
+    selected_logits = map_to_features(lambda logits, x_i: jnp.take_along_axis(logits, jnp.expand_dims(x_i,1), axis=-1), [logits, x_idx])
     return selected_logits.nansum()
 

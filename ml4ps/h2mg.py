@@ -10,7 +10,9 @@ from jax.tree_util import register_pytree_node_class
 @register_pytree_node_class
 class H2MG(dict):
 
-    def __init__(self, data):
+    def __init__(self, data, check_data=True):
+        if check_data:
+            self._check_data(data)
         super().__init__(data)
     
     def tree_flatten(self):
@@ -127,7 +129,7 @@ class H2MG(dict):
     def plot(self):
         raise NotImplementedError
     
-    def shallow_repr(self):
+    def shallow_repr(self) -> Dict[str, Any]:
         return shallow_repr(self)
     
     @property
@@ -160,6 +162,33 @@ class H2MG(dict):
     # def __len__(self) -> int:
     #     return len(self.features)
 
+    def extract_like(self, other: 'H2MG') -> 'H2MG':
+        build_dict = dict
+        if output_h2mg is None:
+            output_h2mg = dict()
+        for local_key, obj_name, feat_name, value in other.local_features_iterator:
+            if local_key not in output_h2mg:
+                output_h2mg[local_key] = build_dict()
+            if obj_name not in output_h2mg[local_key]:
+                output_h2mg[local_key][obj_name] = build_dict()
+            output_h2mg[local_key][obj_name][feat_name] = self[local_key][obj_name][feat_name]
+
+        for global_key,  feat_name, value in other.global_features_iterator:
+            if global_key not in output_h2mg:
+                output_h2mg[global_key] = build_dict()
+            output_h2mg[global_key][feat_name] = self[global_key][feat_name]
+
+        for local_key, obj_name, addr_name, value in other.local_addresses_iterator:
+            if local_key not in output_h2mg:
+                output_h2mg[local_key] = build_dict()
+            if obj_name not in output_h2mg[local_key]:
+                output_h2mg[local_key][obj_name] = build_dict()
+            output_h2mg[local_key][obj_name][addr_name] = self[local_key][obj_name][addr_name]
+
+        for all_addr_key, value in other.all_addresses_iterator:
+            output_h2mg[all_addr_key] = self[all_addr_key]
+        return H2MG(output_h2mg)
+
     def flatten(self) -> jnp.ndarray:
         flat_dim = sum(v.size for v in self.features)
         flat_action = jnp.zeros(shape=flat_dim)
@@ -183,7 +212,15 @@ class H2MG(dict):
         return res
     
     def _check_data(self, data):
-        pass
+        if isinstance(data, list):
+            return self._check_data(dict(data))
+        valid_keys = [H2MGCategories.LOCAL_FEATURES.value,
+                      H2MGCategories.LOCAL_ADDRESSES.value,
+                      H2MGCategories.GLOBAL_FEATURES.value,
+                      H2MGCategories.ALL_ADDRESSES.value]
+        if not set(data.keys()).issubset(set(valid_keys)):
+            raise ValueError(f"Unknown keys in data: {data.keys()}, expected in {valid_keys}")
+
     
     @staticmethod
     def make(local_features, global_features, local_addresses, all_addresses):
@@ -439,7 +476,7 @@ def collate_h2mgs(h2mgs_list):
         return jnp.array(list(args))
     return map_to_all(collate_arrays, h2mgs_list)
 
-def shallow_repr(h2mg, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False):
+def shallow_repr(h2mg, local_features: bool=True, global_features: bool=True, local_addresses: bool=False, all_addresses: bool=False) -> Dict[str, Any]:
     results = {}
     if local_features:
         for key, obj_name, feat_name, value in local_features_iterator(h2mg):

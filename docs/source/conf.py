@@ -19,7 +19,8 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
     'sphinx.ext.intersphinx',
-    'nbsphinx'
+    'nbsphinx',
+    "furo.gen_tutorials"
 ]
 
 intersphinx_mapping = {

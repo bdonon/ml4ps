@@ -216,7 +216,7 @@ class GlobalDecoder(nn.Module):
 
 
 class H2MGNODE(flax.struct.PyTreeNode):
-    """Hyper Heterogeneous Multi Graph Neural Ordinary Differential Equation.
+    r"""Hyper Heterogeneous Multi Graph Neural Ordinary Differential Equation.
 
     Solves the following differential system defined over a H2MG (Hyper Heterogeneous Multi Graph):
     .. math::

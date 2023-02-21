@@ -30,7 +30,9 @@ dependencies = [
     "pypowsybl",
     "matpowercaseframes",
     "gymnasium",
-    "furo"
+    "furo",
+    "flax",
+    "diffrax"
 ]
 
 [build-system]

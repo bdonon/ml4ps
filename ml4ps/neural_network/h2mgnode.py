@@ -219,6 +219,7 @@ class H2MGNODE(flax.struct.PyTreeNode):
     r"""Hyper Heterogeneous Multi Graph Neural Ordinary Differential Equation.
 
     Solves the following differential system defined over a H2MG (Hyper Heterogeneous Multi Graph):
+
     .. math::
         \forall i \in \{1, \dots, n\}, \frac{dh_i}{dt} = \tanh(\sum_{(c,e,o) \in \mathcal{N}(i)} \tanh
             \Phi_\theta^{c,o} (x^g, x^c_e, h^g, (h_{o(e)})_{o\in \mathcal{O}^c}, t) \\

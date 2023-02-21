@@ -29,7 +29,8 @@ dependencies = [
     "numba>=0.56.2",
     "pypowsybl",
     "matpowercaseframes",
-    "gymnasium"
+    "gymnasium",
+    "furo"
 ]
 
 [build-system]

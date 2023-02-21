@@ -41,9 +41,3 @@ Contents
     :maxdepth: 1
 
     data_formalism
-    dataset/index
-    normalization
-    neural_networks/index
-    postprocessing
-    interaction
-    usecase/index

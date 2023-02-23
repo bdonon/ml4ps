@@ -97,30 +97,20 @@ def _my_read(space, shared_memory, n: int = 1):
 
 def _fill_on_mask(fill_h2mg: H2MG, mask: H2MG, output_h2mg=None):
     if output_h2mg is None:
-        output_h2mg = dict()
+        output_h2mg = deepcopy(fill_h2mg)
     for local_key, obj_name, feat_name, value in mask.local_features_iterator:
-        if value:
-            if local_key not in output_h2mg:
-                output_h2mg[local_key] = spaces.Dict()
-            if obj_name not in output_h2mg[local_key]:
-                output_h2mg[local_key][obj_name] = spaces.Dict()
-            output_h2mg[local_key][obj_name][feat_name] = fill_h2mg[local_key][obj_name][feat_name]
+        if not value:
+            del output_h2mg[local_key][obj_name].spaces[feat_name]
 
-    for global_key,  feat_name, value in mask.global_features_iterator:
-        if value:
-            if global_key not in output_h2mg:
-                output_h2mg[global_key] = spaces.Dict()
-            output_h2mg[global_key][feat_name] = fill_h2mg[global_key][feat_name]
+    for global_key, feat_name, value in mask.global_features_iterator:
+        if not value:
+            del output_h2mg[global_key].spaces[feat_name]
 
     for local_key, obj_name, addr_name, value in mask.local_addresses_iterator:
-        if value:
-            if local_key not in output_h2mg:
-                output_h2mg[local_key] = spaces.Dict()
-            if obj_name not in output_h2mg[local_key]:
-                output_h2mg[local_key][obj_name] = spaces.Dict()
-            output_h2mg[local_key][obj_name][addr_name] = fill_h2mg[local_key][obj_name][addr_name]
+        if not value:
+            del output_h2mg[local_key][obj_name].spaces[addr_name]
 
     for all_addr_key, value in mask.all_addresses_iterator:
-        if value:
-            output_h2mg[all_addr_key] = fill_h2mg[all_addr_key]
+        if not value:
+            del output_h2mg.spaces[all_addr_key]
     return H2MGSpace(output_h2mg)

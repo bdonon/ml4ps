@@ -66,7 +66,7 @@ To sum things up, power grids actually are Hyper-Heterogeneous Multi Graphs (H2M
     - Heterogeneous graphs:Graphs that are made of multiple classes of objects.
     - Multi-graphs: Graphs that allow multiple objects to have the same addresses.
 
-.. figure:: figures/h2mg.png
+.. figure:: _static/h2mg.png
     :width: 800
 
     Power grid instance and its conversions into a standard graph, and into a H2MG.
@@ -163,7 +163,7 @@ Now that the mathematical definition of H2MGs has been introduced, we may now pr
 they are implemented in our library.
 Let us consider the power grid shown in the figure below.
 
-.. figure:: figures/simple_power_grid.png
+.. figure:: _static/simple_power_grid.png
     :width: 800
 
 It is composed of multiple classes of hyper-edges : `bus`, `gen`, `load`, `line`

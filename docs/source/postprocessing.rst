@@ -46,7 +46,7 @@ In the case where we know a priori a better initial guess, we can use a post-pro
 to have our neural network start his training routine at a much better place (see the evolution
 of the initial output distribution in blue in the figure below.
 
-.. image:: figures/postprocessing.png
+.. image:: _static/postprocessing.png
   :width: 800
 
 Still, one has to rely on its own understanding of the problem at hand to provide a post-processing

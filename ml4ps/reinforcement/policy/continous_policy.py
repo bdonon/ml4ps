@@ -24,22 +24,23 @@ class ContinuousPolicy(BasePolicy):
             nn produce ditribution parameters from observation input.
     """
 
-    def __init__(self, env=None, normalizer=None, normalizer_args=None, nn_type="h2mgnode", np_random=None, box_to_sigma_ratio=8, **nn_args) -> None:
+    def __init__(self, env, normalizer=None, normalizer_args=None, nn_type="h2mgnode", box_to_sigma_ratio=8, **nn_args) -> None:
         # TODO save normalizer, action, obs space, nn args
         self.box_to_sigma_ratio = box_to_sigma_ratio
         self.nn_args = nn_args
-        self.np_random = np_random or np.random.default_rng()
         self.normalizer = normalizer or self._build_normalizer(env, normalizer_args)
         self.nn = ml4ps.neural_network.get(nn_type, {"feature_dimension":env.action_space.continuous.feature_dimension * 2, **nn_args})
         self.mu_0, self.log_sigma_0 = self._build_postprocessor(env.action_space.continuous)
 
 
     def _build_postprocessor(self, space):
-        return (space.high + space.low) / 2., ((space.high - space.low) / self.box_to_sigma_ratio).log()
+        high = space.high.apply(jnp.mean)
+        low = space.low.apply(jnp.mean)
+        return (high + low) / 2., ((high - low) / self.box_to_sigma_ratio).log()
 
 
     def _postprocess_distrib_params(self, distrib_params):
-        mu, log_sigma = distrib_params[:, 0], distrib_params[:, 1]
+        mu, log_sigma = distrib_params[..., 0], distrib_params[..., 1]
         mu_norm = self.log_sigma_0.exp() * mu + self.mu_0
         log_sigma_norm = log_sigma + self.log_sigma_0
         return mu_norm, log_sigma_norm

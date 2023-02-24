@@ -34,7 +34,6 @@ templates_path = ['_templates']
 
 #html_theme = 'sphinx_rtd_theme'
 html_theme = "furo"
-html_favicon = "figure/ml4ps_logo_dark.png"
 html_theme_options = {
     "light_logo": "figure/ml4ps_logo_light.png",
     "dark_logo": "figure/ml4ps_logo_dark.png"

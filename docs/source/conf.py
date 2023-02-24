@@ -1,5 +1,5 @@
 # Configuration file for the Sphinx documentation builder.
-
+from typing import Any, Dict
 # -- Project information
 
 project = 'ml4ps'
@@ -39,9 +39,11 @@ html_baseurl = "https://ml4ps.org"
 html_copy_source = False
 html_favicon = "_static/favicon.png"
 html_theme_options = {
-    "light_logo": "_static/ml4ps_logo_light.png",
-    "dark_logo": "_static/ml4ps_logo_dark.png"
+    "light_logo": "ml4ps_logo_light.png",
+    "dark_logo": "ml4ps_logo_dark.png"
 }
+html_context: Dict[str, Any] = {}
+html_context["conf_py_path"] = "/docs/"
 html_static_path = ["_static"]
 html_css_files = []
 

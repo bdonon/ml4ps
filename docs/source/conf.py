@@ -44,6 +44,11 @@ html_theme_options = {
 }
 html_context: Dict[str, Any] = {}
 html_context["conf_py_path"] = "/docs/"
+html_context["display_github"] = False
+html_context["github_user"] = "bdonon"
+html_context["github_repo"] = "ml4ps"
+html_context["github_version"] = "reinforcement"
+html_context["slug"] = "gymnasium"
 html_static_path = ["_static"]
 html_css_files = []
 

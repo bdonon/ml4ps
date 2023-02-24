@@ -37,7 +37,7 @@ html_theme = "furo"
 html_title = "ml4ps Documentation"
 html_baseurl = "https://ml4ps.org"
 html_copy_source = False
-html_favicon = "_static/ml4ps_favicon.png"
+html_favicon = "_static/favicon.png"
 html_theme_options = {
     "light_logo": "_static/ml4ps_logo_light.png",
     "dark_logo": "_static/ml4ps_logo_dark.png"

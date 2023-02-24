@@ -10,6 +10,7 @@ import numpy as np
 from gymnasium import spaces
 from ml4ps import Normalizer, h2mg
 from ml4ps.reinforcement.policy.base import BasePolicy
+from .utils import add_prefix, combine_space
 
 
 
@@ -72,9 +73,13 @@ class ContinuousPolicy(BasePolicy):
         else:
             action = [self._sample_from_distrib_params(rng, mu_norm, log_sigma_norm, deterministic=deterministic) for rng in jax.random.split(rng, n_action)]
             log_prob = [h2mg.normal_logprob(a, mu_norm, log_sigma_norm) for a in action]
-        info = h2mg.shallow_repr(h2mg.map_to_features(lambda x: jnp.asarray(jnp.mean(x)), [distrib_params]))
+        info = h2mg.shallow_repr(h2mg.map_to_features(lambda x: jnp.asarray(jnp.mean(x)), [self.compute_info(mu_norm, log_sigma_norm)]))
         return action, log_prob, info
 
+    def compute_info(self, mu_norm, log_sigma_norm):
+        mu_norm = add_prefix(mu_norm, "mu_")
+        log_sigma_norm = add_prefix(log_sigma_norm, "log_sigma_")
+        return combine_space(mu_norm, log_sigma_norm)
 
     def _sample_from_distrib_params(self, rng, mu, log_sigma, deterministic=False):
         if deterministic:

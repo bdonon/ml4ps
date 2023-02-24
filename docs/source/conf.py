@@ -39,9 +39,11 @@ html_baseurl = "https://ml4ps.org"
 html_copy_source = False
 html_favicon = "_static/favicon.png"
 html_theme_options = {
-    "light_logo": "ml4ps_logo_light.png",
-    "dark_logo": "ml4ps_logo_dark.png",
-    "text": "ml4ps Documentation"
+    "logo": {
+        "image_light": "ml4ps_logo_light.png",
+        "image_dark": "ml4ps_logo_dark.png",
+        "text": "ml4ps Documentation"
+       }
 }
 html_context: Dict[str, Any] = {}
 html_context["conf_py_path"] = "/docs/"

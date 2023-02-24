@@ -56,7 +56,7 @@ In this case, standardization is not enough to make data suitable for our
 neural network. We are looking for another way of mapping this odd
 distribution to a more appropriate one.
 
-.. image:: figures/distribution.png
+.. image:: _static/distribution.png
   :width: 400
 
 Cumulative Distribution Function
@@ -68,7 +68,7 @@ an efficient way of converting our data to a uniform law over the interval
 consider a subset of the empirical distribution (see `amount_of_samples`
 parameter).
 
-.. image:: figures/cdf.png
+.. image:: _static/cdf.png
   :width: 400
 
 Approximating the CDF
@@ -82,7 +82,7 @@ We split the interval [0,1] into `break_points` equal chunks, and look at
 the corresponding quantiles (displayed as red dots in the figure below).
 We then use the linear interpolation provided by `scipy <https://scipy.org>`_.
 
-.. image:: figures/approximation.png
+.. image:: _static/approximation.png
   :width: 400
 
 Merging equal quantiles
@@ -95,7 +95,7 @@ probabilities. For instance, in the figure below, we merged the `20%`
 and `40%` quantiles into a `30%` quantile.
 The interpolation is now continuous.
 
-.. image:: figures/conflicts.png
+.. image:: _static/conflicts.png
   :width: 400
 
 Out of distribution extrapolation
@@ -116,7 +116,7 @@ continuous and non-constant function, extending the largest (resp. smallest)
 non-zero slope will map new values very close, disregard the data order of
 magnitude. These extensions are illustrated in the figure below.
 
-.. image:: figures/extrapolation.png
+.. image:: _static/extrapolation.png
   :width: 400
 
 Usage

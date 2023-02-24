@@ -34,11 +34,16 @@ templates_path = ['_templates']
 
 #html_theme = 'sphinx_rtd_theme'
 html_theme = "furo"
-html_favicon = "figure/ml4ps_favicon.png"
+html_title = "ml4ps Documentation"
+html_baseurl = "https://ml4ps.org"
+html_copy_source = False
+html_favicon = "_static/ml4ps_favicon.png"
 html_theme_options = {
-    "light_logo": "figure/ml4ps_logo_light.png",
-    "dark_logo": "figure/ml4ps_logo_dark.png"
+    "light_logo": "_static/ml4ps_logo_light.png",
+    "dark_logo": "_static/ml4ps_logo_dark.png"
 }
+html_static_path = ["_static"]
+html_css_files = []
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'

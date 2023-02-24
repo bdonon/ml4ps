@@ -22,17 +22,17 @@ Process
 
 At first, the input data is vectorized, as shown in the figure below.
 
-.. image:: ../figures/vectorization.png
+.. image:: ../_static/vectorization.png
   :width: 400
 
 Then, a simple fully connected neural network is applied, and produces a vector output.
 
-.. image:: ../figures/fully_connected.png
+.. image:: ../_static/fully_connected.png
   :width: 400
 
 Finally, the vector is split and sent to the objects for which a prediction is required.
 
-.. image:: ../figures/de_vectorization.png
+.. image:: ../_static/de_vectorization.png
   :width: 400
 
 Usage

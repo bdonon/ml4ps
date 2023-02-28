@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, Dict, Tuple
 
 from gymnasium import Env, spaces
+from ml4ps.h2mg import H2MG
 
 
 class PSBaseEnv(Env, ABC):
@@ -35,12 +36,12 @@ class PSBaseEnv(Env, ABC):
         super().__init__()
 
     @abstractmethod
-    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple:
+    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[H2MG, Dict]:
         """Reset environement to a new power_grid for the given random seed."""
-        return super().reset(seed=seed)
+        pass
 
     @abstractmethod
-    def step(self, a) -> Tuple:
+    def step(self, a) -> Tuple[H2MG, float, bool, bool, Dict]:
         """Update state with action and return new observation and reward."""
         pass
 

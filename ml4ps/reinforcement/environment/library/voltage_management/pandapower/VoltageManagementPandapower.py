@@ -138,8 +138,7 @@ class VoltageManagementPandapower(VoltageManagement):
             c_j = self.compute_joule_cost(power_grid)
             is_violated_dict, violated_percentage_dict = self.compute_constraint_violation(power_grid)
             return {"diverged": self.has_diverged(power_grid),
-                "cost": cost, "c_i": c_i, "c_q": c_q, "c_v": c_v, "c_j": c_j,
-                "action": action, "iteration": state.iteration,
+                "cost": cost, "c_i": c_i, "c_q": c_q, "c_v": c_v, "c_j": c_j, "iteration": state.iteration,
                 **is_violated_dict, **violated_percentage_dict}
         else:
             return {"diverged": self.has_diverged(power_grid)}
@@ -170,12 +169,12 @@ class VoltageManagementPandapower(VoltageManagement):
         voltage_violated_bus = np.logical_or(data["bus"]["res_vm_pu"] > data["bus"]["max_vm_pu"],
                                              data["bus"]["res_vm_pu"] < data["bus"]["min_vm_pu"])
         voltage_violated_percentage = voltage_violated_bus.mean()
-        voltage_violated = voltage_violated_bus.any()
+        voltage_violated = voltage_violated_bus.any().astype(int)
         loading_connexion = np.concatenate(
             [data["line"]["res_loading_percent"], data["trafo"]["res_loading_percent"]], axis=-1)
         loading_violated_connexion = loading_connexion > 100
         loading_violated_percentage = loading_violated_connexion.mean()
-        loading_violated = (loading_violated_connexion>1).any()
+        loading_violated = (loading_violated_connexion>1).any().astype(int)
         q = np.concatenate(
             [data["gen"]["res_q_mvar"], data["ext_grid"]["res_q_mvar"]], axis=-1)
         qmin = np.concatenate(
@@ -184,7 +183,7 @@ class VoltageManagementPandapower(VoltageManagement):
             [data["gen"]["max_q_mvar"], data["ext_grid"]["max_q_mvar"]], axis=-1)
         reactive_power_violated_gen = np.logical_or(q > qmax, q < qmin)
         reactive_power_violated_percentage = reactive_power_violated_gen.mean()
-        reactive_power_violated = reactive_power_violated_gen.any()
+        reactive_power_violated = reactive_power_violated_gen.any().astype(int)
         return {"voltage_violated": voltage_violated,
                 "loading_violated": loading_violated,
                 "reactive_power_violated": reactive_power_violated}, \

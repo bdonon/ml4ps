@@ -119,14 +119,17 @@ class VoltageManagement(PSBaseEnv, ABC):
     def random_power_grid_path(self) -> str:
         """Returns the path of a random power grid in self.data_dir"""
         return self.np_random.choice(self.backend.get_valid_files(self.data_dir))
+    
+    def get_next_power_grid(self, options) -> Any:
+        path = options.get("power_grid_path", self.random_power_grid_path())
+        return self.backend.load_power_grid(path)
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple:
         """Resets environment to a new power grid for the given random seed."""
         super().reset(seed=seed)
         power_grid = self.state.power_grid
         if not self.soft_reset or (power_grid is None or options is not None and options.get("load_new_power_grid", False)):
-            power_grid = self.backend.load_power_grid(
-                self.random_power_grid_path())
+            power_grid = self.get_next_power_grid(options)
         ctrl_var = self.initialize_control_variables()
         self.backend.set_data_power_grid(power_grid, ctrl_var)
         self.run_power_grid(power_grid)

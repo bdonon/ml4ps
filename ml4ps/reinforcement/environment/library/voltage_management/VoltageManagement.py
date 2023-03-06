@@ -49,8 +49,9 @@ class VoltageManagement(PSBaseEnv, ABC):
     obs_feature_names: Dict
 
     def __init__(self, data_dir, address_names, obs_feature_names, n_obj=None,
-                 max_steps=None, cost_hparams=None):
+                 max_steps=None, cost_hparams=None, soft_reset=True):
         super().__init__()
+        self.soft_reset = soft_reset
         if self.address_names is None:
             raise NotImplementedError("Subclasses must define address_names")
         if self.backend is None:
@@ -123,7 +124,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         """Resets environment to a new power grid for the given random seed."""
         super().reset(seed=seed)
         power_grid = self.state.power_grid
-        if power_grid is None or options is not None and options.get("load_new_power_grid", False):
+        if not self.soft_reset or (power_grid is None or options is not None and options.get("load_new_power_grid", False)):
             power_grid = self.backend.load_power_grid(
                 self.random_power_grid_path())
         ctrl_var = self.initialize_control_variables()
@@ -138,7 +139,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         info = self.get_information(state=self.state, action=None)
         return obs, info
 
-    def step(self, action) -> Tuple:
+    def step(self, action) -> Tuple[H2MG, float, bool, bool, Dict]:
         """Update state with action and return new observation and reward."""
         last_cost = self.state.cost
         self.state = self.dynamics(self.state, action)

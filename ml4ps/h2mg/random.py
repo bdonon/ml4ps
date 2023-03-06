@@ -27,7 +27,7 @@ def normal_like(rng, h2mg: H2MG) -> H2MG:
     return h2mg.unflatten_like(x)
 
 def normal_logprob(h2mg: H2MG, mu: H2MG, log_sigma: H2MG) -> float:
-    r"""Returns the log-probability of `h2mg`, assuming it is sampled from \mathcal{N}(mu, diag(\exp(2 log\_sigma))).
+    r"""Returns the log-probability of `h2mg`, assuming it is sampled from :math:`\mathcal{N}(mu, diag(\exp(2 log\_sigma)))`.
 
     .. math::
         \log(P(h2mg | mu, \log(\sigma)) = \sum_{n=1}^N \left( - \frac{\log(2 \pi)}{2} - log\_sigma_n

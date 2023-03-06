@@ -166,8 +166,9 @@ class Reinforce():
     
     def get_final_info_dict(self, infos, prefix):
         res = {}
-        for key in infos[0]:
-            res[prefix+"final_"+key] = np.nanmean([info[key] for info in infos])
+        not_none_infos = [info for info in infos if info is not None]
+        for key in not_none_infos[0]:
+            res[prefix+"final_"+key] = np.nanmean([info[key] for info in not_none_infos])
         return res
     
     def log_final_info(self, logger, infos, step, prefix):
@@ -192,4 +193,4 @@ class Reinforce():
         with open(os.path.join(folder, "hparams.pkl"), 'wb') as f:
             pickle.dump(self.hparams, f)
         with open(os.path.join(folder, "train_state.pkl"), 'wb') as f:
-            pickle.dump(self.hparams, f)
+            pickle.dump(self.train_state, f)

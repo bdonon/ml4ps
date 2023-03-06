@@ -32,7 +32,8 @@ dependencies = [
     "gymnasium",
     "furo",
     "flax",
-    "diffrax"
+    "diffrax",
+    "mlflow"
 ]
 
 [build-system]

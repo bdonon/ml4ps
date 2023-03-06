@@ -120,7 +120,8 @@ class VoltageManagement(PSBaseEnv, ABC):
         """Returns the path of a random power grid in self.data_dir"""
         return self.np_random.choice(self.backend.get_valid_files(self.data_dir))
     
-    def get_next_power_grid(self, options) -> Any:
+    def get_next_power_grid(self, options=None) -> Any:
+        options = options if options is not None else {}
         path = options.get("power_grid_path", self.random_power_grid_path())
         return self.backend.load_power_grid(path)
 

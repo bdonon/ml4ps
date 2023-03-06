@@ -1,7 +1,7 @@
 from collections import defaultdict
 from enum import Enum
 from typing import Any, Callable, Dict, Iterator, List
-
+from functools import partial
 import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
@@ -547,7 +547,7 @@ def categorical_per_feature(rng, logits:H2MG, deterministic=False) -> H2MG:
     rng_h2mg = rng_like(rng, logits)
     logits_clean = logits.apply(lambda x: jnp.nan_to_num(x, nan=-jnp.inf))
     if deterministic:
-        return map_to_features(jnp.argmax, [logits_clean])
+        return map_to_features(partial(jnp.argmax, axis=-1), [logits_clean])
     r = map_to_features(jax.random.categorical, [rng_h2mg, logits_clean])
     return r + logits[:, 0] * 0
 

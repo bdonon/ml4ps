@@ -9,6 +9,17 @@ import numpy as np
 from functools import partial
 import pickle
 import os
+from flax.training import train_state
+
+class ReinforceTrainState(train_state.TrainState):
+    pass
+
+def create_train_state(*, module, apply_fn, rng, learning_rate, init_obs):
+    """Creates an initial `TrainState`."""
+    params = module.init(rng, init_obs)
+    tx = optax.adam(learning_rate=learning_rate)
+    return ReinforceTrainState.create(apply_fn=apply_fn, params=params, tx=tx)
+
 
 def remove_underscore_keys(d: Dict[str, Any]) -> Dict[str, Any]:
     keys_to_remove = []
@@ -22,7 +33,7 @@ def remove_underscore_keys(d: Dict[str, Any]) -> Dict[str, Any]:
 class Reinforce():
     policy: BasePolicy
     env: PSBaseEnv
-    def __init__(self, env: PSBaseEnv, seed=0, val_env: PSBaseEnv=None, test_env: PSBaseEnv=None, policy_type: str=None, logger=None, validation_interval=100) -> None:
+    def __init__(self, env: PSBaseEnv, seed=0, *, init_obs, val_env: PSBaseEnv=None, test_env: PSBaseEnv=None, policy_type: str=None, logger=None, validation_interval=100) -> None:
         super().__init__()
         self.policy = get_policy(policy_type, env, {})
         self.env = env
@@ -31,6 +42,7 @@ class Reinforce():
         self.test_env = test_env or env
         self.logger = logger
         self.validation_interval = validation_interval
+        self.train_state = create_train_state(module=self.policy, apply_fn=self.vmap_sample, rng=PRNGKey(seed), learning_rate=1e-3, init_obs=init_obs)
     
     @property
     def hparams(self):
@@ -40,20 +52,19 @@ class Reinforce():
     def hparams(self, value):
         self.validation_interval = value.get("validation_interval", self.validation_interval)
         self.seed = value.get("seed", self.seed)
+        
+    def train_step(self, state, batch, *, rng, batch_size):
+        action, _, sample_info = state.apply_fn(state.params, batch, split(rng, batch_size))
+        next_obs, rewards, done, _, step_info = self.env.step(action)
+        value, grad = self.value_and_grad_fn(state.params, batch, action, rewards)
+        state = state.apply_gradients(grads=grad)
+        return state, next_obs, rewards, sample_info, step_info
     
-    @property
-    def train_state(self):
-        pass
-    
-    @hparams.setter
-    def train_state(self, value):
-        pass
-    
-    def init(self, seed, observation):
-        self.params = self.policy.init(seed, obs=observation)
-        self.optimizer, self.optimizer_state = self.configure_optimizers(self.params)
+    def validation_step(self, state, batch, *, rng, batch_size):
+        action, _, sample_info = self.vmap_sample_det(state.params, batch, split(rng, batch_size))
+        next_obs, rewards, done, _, step_info = self.val_env.step(action)
+        return sample_info, step_info, rewards
 
-    
     def learn(self, logger=None, seed=None, batch_size=None, n_iterations=1000, validation_interval=None):
         validation_interval = validation_interval or self.validation_interval
         logger = logger or self.logger
@@ -67,12 +78,7 @@ class Reinforce():
         for i in tqdm(range(n_iterations)):
             # Train step
             rng_key, subkey = split(rng_key)
-            action, _, sample_info = self.vmap_sample(self.params, obs, split(subkey, batch_size))
-            next_obs, rewards, done, _, step_info = self.env.step(action)
-            value, grad = self.value_and_grad_fn(self.params, obs, action, rewards)
-            obs = next_obs
-            updates, self.optimizer_state = self.optimizer.update(grad, self.optimizer_state)
-            self.params = optax.apply_updates(self.params, updates)
+            self.train_state, obs, rewards, sample_info, step_info = self.train_step(self.train_state, obs, rng=subkey, batch_size=batch_size)
             
             # Logging
             self.log_dicts(logger, i, "train_", sample_info, step_info, {"reward": rewards})
@@ -82,9 +88,9 @@ class Reinforce():
                 self.val_env.reset()
                 for _ in range(10):
                     rng_key_val, subkey_val = split(rng_key_val)
-                    action, _, sample_info = self.vmap_sample_det(self.params, obs, split(subkey_val, batch_size))
-                    next_obs, rewards, done, _, step_info = self.val_env.step(action)
+                    sample_info, step_info, rewards = self.validation_step(self.train_state, obs, rng=subkey_val, batch_size=batch_size)
                     self.log_dicts(logger, i, "val_", sample_info, step_info, {"reward": rewards})
+    
 
     def test(self, step, logger=None, seed=None, batch_size=None, test_env=None, rng_key=None):
         # [WIP]
@@ -121,12 +127,6 @@ class Reinforce():
 
     def vmap_log_prob(self, params, obs, action):
         return vmap(self.policy.log_prob, in_axes=(None, 0, 0), out_axes=0)(params, obs, action)
-            
-    def configure_optimizers(self, params):
-        optimizer = optax.adam(learning_rate=1e-3)
-        optimizer_state = optimizer.init(params)
-        return optimizer, optimizer_state
-
 
     def log_dicts(self, logger, step, prefix, *dicts):
         for d in dicts:

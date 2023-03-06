@@ -41,7 +41,7 @@ class VoltageManagementPandapower(VoltageManagement):
     ctrl_var_names: Dict
     obs_feature_names: Dict
 
-    def __init__(self, data_dir, n_obj=None, max_steps=None, cost_hparams=None):
+    def __init__(self, data_dir, n_obj=None, max_steps=None, cost_hparams=None, soft_reset=True):
         self.address_names = {
             "bus": ["id"],
             "load": ["bus_id"],
@@ -73,7 +73,7 @@ class VoltageManagementPandapower(VoltageManagement):
         }
         self.backend = PaddingWrapper(PandaPowerBackend(), data_dir=data_dir)
         super().__init__(data_dir, address_names=self.address_names, obs_feature_names=self.obs_feature_names,
-                         n_obj=n_obj, max_steps=max_steps, cost_hparams=cost_hparams)
+                         n_obj=n_obj, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
 
     def has_diverged(self, power_grid) -> bool:
         return not power_grid.converged

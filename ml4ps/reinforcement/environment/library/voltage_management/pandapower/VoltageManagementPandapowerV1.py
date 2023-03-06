@@ -36,8 +36,8 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
         c_div: The float cost hyperparameter corresponding to the penalty for diverging power grid simulations.
     """
 
-    def __init__(self, data_dir, n_obj=None, max_steps=None, cost_hparams=None):
-        super().__init__(data_dir, n_obj=n_obj, max_steps=max_steps, cost_hparams=cost_hparams)
+    def __init__(self, data_dir, n_obj=None, max_steps=None, cost_hparams=None, soft_reset=True):
+        super().__init__(data_dir, n_obj=n_obj, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
         self.vlow = 0.8
         self.vhigh = 1.2
         self.ctrl_var_names = {"gen": ["vm_pu"],

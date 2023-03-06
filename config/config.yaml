@@ -1,0 +1,53 @@
+
+experiment_name: "default_experiment"
+run_name: null
+save_dir: null
+train_dir: ../data/test
+val_dir: ../data/val
+test_dir: ../data/test
+seed: 0
+debug: False
+shuffle: False
+batch_size: 8
+env_name: "VoltageManagementPandapowerV1"
+env:
+  name: ${env_name}
+  data_dir: ${train_dir}
+  num_envs: ${batch_size}
+  soft_reset: True
+val_env:
+  name: ${env_name}
+  data_dir: ${val_dir}
+  num_envs: ${batch_size}
+  soft_reset: True
+test_env:
+  name: ${env_name}
+  data_dir: ${test_dir}
+  num_envs: ${batch_size}
+  soft_reset: True
+algorithm:
+  # name: "reinforce"
+  policy_type: "continuous"
+  # learning_rate: 0.0003
+  # clip_norm: 0.1
+  # fixed_sigma: false
+  # n_actions_per_state: 1
+  # model:
+  #   name: "h2mgnode"
+  #   latent_dimension: 16
+  # normalizer:
+  #   data_dir: ${train_dir}
+  #   n_samples: 1000
+logger:
+  experiment_name: ${experiment_name}
+  run_name: ${run_name}
+  save_dir: ${save_dir}
+learn:
+  n_iterations: 6000
+# algorithm_hydra:
+#   _target_: ml4ps.reinforcement.algorithm.Reinforce
+#   policy_type: "continuous"
+#   learning_rate: 0.0003
+#   clip_norm: 0.1
+#   fixed_sigma: false
+#   n_actions_per_state: 1

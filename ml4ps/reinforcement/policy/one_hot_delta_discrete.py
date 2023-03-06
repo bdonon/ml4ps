@@ -8,7 +8,7 @@ from ml4ps.reinforcement.policy.base import BasePolicy
 
 
 class OneHotDeltaDiscrete(BasePolicy):
-    def __init__(self, env=None, normalizer=None, normalizer_args=None, nn_type="h2mgnode", np_random=None, **nn_args):
+    def __init__(self, env, normalizer=None, normalizer_args=None, nn_type="h2mgnode", np_random=None, **nn_args):
         self.nn_args = nn_args
         self.np_random = np_random or np.random.default_rng()
         self.normalizer = normalizer or self.build_normalizer(env, normalizer_args)

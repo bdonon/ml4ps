@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Any, Callable, Dict, Tuple
 
-
+import gymnasium
 from gymnasium import spaces
 from ml4ps import h2mg
 from jax import numpy as jnp
@@ -120,3 +120,9 @@ def unflatten_like(x, d):
         print(x.size)
         raise ValueError
     return res
+
+def get_single_action_space(env: gymnasium.Env) -> gymnasium.Space:
+    if isinstance(env, gymnasium.vector.VectorEnv):
+        return env.single_action_space
+    else:
+        return env.action_space

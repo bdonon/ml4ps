@@ -11,7 +11,7 @@ from ml4ps import Normalizer, h2mg
 from ml4ps.reinforcement.policy.base import BasePolicy
 
 from .utils import (add_prefix, combine_feature_names, flatten_dict,
-                    slice_with_prefix, space_to_feature_names, unflatten_like)
+                    slice_with_prefix, space_to_feature_names, unflatten_like, get_single_action_space)
 
 
 class FactorizedDeltaDiscrete(BasePolicy):
@@ -20,8 +20,9 @@ class FactorizedDeltaDiscrete(BasePolicy):
         self.nn_args = nn_args
         self.np_random = np_random or np.random.default_rng()
         self.normalizer = normalizer or self.build_normalizer(env, normalizer_args)
-        self.multi_discrete = env.action_space.multi_discrete.feature_dimension * 3
-        self.multi_binary = env.action_space.multi_binary.feature_dimension * 2
+        action_space = get_single_action_space(env)
+        self.multi_discrete = action_space.multi_discrete.feature_dimension * 3
+        self.multi_binary = action_space.multi_binary.feature_dimension * 2
         self.nn = ml4ps.neural_network.get(nn_type, {
             "feature_dimension": self.multi_binary.combine(self.multi_discrete), **nn_args})
 

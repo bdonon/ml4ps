@@ -10,6 +10,7 @@ from functools import partial
 import pickle
 import os
 from flax.training import train_state
+from collections import defaultdict
 
 class ReinforceTrainState(train_state.TrainState):
     pass
@@ -86,10 +87,18 @@ class Reinforce():
             # Val step
             if i % validation_interval==0 and self.val_env is not None:
                 self.val_env.reset()
+                val_metrics = defaultdict(list)
                 for _ in range(10):
                     rng_key_val, subkey_val = split(rng_key_val)
                     sample_info, step_info, rewards = self.validation_step(self.train_state, obs, rng=subkey_val, batch_size=batch_size)
-                    self.log_dicts(logger, i, "val_", sample_info, step_info, {"reward": rewards})
+                    sample_info, step_info = self.process_dict(sample_info, "val_") ,self.process_dict(step_info, "val_")
+                    for k, v in sample_info.items():
+                        val_metrics[k].append(v)
+                    for k, v in step_info.items():
+                        val_metrics[k].append(v)
+                    val_metrics["val_reward"].append(np.mean(rewards))
+                val_metrics = self.dict_mean(val_metrics)
+                logger.log_metrics_dict(val_metrics, i)
     
 
     def test(self, step, logger=None, seed=None, batch_size=None, test_env=None, rng_key=None):
@@ -130,27 +139,39 @@ class Reinforce():
 
     def log_dicts(self, logger, step, prefix, *dicts):
         for d in dicts:
-            d = remove_underscore_keys(d)
-            d = {prefix + k: v for (k, v) in d.items()}
-            d = self.handle_vector_env(logger, d, step, prefix)
+            d = self.process_dict(d, prefix)
             logger.log_metrics_dict(d, step)
     
-    def handle_vector_env(self, logger, d, step, prefix):
+    def process_dict(self, d: Dict[str, Any], prefix) -> Dict[str, Any]:
+        d = remove_underscore_keys(d)
+        d = {prefix + k: v for (k, v) in d.items()}
+        d = self.handle_vector_env( d, prefix)
+        return  self.dict_mean(d)
+    
+    def dict_mean(self, d):
+        return {k: np.nanmean(v) for (k, v) in d.items()}
+    
+    def handle_vector_env(self, d, prefix):
         keys_to_remove = []
+        final_info = {}
         for k, v  in d.items():
             if k.endswith("final_observation"):
                 keys_to_remove.append(k)
             elif k.endswith("final_info"):
                 keys_to_remove.append(k)
-                self.log_final_info(logger, v, step, prefix)
+                final_info = self.get_final_info_dict(v, prefix)
         for k in keys_to_remove:
             del d[k]
-        return d
+        return {**d, **final_info}
     
-    def log_final_info(self, logger, infos, step, prefix):
+    def get_final_info_dict(self, infos, prefix):
         res = {}
         for key in infos[0]:
             res[prefix+"final_"+key] = np.nanmean([info[key] for info in infos])
+        return res
+    
+    def log_final_info(self, logger, infos, step, prefix):
+        res = self.get_final_info_dict(infos, prefix)
         logger.log_metrics_dict(res, step=step)
 
     def log(self, key, value, step):

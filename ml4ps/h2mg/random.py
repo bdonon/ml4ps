@@ -31,7 +31,7 @@ def normal_logprob(h2mg: H2MG, mu: H2MG, log_sigma: H2MG) -> float:
 
     .. math::
         \log(P(h2mg | mu, \log(\sigma)) = \sum_{n=1}^N \left( - \frac{\log(2 \pi)}{2} - log\_sigma_n
-        - \frac{(h2mg_n - mu_n)^2}{\exp(2 log\_sigma_n)} \right
+        - \frac{(h2mg_n - mu_n)^2}{\exp(2 log\_sigma_n)} \right)
 
     Where $k$ is the amount of features defined in `h2mg`, `mu` and `log_sigma`.
     Fictitious objects (which are represented as NaNs) are not included in the sum.

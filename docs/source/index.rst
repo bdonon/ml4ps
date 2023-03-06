@@ -40,6 +40,7 @@ Contents
 .. toctree::
     :maxdepth: 1
 
+    h2mg/index
     data_formalism
     dataset/index
     normalization

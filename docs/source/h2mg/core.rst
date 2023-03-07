@@ -1,3 +1,5 @@
+.. _h2mg:
+
 Hyper Heterogeneous Multi Graphs
 ================================
 

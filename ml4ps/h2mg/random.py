@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -93,7 +95,7 @@ def categorical_per_feature(rng, logits:H2MG, deterministic=False) -> H2MG:
     rng_h2mg = split_rng_like(rng, logits)
     logits_clean = logits.apply(lambda x: jnp.nan_to_num(x, nan=-jnp.inf))
     if deterministic:
-        return map_to_features(jnp.argmax, [logits_clean])
+        return map_to_features(partial(jnp.argmax, axis=-1), [logits_clean])
     r = map_to_features(jax.random.categorical, [rng_h2mg, logits_clean])
     return r + logits[:, 0] * 0
 

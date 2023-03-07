@@ -12,10 +12,30 @@ Contents
 --------
 
 .. module:: ml4ps.h2mg.random
+
+Continuous Distributions
+________________________
+
 .. autofunction:: uniform_like
 .. autofunction:: normal_like
 .. autofunction:: normal_logprob
+
+Discrete Distributions
+______________________
+
 .. autofunction:: categorical
 .. autofunction:: categorical_logprob
 .. autofunction:: categorical_per_feature
 .. autofunction:: categorical_per_feature_logprob
+
+
+.. currentmodule:: ml4ps.h2mg.random
+
+.. automodule:: ml4ps.h2mg.random
+
+.. autosummary::
+  :toctree: _autosummary
+
+    categorical
+    categorical_logprob
+    categorical_per_feature

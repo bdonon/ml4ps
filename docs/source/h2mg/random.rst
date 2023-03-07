@@ -11,22 +11,6 @@ log-probability of an :ref:`H2MG <h2mg>` (differentiable w.r.t the parameters of
 Contents
 --------
 
-.. module:: ml4ps.h2mg.random
-
-Continuous Distributions
-________________________
-
-.. autofunction:: uniform_like
-.. autofunction:: normal_like
-.. autofunction:: normal_logprob
-
-Discrete Distributions
-______________________
-
-.. autofunction:: categorical
-.. autofunction:: categorical_logprob
-.. autofunction:: categorical_per_feature
-.. autofunction:: categorical_per_feature_logprob
 
 
 .. currentmodule:: ml4ps.h2mg.random

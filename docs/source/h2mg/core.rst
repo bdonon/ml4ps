@@ -1,7 +1,14 @@
-.. _h2mg:
+.. _h2mg_core:
 
-Hyper Heterogeneous Multi Graphs
-================================
+``ml4ps.h2mg.core.H2MG`` class
+=========================
 
-.. module:: ml4ps.h2mg.core
-.. autoclass:: H2MG
+.. currentmodule:: ml4ps.h2mg.core
+
+.. automodule:: ml4ps.h2mg.core
+
+.. autosummary::
+  :toctree: _autosummary
+
+    H2MG
+    H2MG.__add__

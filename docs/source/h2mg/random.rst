@@ -1,7 +1,7 @@
 .. _random_h2mg:
 
-Random H2MGs
-============
+``ml4ps.h2mg.random`` module
+============================
 
 Our package being aimed at training stochastic policies to control power grids, we propose
 several implementations of standard distributions.

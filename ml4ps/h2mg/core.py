@@ -1,24 +1,60 @@
-from collections import defaultdict
-from enum import Enum
-from typing import Any, Callable, Dict, Iterator, List
-from functools import partial
-import jax
-import jax.numpy as jnp
-from jax.tree_util import register_pytree_node_class
+from typing import Any, Callable, Dict, Iterator
+from jax.tree_util import register_pytree_node_class, tree_map
+
+
+# TODO : utiliser tree_map
+# TODO : utiliser tree_structure pour vérifier que les structures sont les mêmes
+# TODO : permettre d'agréger les features d'une même classe.
+# TODO : vérifier que toutes les dims d'une même classe sont identiques.
+# TODO : shallow repr cache pas mal de choses
+# TODO : rendre le constructeur plus clair, avec plusieurs signatures possibles.
+
+# TODO : changer le constructeur pour qu'on puisse créer un H2MG vide plus facilement, ou avec des signatures différentes
+
+# TODO : garder à l'esprit qu'un H2MG peut aussi contenir des fonctions plutôt que des array
+# TODO : si on initialise les données avec des listes ou des numpy array, il faut tout transformer en jax.array
+# TODO :     ça permettra d'assurer la compatibilité des fonctions shap.
+# TODO : que faire d'un H2MG qui contient des fonctions plutôt que des array ? Y a t il un attribut shape ?
+
+# TODO : mettre un check pour s'assurer qu'il n'y a pas une addresse quelque part qui soit supérieure au max de
+# TODO :     all_addresses.
+
+# TODO : mettre un check sur la profondeur des différents dictionnaires
+# TODO :     à voir, parce qu'on peut avoir des profondeurs variables.
+
+# TODO : mettre un check pour s'assurer qu'il n'y a pas de classe locale qui s'appelle 'global'
+
+# TODO : merge features : on rajoute une dimension si besoin sur chacune des features, et puis concatenate.
+# TODO :     ça fait sauter un niveau au H2MG, donc il faut voir si c'est ok pour nous ou si on veut créer une sous classe
+# TODO : en même temps, on aimerait bien pouvoir garder H2MG.local_features et global_features.
+
+# TODO : Check list :
+# TODO : 1/ Vérifier qu'il n'y a pas une clé inattendue
+
+
+LOCAL_FEATURES = "local_features"
+GLOBAL_FEATURES = "global_features"
+LOCAL_ADDRESSES = "local_addresses"
+ALL_ADDRESSES = "all_addresses"
 
 
 @register_pytree_node_class
 class H2MG(dict):
-    """ Hyper Heterogeneous Multi Graph (H2MG).
+    """Hyper Heterogeneous Multi Graph (H2MG)."""
 
-    Data formalism that can seamlessly represent power grid, without any preprocessing or aggregation.
-
-    """
-
-    def __init__(self, data, check_data=True):
-        if check_data:
-            self._check_data(data)
-        super().__init__(data)
+    def __init__(self, data_dict=None, check_data=True, **kwargs):
+        data = data_dict if data_dict else kwargs
+        if data:
+            super().__init__({
+                LOCAL_FEATURES: data.get(LOCAL_FEATURES, {}),
+                GLOBAL_FEATURES: data.get(GLOBAL_FEATURES, {}),
+                LOCAL_ADDRESSES: data.get(LOCAL_ADDRESSES, {}),
+                ALL_ADDRESSES: data.get(ALL_ADDRESSES, [])
+            })
+            if check_data:
+                self._check_data(data)
+        else:
+            super().__init__({LOCAL_FEATURES: {}, GLOBAL_FEATURES: {}, LOCAL_ADDRESSES: {}, ALL_ADDRESSES: []})
 
     def tree_flatten(self):
         children = self.values()
@@ -29,90 +65,65 @@ class H2MG(dict):
     def tree_unflatten(cls, aux_data, children):
         return H2MG({k: f for k, f in zip(aux_data, children)})
 
-    @property
-    def local_features(self) -> Dict:
-        return self.get(H2MGCategories.LOCAL_FEATURES.value, {})
-
-    @property
-    def global_features(self) -> Dict:
-        return self.get(H2MGCategories.GLOBAL_FEATURES.value, {})
-
-    @property
-    def local_addresses(self) -> Dict:
-        return self.get(H2MGCategories.LOCAL_ADDRESSES.value, {})
-
-    @property
-    def all_addresses(self):
-        return self.get(H2MGCategories.ALL_ADDRESSES.value, {})
-
-    @local_features.setter
-    def local_features(self, value):
-        self[H2MGCategories.LOCAL_FEATURES.value] = value
-
-    @global_features.setter
-    def global_features(self, value):
-        self[H2MGCategories.GLOBAL_FEATURES.value] = value
-
-    @local_addresses.setter
-    def local_addresses(self, value):
-        self[H2MGCategories.LOCAL_ADDRESSES.value] = value
-
-    @all_addresses.setter
-    def all_addresses(self, value):
-        self[H2MGCategories.ALL_ADDRESSES.value] = value
-
     def __add__(self, other) -> 'H2MG':
+        """Element-wise addition of two H2MGs with same structure, or of one H2MG with a scalar quantity."""
         if isinstance(other, H2MG):
-            return map_to_features(lambda a, b: a + b, [self, other])
+            return tree_map(lambda a, b: a + b, self, other)
         else:
-            return map_to_features(lambda a: a + other, [self])
+            return tree_map(lambda a: a + other, self)
+
+    def __radd__(self, other) -> 'H2MG':
+        return self.__add__(other)
 
     def __sub__(self, other) -> 'H2MG':
+        """Element-wise subtraction of two H2MGs with same structure, or of one H2MG with a scalar quantity."""
         if isinstance(other, H2MG):
-            return map_to_features(lambda a, b: a - b, [self, other])
+            return tree_map(lambda a, b: a - b, self, other)
         else:
-            return map_to_features(lambda a: a - other, [self])
+            return tree_map(lambda a: a - other, self)
+
+    def __rsub__(self, other) -> 'H2MG':
+        return - self.__sub__(other)
 
     def __mul__(self, other) -> 'H2MG':
+        """Element-wise multiplication of two H2MGs with same structure, or of one H2MG with a scalar quantity."""
         if isinstance(other, H2MG):
-            return map_to_features(lambda a, b: a * b, [self, other])
+            return tree_map(lambda a, b: a * b, self, other)
         else:
-            return map_to_features(lambda a: a * other, [self])
+            return tree_map(lambda a: a * other, self)
 
     def __rmul__(self, other) -> 'H2MG':
-        if isinstance(other, H2MG):
-            return map_to_features(lambda a, b: a * b, [self, other])
-        else:
-            return map_to_features(lambda a: a * other, [self])
+        return self.__mul__(other)
 
     def __truediv__(self, other) -> 'H2MG':
+        """Element-wise division of two H2MGs with same structure, or of one H2MG with a scalar quantity."""
         if isinstance(other, H2MG):
-            return map_to_features(lambda a, b: a / b, [self, other])
+            return tree_map(lambda a, b: a / b, self, other)
         else:
-            return map_to_features(lambda a: a / other, [self])
+            return tree_map(lambda a: a / other, self)
 
-    def __pow__(self, exponent: int) -> 'H2MG':
+    def __rtruediv__(self, other) -> 'H2MG':
+        if isinstance(other, H2MG):
+            return tree_map(lambda a, b: b / a, self, other)
+        else:
+            return tree_map(lambda a: other / a, self)
+
+    def __pow__(self, exponent) -> 'H2MG':
+        """Element-wise exponentiation of two H2MG with same structure, or of one H2MG with a scalar quantity."""
         if isinstance(exponent, H2MG):
-            return map_to_features(lambda a, b: a / b, [self, exponent])
-        return map_to_features(lambda a: a ** exponent, [self])
+            return tree_map(lambda a, b: a ** b, self, exponent)
+        else:
+            return tree_map(lambda a: a ** exponent, self)
+
+    def __rpow__(self, base) -> 'H2MG':
+        if isinstance(base, H2MG):
+            return tree_map(lambda a, b: a ** b, base, self)
+        else:
+            return tree_map(lambda a: base ** a, self)
 
     def __neg__(self) -> 'H2MG':
+        """Returns an H2MG with opposite features."""
         return self * (-1)
-
-    def log(self) -> 'H2MG':
-        return map_to_features(jnp.log, [self])
-
-    def exp(self) -> 'H2MG':
-        return map_to_features(jnp.exp, [self])
-
-    def maximum(self, other):
-        if isinstance(other, H2MG):
-            return map_to_features(lambda a, b: jnp.maximum(a, b), [self, other])
-        else:
-            return map_to_features(lambda a: jnp.maximum(a, other), [self])
-
-    def stack(self, other):
-        return map_to_features(lambda a, b: jnp.stack([a, b], axis=-1), [self, other])
 
     def __repr__(self) -> str:
         return super().__repr__()
@@ -123,22 +134,93 @@ class H2MG(dict):
     def __getitem__(self, __key: Any) -> Any:
         if isinstance(__key, str):
             return super().__getitem__(__key)
-        return map_to_features(lambda a: a.__getitem__(__key), [self])
+        return tree_map(lambda a: a.__getitem__(__key), [self])
 
-    def apply(self, fn: Callable[[Dict], Dict]) -> 'H2MG':
-        return map_to_features(fn, [self])
+    @property
+    def local_features(self) -> Dict:
+        return self.get(LOCAL_FEATURES, {})
 
-    def apply_h2mg_fn(self, h2mg_fn: Dict) -> 'H2MG':
-        return h2mg_apply(h2mg_fn, self)
+    @property
+    def global_features(self) -> Dict:
+        return self.get(GLOBAL_FEATURES, {})
 
-    def sum(self) -> float:
-        return sum(features_iterator(self.apply(jnp.sum)))
+    @property
+    def local_addresses(self) -> Dict:
+        return self.get(LOCAL_ADDRESSES, {})
 
-    def nansum(self) -> float:
-        return sum(features_iterator(self.apply(jnp.nansum)))
+    @property
+    def all_addresses(self):
+        return self.get(ALL_ADDRESSES, {})
 
-    def combine(self, other) -> 'H2MG':
-        return combine_space(self, other)
+    @local_features.setter
+    def local_features(self, value):
+        self[LOCAL_FEATURES] = value
+
+    @global_features.setter
+    def global_features(self, value):
+        self[GLOBAL_FEATURES] = value
+
+    @local_addresses.setter
+    def local_addresses(self, value):
+        self[LOCAL_ADDRESSES] = value
+
+    @all_addresses.setter
+    def all_addresses(self, value):
+        self[ALL_ADDRESSES] = value
+
+    @property
+    def local_features_iterator(self) -> Iterator:
+        for obj_name in self.get(LOCAL_FEATURES, {}):
+            for feat_name, value in self[LOCAL_FEATURES][obj_name].items():
+                yield LOCAL_FEATURES, obj_name, feat_name, value
+
+    @property
+    def local_addresses_iterator(self) -> Iterator:
+        for obj_name in self.get(LOCAL_ADDRESSES, {}):
+            for addr_name, value in self[LOCAL_ADDRESSES][obj_name].items():
+                yield LOCAL_ADDRESSES, obj_name, addr_name, value
+
+    @property
+    def global_features_iterator(self) -> Iterator:
+        for feat_name, value in self.get(GLOBAL_FEATURES, {}).items():
+            yield GLOBAL_FEATURES, feat_name, value
+
+    @property
+    def all_addresses_iterator(self) -> Iterator:
+        if ALL_ADDRESSES in self:
+            yield ALL_ADDRESSES, self[ALL_ADDRESSES]
+
+    @property
+    def shape(self) -> 'H2MG':
+        return tree_map(lambda a: a.shape, self)
+
+    @property
+    def size(self) -> 'H2MG':
+        return tree_map(lambda a: a.size, self)
+
+    @property
+    def class_count(self) -> 'H2MG':
+        shape_0 = self.shape[0]
+        local_features_count = {k: max(max([v for v in d.values()])) for k, d in shape_0.local_features.items()}
+        local_addresses_count = {k: max(max([v for v in d.values()])) for k, d in shape_0.local_features.items()}
+        local_count = {k: max(local_features_count[k], local_addresses_count[k]) for k in local_features_count | local_addresses_count}
+        global_count = max(max([d for d in shape_0.global_features.values()]))
+        return local_count | {'global': global_count}
+
+    def update(self, other) -> 'H2MG':
+        self.global_features = self.global_features | other.global_features
+        self.local_features = {k: self.local_features.get(k, {}) | other.local_features.get(k, {})
+            for k in self.local_features | other.local_features}
+        self.local_addresses = {k: self.local_addresses.get(k, {}) | other.local_addresses.get(k, {})
+            for k in self.local_addresses | other.local_addresses}
+        self.all_addresses = self.all_addresses if self.all_addresses else other.all_addresses
+
+    def apply(self, fn: Callable | 'H2MG') -> 'H2MG':
+        """Apply a single scalar function to all features, or a H2MG of functions with one function per tree_leaf. """
+        if isinstance(fn, H2MG):
+            return tree_map(lambda f, x: f(x), fn, self)
+        else:
+            return tree_map(fn, self)
 
     def plot(self):
         raise NotImplementedError
@@ -146,374 +228,36 @@ class H2MG(dict):
     def shallow_repr(self) -> Dict[str, Any]:
         return shallow_repr(self)
 
-    @property
-    def local_features_iterator(self) -> Iterator:
-        return local_features_iterator(self)
-
-    @property
-    def local_addresses_iterator(self) -> Iterator:
-        return local_addresses_iterator(self)
-
-    @property
-    def global_features_iterator(self) -> Iterator:
-        return global_features_iterator(self)
-
-    @property
-    def all_addresses_iterator(self) -> Iterator:
-        return all_addresses_iterator(self)
-
-    @property
-    def features(self) -> Iterator:
-        return features_iterator(self)
-
-    @property
-    def shape(self) -> 'H2MG':
-        return map_to_features(lambda a: a.shape, [self])
-
-    @property
-    def size(self) -> 'H2MG':
-        return map_to_features(lambda a: a.size, [self])
-
-    # def __len__(self) -> int:
-    #     return len(self.features)
-
     def extract_like(self, other: 'H2MG') -> 'H2MG':
-        build_dict = dict
-        output_h2mg = dict()
-        for local_key, obj_name, feat_name, value in other.local_features_iterator:
-            if local_key not in output_h2mg:
-                output_h2mg[local_key] = build_dict()
-            if obj_name not in output_h2mg[local_key]:
-                output_h2mg[local_key][obj_name] = build_dict()
-            output_h2mg[local_key][obj_name][feat_name] = self[local_key][obj_name][feat_name]
-
-        for global_key, feat_name, value in other.global_features_iterator:
-            if global_key not in output_h2mg:
-                output_h2mg[global_key] = build_dict()
-            output_h2mg[global_key][feat_name] = self[global_key][feat_name]
-
-        for local_key, obj_name, addr_name, value in other.local_addresses_iterator:
-            if local_key not in output_h2mg:
-                output_h2mg[local_key] = build_dict()
-            if obj_name not in output_h2mg[local_key]:
-                output_h2mg[local_key][obj_name] = build_dict()
-            output_h2mg[local_key][obj_name][addr_name] = self[local_key][obj_name][addr_name]
-
-        for all_addr_key, value in other.all_addresses_iterator:
-            output_h2mg[all_addr_key] = self[all_addr_key]
-        return H2MG(output_h2mg)
-
-    def flatten(self) -> jnp.ndarray:
-        flat_dim = sum(v.size for v in self.features)
-        flat_action = jnp.zeros(shape=flat_dim)
-        i = 0
-        for v in self.features:
-            flat_action = flat_action.at[i:i + v.size].set(v.flatten())
-            i += v.size
-        return flat_action
-
-    def unflatten_like(self, x) -> 'H2MG':
-        res = empty_like(self)
-        i = 0
-        for key, obj_name, feat_name, value in self.local_features_iterator:
-            res[key][obj_name][feat_name] = x[i:i + value.size].reshape(value.shape)
-            i += value.size
-        for key, feat_name, value in self.global_features_iterator:
-            res[key][feat_name] = x[i:i + value.size].reshape(value.shape)
-            i += value.size
-        if i != x.size:
-            raise ValueError(f"{i}!= {x.size}")
-        return res
+        """Extracts the features """
+        r = H2MG()
+        r.local_features = {k: {f: self.local_features[k][f] for f in d} for k, d in other.local_features.items()}
+        r.local_addresses = {k: {f: self.local_addresses[k][f] for f in d} for k, d in other.local_addresses.items()}
+        r.global_features = {k: self.global_features[k] for k in other.global_features}
+        r.all_addresses = self.all_addresses
+        return r
 
     def _check_data(self, data):
         if isinstance(data, list):
             return self._check_data(dict(data))
-        valid_keys = [H2MGCategories.LOCAL_FEATURES.value, H2MGCategories.LOCAL_ADDRESSES.value,
-            H2MGCategories.GLOBAL_FEATURES.value, H2MGCategories.ALL_ADDRESSES.value]
+        valid_keys = [LOCAL_FEATURES, LOCAL_ADDRESSES, GLOBAL_FEATURES, ALL_ADDRESSES]
         if not set(data.keys()).issubset(set(valid_keys)):
             raise ValueError(f"Unknown keys in data: {data.keys()}, expected in {valid_keys}")
-
-    @staticmethod
-    def make(local_features, global_features, local_addresses, all_addresses):
-        data = {
-            H2MGCategories.LOCAL_FEATURES.value: local_features, H2MGCategories.GLOBAL_FEATURES.value: global_features,
-            H2MGCategories.LOCAL_ADDRESSES.value: local_addresses, H2MGCategories.ALL_ADDRESSES.value: all_addresses}
-        H2MG._check_data(data)
-        return H2MG(data)
-
-
-def combine_space(a, b):
-    x = empty_h2mg()
-    for local_key, obj_name, feat_name, value in local_features_iterator(a):
-        x[local_key][obj_name][feat_name] = value
-    for local_key, obj_name, feat_name, value in local_features_iterator(b):
-        x[local_key][obj_name][feat_name] = value
-
-    for global_key, feat_name, value in global_features_iterator(a):
-        x[global_key][feat_name] = value
-    for global_key, feat_name, value in global_features_iterator(b):
-        x[global_key][feat_name] = value
-
-    for local_key, obj_name, addr_name, value in local_addresses_iterator(a):
-        x[local_key][obj_name][addr_name] = value
-    for local_key, obj_name, addr_name, value in local_addresses_iterator(b):
-        x[local_key][obj_name][addr_name] = value
-
-    for all_addr_key, value in all_addresses_iterator(a):
-        x[all_addr_key] = value
-    return H2MG(x)
-
-
-class H2MGCategories(Enum):
-
-    LOCAL_FEATURES = "local_features"
-
-    GLOBAL_FEATURES = "global_features"
-
-    LOCAL_ADDRESSES = "local_addresses"
-
-    ALL_ADDRESSES = "all_addresses"
-
-
-def h2mg(local_features, global_features, local_addresses, all_addresses):
-    return {
-        H2MGCategories.LOCAL_FEATURES.value: local_features, H2MGCategories.GLOBAL_FEATURES.value: global_features,
-        H2MGCategories.LOCAL_ADDRESSES.value: local_addresses, H2MGCategories.ALL_ADDRESSES.value: all_addresses}
-
-
-def local_features(h2mg: Dict) -> Dict:
-    return h2mg.get(H2MGCategories.LOCAL_FEATURES.value, {})
-
-
-def global_features(h2mg):
-    return h2mg.get(H2MGCategories.GLOBAL_FEATURES.value, {})
-
-
-def local_addresses(h2mg):
-    return h2mg.get(H2MGCategories.LOCAL_ADDRESSES.value, {})
-
-
-def all_addresses(h2mg):
-    return h2mg.get(H2MGCategories.ALL_ADDRESSES.value, [])
-
-
-def local_feature_names_iterator(feature_names):
-    local_key = H2MGCategories.LOCAL_FEATURES.value
-    if local_key in feature_names:
-        for obj_name, feat_names_list in feature_names[local_key].items():
-            for feat_name in feat_names_list:
-                yield local_key, obj_name, feat_name
-
-
-def global_feature_names_iterator(feature_names):
-    global_key = H2MGCategories.GLOBAL_FEATURES.value
-    if global_key in feature_names:
-        for feat_name in feature_names[global_key]:
-            yield global_key, feat_name
-
-
-def local_features_iterator(h2mg) -> Iterator:
-    local_key = H2MGCategories.LOCAL_FEATURES.value
-    if h2mg.get(local_key, None) is not None:
-        for obj_name in h2mg[local_key]:
-            for feat_name, value in h2mg[local_key][obj_name].items():
-                yield local_key, obj_name, feat_name, value
-
-
-def global_features_iterator(h2mg) -> Iterator:
-    global_key = H2MGCategories.GLOBAL_FEATURES.value
-    if h2mg.get(global_key, None) is not None:
-        for feat_name, value in h2mg[global_key].items():
-            yield global_key, feat_name, value
-
-
-def local_addresses_iterator(h2mg) -> Iterator:
-    local_key = H2MGCategories.LOCAL_ADDRESSES.value
-    if h2mg.get(local_key, None) is not None:
-        for obj_name in h2mg[local_key]:
-            for addr_name, value in h2mg[local_key][obj_name].items():
-                yield local_key, obj_name, addr_name, value
-
-
-def all_addresses_iterator(h2mg) -> Iterator:
-    all_addr_key = H2MGCategories.ALL_ADDRESSES.value
-    if h2mg.get(all_addr_key, None) is not None:
-        yield all_addr_key, h2mg[all_addr_key]
-
-
-def features_iterator(h2mg) -> Iterator:
-    for _, _, _, value in local_features_iterator(h2mg):
-        yield value
-    for _, _, value in global_features_iterator(h2mg):
-        yield value
-
-
-def empty_h2mg():
-    return defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
-
-
-def h2mg_slicer(key, obj_name, feat_name):
-    def slice(h2mg):
-        if key == H2MGCategories.LOCAL_FEATURES.value:
-            return h2mg[key][obj_name][feat_name]
-        elif key == H2MGCategories.GLOBAL_FEATURES.value:
-            return h2mg[key][feat_name]
-        elif key == H2MGCategories.LOCAL_ADDRESSES.value:
-            return h2mg[key][obj_name][feat_name]
-        elif key == H2MGCategories.ALL_ADDRESSES.value:
-            return h2mg[key]
-        else:
-            raise ValueError
-
-    return slice
-
-
-def compatible(h2mg, h2mg_other):
-    if not (isinstance(h2mg, dict) and isinstance(h2mg_other, dict)):
-        return False
-    if set(h2mg.keys()) != set(h2mg_other.keys()):
-        return False
-    local_key = H2MGCategories.LOCAL_FEATURES.value
-    if set(h2mg.get(local_key, [])) != set(h2mg_other.get(local_key, [])):
-        return False
-    for obj_name in h2mg.get(local_key, []):
-        if set(h2mg[local_key].get(obj_name, [])) != set(h2mg_other[local_key].get(obj_name, [])):
-            return False
-    local_addr_key = H2MGCategories.LOCAL_ADDRESSES.value
-    if set(h2mg.get(local_addr_key, [])) != set(h2mg_other.get(local_addr_key, [])):
-        return False
-    for feat_name in h2mg.get(local_addr_key, []):
-        if set(h2mg[local_addr_key].get(feat_name, [])) != set(h2mg_other[local_addr_key].get(feat_name, [])):
-            return False
-    global_key = H2MGCategories.GLOBAL_FEATURES.value
-    if set(h2mg.get(global_key, [])) != set(h2mg_other.get(global_key, [])):
-        return False
-    return True
-
-
-def h2mg_apply(fns_h2mg: H2MG, target_h2mg: H2MG, local_features: bool = True, global_features: bool = True,
-               local_addresses: bool = False, all_addresses: bool = False) -> H2MG:
-    if local_features:
-        for key, obj_name, feat_name, value in local_features_iterator(target_h2mg):
-            fn = fns_h2mg.get(key, {}).get(obj_name, {}).get(feat_name, lambda x: x)
-            target_h2mg[key][obj_name][feat_name] = fn(value)
-    if global_features:
-        for key, feat_name, value in global_features_iterator(target_h2mg):
-            fn = fns_h2mg.get(key, {}).get(feat_name, lambda x: x)
-            target_h2mg[key][feat_name] = fn(value)
-    if local_addresses:
-        for key, obj_name, feat_name, value in local_addresses_iterator(target_h2mg):
-            fn = fns_h2mg.get(key, {}).get(obj_name, {}).get(feat_name, lambda x: x)
-            target_h2mg[key][obj_name][feat_name] = fn(value)
-    if all_addresses:
-        for key, value in all_addresses_iterator(target_h2mg):
-            fn = fns_h2mg.get(key, lambda x: x)
-            target_h2mg[key] = fn(value)
-
-    return H2MG(target_h2mg)
-
-
-def all_compatible(*h2mgs):
-    if len(h2mgs) < 2:
-        return True
-    else:
-        return compatible(h2mgs[0], h2mgs[1]) and all_compatible(*h2mgs[1:])
-
-
-def empty_like(h2mg):
-    new_h2mg = {}
-    for key, obj_name, feat_name, value in local_features_iterator(h2mg):
-        if key not in new_h2mg:
-            new_h2mg[key] = {}
-        if obj_name not in new_h2mg[key]:
-            new_h2mg[key][obj_name] = {}
-        if feat_name not in new_h2mg[key][obj_name]:
-            new_h2mg[key][obj_name][feat_name] = None  # jnp.empty_like(jnp.array(value))
-
-    for key, feat_name, value in global_features_iterator(h2mg):
-        if key not in new_h2mg:
-            new_h2mg[key] = {}
-        if feat_name not in new_h2mg[key]:
-            new_h2mg[key][feat_name] = None  # jnp.empty_like(jnp.array(value))
-
-    for key, obj_name, addr_name, value in local_addresses_iterator(h2mg):
-        if key not in new_h2mg:
-            new_h2mg[key] = {}
-        if obj_name not in new_h2mg[key]:
-            new_h2mg[key][obj_name] = {}
-        if addr_name not in new_h2mg[key][obj_name]:
-            new_h2mg[key][obj_name][addr_name] = value
-
-    for key, value in all_addresses_iterator(h2mg):
-        new_h2mg[key] = value
-
-    return H2MG(new_h2mg)
-
-
-def collate_h2mgs_features(h2mgs_list):
-    def collate_arrays(*args):
-        return jnp.array(list(args))
-
-    return map_to_features(collate_arrays, h2mgs_list)
-
-
-def h2mg_map(fn: Callable, args_h2mg: List = None, local_features: bool = True, global_features: bool = True,
-             local_addresses: bool = False, all_addresses: bool = False, check_compat: bool = False) -> Dict:
-    if not args_h2mg:
-        raise ValueError
-    if check_compat and not all_compatible(args_h2mg):
-        raise ValueError
-    results = empty_like(args_h2mg[0])
-    if local_features:
-        for key, obj_name, feat_name, value in local_features_iterator(results):
-            results[key][obj_name][feat_name] = fn(*list(map(h2mg_slicer(key, obj_name, feat_name), args_h2mg)))
-    if global_features:
-        for key, feat_name, value in global_features_iterator(results):
-            results[key][feat_name] = fn(*list(map(h2mg_slicer(key, None, feat_name), args_h2mg)))
-    if local_addresses:
-        for key, obj_name, feat_name, value in local_addresses_iterator(results):
-            results[key][obj_name][feat_name] = fn(*list(map(h2mg_slicer(key, obj_name, feat_name), args_h2mg)))
-    if all_addresses:
-        for key, value in all_addresses_iterator(results):
-            results[key] = fn(*list(map(h2mg_slicer(key, None, None), args_h2mg)))
-
-    return H2MG(results)
-
-
-def map_to_features(fn: Callable, args_h2mg: List[H2MG], check_compat=False) -> H2MG:
-    if not isinstance(args_h2mg, list):
-        raise ValueError
-    return h2mg_map(fn=fn, args_h2mg=args_h2mg, check_compat=check_compat)
-
-
-def map_to_all(fn: Callable, args_h2mg: List, check_compat=False) -> H2MG:
-    return h2mg_map(fn, args_h2mg=args_h2mg, local_features=True, global_features=True, local_addresses=True,
-                    all_addresses=True, check_compat=check_compat)
-
-
-def collate_h2mgs(h2mgs_list):
-    def collate_arrays(*args):
-        return jnp.array(list(args))
-
-    return map_to_all(collate_arrays, h2mgs_list)
 
 
 def shallow_repr(h2mg, local_features: bool = True, global_features: bool = True, local_addresses: bool = False,
                  all_addresses: bool = False) -> Dict[str, Any]:
     results = {}
     if local_features:
-        for key, obj_name, feat_name, value in local_features_iterator(h2mg):
+        for key, obj_name, feat_name, value in h2mg.local_features_iterator:
             results[obj_name + "_" + feat_name] = value
     if global_features:
-        for key, feat_name, value in global_features_iterator(h2mg):
+        for key, feat_name, value in h2mg.global_features_iterator:
             results[feat_name] = value
     if local_addresses:
-        for key, obj_name, feat_name, value in local_addresses_iterator(h2mg):
+        for key, obj_name, feat_name, value in h2mg.local_addresses_iterator:
             results[obj_name + "_" + feat_name] = value
     if all_addresses:
-        for key, value in all_addresses_iterator(h2mg):
+        for key, value in h2mg.all_addresses_iterator:
             results[key] = value
     return results
-
-
-

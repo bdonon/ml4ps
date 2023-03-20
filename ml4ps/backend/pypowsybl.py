@@ -1,13 +1,13 @@
-from ml4ps.backend.interface import AbstractBackend
-# from ml4ps.utils import clean_dict, convert_addresses_to_integers
-
 import pypowsybl.loadflow as pl
 import pypowsybl.network as pn
-
+import pypowsybl
 import os
 import pandas as pd
 import numpy as np
-from joblib import Parallel, delayed, parallel_backend
+
+from ml4ps.backend.interface import AbstractBackend
+from ml4ps.h2mg import H2MGStructure, HyperEdgesStructure, H2MG, HyperEdges
+
 
 VALID_FEATURE_NAMES = {
     'bus': ['v_mag', 'v_angle'],
@@ -37,8 +37,7 @@ VALID_FEATURE_NAMES = {
 
     # vsc / lcc converter stations à mettre 
     'vsc_converter_station': ['loss_factor', 'min_q', 'max_q', 'min_q_at_p', 'max_q_at_p', 'reactive_limits_kind', 'target_v', 'target_q', 'voltage_regulator_on', 'p', 'q', 'i' ,'connected'], 
-    'lcc_converter_station': ['power_factor', 'loss_factor', 'p', 'q', 'i', 'connected'], 
-
+    'lcc_converter_station': ['power_factor', 'loss_factor', 'p', 'q', 'i', 'connected'],
 }
 
 VALID_ADDRESSE_NAMES = {
@@ -65,56 +64,59 @@ VALID_ADDRESSE_NAMES = {
 
 
 class PyPowSyblBackend(AbstractBackend):
+    """Backend implementation that uses `Pypowsybl <https://pypowsybl.readthedocs.io>`_."""
 
     valid_extensions = (".xiidm", "xiidm.gz", ".mat")
-    valid_feature_names = VALID_FEATURE_NAMES
-    valid_address_names = VALID_ADDRESSE_NAMES
 
-    def __init__(self, n_cores=0):
+    valid_structure = H2MGStructure()
+    for key in VALID_ADDRESSE_NAMES.keys():
+        hyper_edges_structure = HyperEdgesStructure(addresses=VALID_ADDRESSE_NAMES[key], features=VALID_FEATURE_NAMES[key])
+        valid_structure.add_local_hyper_edges_structure(key, hyper_edges_structure)
+
+    def __init__(self):
         super().__init__()
 
-        self.n_cores = n_cores
-
     @staticmethod
-    def get_table(net, key):
+    def get_table(power_grid: pypowsybl.network, key: str) -> pd.DataFrame:
+        """Gets a pandas dataframe for the object class `key`."""
         if key == 'bus':
-            table = net.get_buses().reset_index()
+            table = power_grid.get_buses().reset_index()
         elif key == 'gen':
-            table = net.get_generators().reset_index()
+            table = power_grid.get_generators().reset_index()
         elif key == 'load':
-            table = net.get_loads().reset_index()
+            table = power_grid.get_loads().reset_index()
         elif key == 'shunt_compensator':
-            table = net.get_shunt_compensators().reset_index()
+            table = power_grid.get_shunt_compensators().reset_index()
         elif key == "static_var_compensators":
-            table = net.get_static_var_compensators().reset_index()
+            table = power_grid.get_static_var_compensators().reset_index()
         elif key == 'batteries':
-            table = net.get_batteries().reset_index()
+            table = power_grid.get_batteries().reset_index()
         elif key == 'line':
-            table = net.get_lines().reset_index()
+            table = power_grid.get_lines().reset_index()
         elif key == 'twt':
-            table = net.get_2_windings_transformers().reset_index()
+            table = power_grid.get_2_windings_transformers().reset_index()
         elif key == 'thwt':
-            table = net.get_3_windings_transformers().reset_index()
+            table = power_grid.get_3_windings_transformers().reset_index()
         elif key == 'voltage_levels':
-            table = net.get_voltage_levels().reset_index()
+            table = power_grid.get_voltage_levels().reset_index()
         elif key == 'substations':
-            table = net.get_substations().reset_index()
+            table = power_grid.get_substations().reset_index()
         elif key == 'operational_limits': 
-            table = net.get_operational_limits().reset_index()
+            table = power_grid.get_operational_limits().reset_index()
         elif key == 'dangling_lines': 
-            table = net.get_dangling_lines().reset_index()
+            table = power_grid.get_dangling_lines().reset_index()
         elif key == 'ratio_tap_changers': 
-            table = net.get_ratio_tap_changers().reset_index()
+            table = power_grid.get_ratio_tap_changers().reset_index()
         elif key == 'phase_tap_changers': 
-            table = pd.merge(net.get_phase_tap_changers(all_attributes=True).reset_index(), 
-                             net.get_phase_tap_changer_steps().reset_index(), 
+            table = pd.merge(power_grid.get_phase_tap_changers(all_attributes=True).reset_index(),
+                             power_grid.get_phase_tap_changer_steps().reset_index(),
                              left_on=['id', 'tap'], right_on=['id', 'position'], how='left')
         elif key == 'hvdc_line': 
-            table = net.get_hvdc_lines().reset_index()
+            table = power_grid.get_hvdc_lines().reset_index()
         elif key == 'vsc_converter_station': 
-            table = net.get_vsc_converter_stations(all_attributes=True).reset_index()
+            table = power_grid.get_vsc_converter_stations(all_attributes=True).reset_index()
         elif key == 'lcc_converter_station': 
-            table = net.get_lcc_converter_stations().reset_index()
+            table = power_grid.get_lcc_converter_stations().reset_index()
         else:
             raise ValueError(f'Object {key} is not a valid object name. ' +
                              f'Please pick from this list : {VALID_FEATURE_NAMES}')
@@ -124,103 +126,105 @@ class PyPowSyblBackend(AbstractBackend):
         table = table.fillna(0.)
         return table
 
-    def get_data_network(self, network, feature_names=None, address_names=None, address_to_int=True):
-        """Extracts features from a pandapower network.
+    def get_h2mg_from_power_grid(self, power_grid: pypowsybl.network, structure: H2MGStructure = None,
+                                 str_to_int: bool = True) -> H2MG:
+        """Extracts features from a pypowsybl network.
 
         Addresses are converted into unique integers that start at 0.
         Overrides the abstract `get_data_network` method.
         """
-        if feature_names is None:
-            feature_names = dict()
-        if address_names is None:
-            address_names = dict()
+        if structure is not None:
+            current_structure = structure
+        elif self.default_structure is not None:
+            current_structure = self.default_structure
+        else:
+            current_structure = self.valid_structure
 
-        object_names = list(set(list(feature_names.keys()) + list(address_names.keys())))
-        x = {}
-        for object_name in object_names:
+        h2mg = H2MG()
+        if current_structure.local_hyper_edges_structure is not None:
+            for k, hyper_edges_structure in current_structure.local_hyper_edges_structure.items():
+                table = self.get_table(power_grid, k)
+                if not table.empty:
 
-            if (object_name in address_names.keys()) or (object_name in feature_names.keys()):
-                x[object_name] = {}
-                table = self.get_table(network, object_name)
+                    addresses_dict = None
+                    if hyper_edges_structure.addresses is not None:
+                        addresses_dict = {}
+                        for address_name in hyper_edges_structure.addresses:
+                            addresses_dict[address_name] = table[address_name].astype(str).values
 
-                object_address_names = address_names.get(object_name, [])
-                for address_name in object_address_names:
-                    x[object_name][address_name] = table[address_name].astype(str).values
+                    features_dict = None
+                    if hyper_edges_structure.features is not None:
+                        features_dict = {}
+                        for feature_name in hyper_edges_structure.features:
+                            features_dict[feature_name] = np.nan_to_num(table[feature_name].astype(float).values, copy=False) * 1
 
-                object_feature_names = feature_names.get(object_name, [])
-                for feature_name in object_feature_names:
-                    try:
-                        if len(table[feature_name])>0:
-                            if isinstance(table[feature_name][0], str):
-                                table[feature_name] = table[feature_name].astype('category').cat.codes
+                    hyper_edges = HyperEdges(features=features_dict, addresses=addresses_dict)
+                    if not hyper_edges.is_empty():
+                        h2mg.add_local_hyper_edges(k, hyper_edges)
 
-                        x[object_name][feature_name] = np.array(table[feature_name], dtype=np.float32)
-                    except Exception as e : 
-                        print(e, object_name, feature_name)
+        if str_to_int:
+            h2mg.convert_str_to_int()
+        return h2mg
 
-        # clean_dict(x)
-        # if address_to_int:
-        #     convert_addresses_to_integers(x, address_names)
-        return x
+    def load_power_grid(self, file_path: str) -> pypowsybl.network:
+        """Loads a pypowsybl power grid instance.
 
-    def load_network(self, file_path):
+        Overrides the abstract `load_power_grid` method.
+        """
         return pn.load(file_path)
 
-    def set_data_network(self, net, y):
-        for k in y.keys():
-            for f in y[k].keys():
+    def set_h2mg_into_power_grid(self, power_grid: pypowsybl.network, h2mg: H2MG) -> None:
+        """Updates a power grid by setting features according to `h2mg`.
+
+        Overrides the abstract `set_data_power_grid` method.
+        """
+        for k in h2mg.hyper_edges:
+            for f in h2mg[k].features.keys():
                 if k == 'bus':
-                    df = pd.DataFrame(data=y[k][f], index=net.get_buses().index, columns=[f])
-                    net.update_buses(df)
+                    df = pd.DataFrame(data=h2mg[k].features[f], index=power_grid.get_buses().index, columns=[f])
+                    power_grid.update_buses(df)
                 elif k == 'gen':
-                    df = pd.DataFrame(data=y[k][f], index=net.get_generators().index, columns=[f])
-                    net.update_generators(df)
+                    df = pd.DataFrame(data=h2mg[k].features[f], index=power_grid.get_generators().index, columns=[f])
+                    power_grid.update_generators(df)
                 elif k == 'load':
-                    df = pd.DataFrame(data=y[k][f], index=net.get_loads().index, columns=[f])
-                    net.update_loads(df)
+                    df = pd.DataFrame(data=h2mg[k].features[f], index=power_grid.get_loads().index, columns=[f])
+                    power_grid.update_loads(df)
                 elif k == 'line':
-                    df = pd.DataFrame(data=y[k][f], index=net.get_lines().index, columns=[f])
-                    net.update_lines(df)
+                    df = pd.DataFrame(data=h2mg[k].features[f], index=power_grid.get_lines().index, columns=[f])
+                    power_grid.update_lines(df)
                 elif k == 'twt':
-                    df = pd.DataFrame(data=y[k][f], index=net.get_2_windings_transformers().index, columns=[f])
-                    net.update_2_windings_transformers(df)
+                    df = pd.DataFrame(data=h2mg[k].features[f], index=power_grid.get_2_windings_transformers().index, columns=[f])
+                    power_grid.update_2_windings_transformers(df)
                 elif k == 'thwt':
-                    df = pd.DataFrame(data=y[k][f], index=net.get_3_windings_transformers().index, columns=[f])
-                    net.update_3_windings_transformers(df)
+                    df = pd.DataFrame(data=h2mg[k].features[f], index=power_grid.get_3_windings_transformers().index, columns=[f])
+                    power_grid.update_3_windings_transformers(df)
                 elif k == 'static_var_compensators': 
-                    df = pd.DataFrame(data=y[k][f], index=net.get_static_var_compensators().index, columns=[f])
-                    net.update_static_var_compensators(df)
+                    df = pd.DataFrame(data=h2mg[k].features[f], index=power_grid.get_static_var_compensators().index, columns=[f])
+                    power_grid.update_static_var_compensators(df)
                 else:
                     raise ValueError(f'Object {k} is not a valid object name. ' +
                                      f'Please pick from this specific list : {VALID_FEATURE_NAMES}')
 
-    def run_network(self, net, **kwargs):
-        parameters = pl.Parameters(voltage_init_mode=pl.VoltageInitMode.DC_VALUES)
-        pl.run_ac(net, parameters=parameters)
+    def run_power_grid(self, power_grid: pypowsybl.network, **kwargs) -> None:
+        """Runs a power flow simulation.
 
-    def save_network(self, net, path):
+        Pypowsybl `runpp` options can be passed as keyword arguments.
+        Overrides the abstract `run_power_grid` method.
+        """
+        parameters = pl.Parameters(voltage_init_mode=pl.VoltageInitMode.DC_VALUES)
+        pl.run_ac(power_grid, parameters=parameters)
+
+    def save_power_grid(self, power_grid: pypowsybl.network, path: str) -> None:
         """Saves a power grid instance using the same name as in the initial file.
 
         Useful for saving a version of a test set modified by a trained neural network.
         Overrides the abstract `save_network` method.
         """
-        file_name = net.name
+        file_name = power_grid.name
         file_path = os.path.join(path, file_name)
         if file_path.endswith('.xiidm'):
-            net.dump(file_path, format="XIIDM")
+            power_grid.dump(file_path, format="XIIDM")
         elif file_path.endswith('.mat'):
-            net.dump(file_path, format=file_path)
+            power_grid.dump(file_path, format=file_path)
         else:
             raise NotImplementedError('No support for file {}'.format(file_path))
-
-    def run_batch(self, network_batch, **kwargs):
-        """Performs power flow computations for a batch of power grids."""
-        def run_single(i):
-            net = network_batch[i]
-            parameters = pl.Parameters(voltage_init_mode=pl.VoltageInitMode.DC_VALUES)
-            pl.run_ac(net, parameters=parameters)
-
-        if self.n_cores > 0:
-            Parallel(n_jobs=self.n_cores, require='sharedmem')(delayed(run_single)(i) for i in range(len(network_batch)))
-        else:
-            super(PyPowSyblBackend, self).run_batch(network_batch, **kwargs)

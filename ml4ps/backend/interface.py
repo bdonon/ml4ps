@@ -1,4 +1,3 @@
-from ml4ps.utils import collate_dict, separate_dict, assert_substructure
 from abc import ABC, abstractmethod
 import numpy as np
 import os

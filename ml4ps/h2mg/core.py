@@ -1,263 +1,308 @@
-from typing import Any, Callable, Dict, Iterator
-from jax.tree_util import register_pytree_node_class, tree_map
+import numpy as np
+import jax.numpy as jnp
+from jax.tree_util import register_pytree_node_class
+
+from ml4ps.h2mg.hyper_edges import HyperEdges, collate_hyper_edges, separate_hyper_edges
 
 
-# TODO : utiliser tree_map
-# TODO : utiliser tree_structure pour vérifier que les structures sont les mêmes
-# TODO : permettre d'agréger les features d'une même classe.
-# TODO : vérifier que toutes les dims d'une même classe sont identiques.
-# TODO : shallow repr cache pas mal de choses
-# TODO : rendre le constructeur plus clair, avec plusieurs signatures possibles.
-
-# TODO : changer le constructeur pour qu'on puisse créer un H2MG vide plus facilement, ou avec des signatures différentes
-
-# TODO : garder à l'esprit qu'un H2MG peut aussi contenir des fonctions plutôt que des array
-# TODO : si on initialise les données avec des listes ou des numpy array, il faut tout transformer en jax.array
-# TODO :     ça permettra d'assurer la compatibilité des fonctions shap.
-# TODO : que faire d'un H2MG qui contient des fonctions plutôt que des array ? Y a t il un attribut shape ?
-
-# TODO : mettre un check pour s'assurer qu'il n'y a pas une addresse quelque part qui soit supérieure au max de
-# TODO :     all_addresses.
-
-# TODO : mettre un check sur la profondeur des différents dictionnaires
-# TODO :     à voir, parce qu'on peut avoir des profondeurs variables.
-
-# TODO : mettre un check pour s'assurer qu'il n'y a pas de classe locale qui s'appelle 'global'
-
-# TODO : merge features : on rajoute une dimension si besoin sur chacune des features, et puis concatenate.
-# TODO :     ça fait sauter un niveau au H2MG, donc il faut voir si c'est ok pour nous ou si on veut créer une sous classe
-# TODO : en même temps, on aimerait bien pouvoir garder H2MG.local_features et global_features.
-
-# TODO : Check list :
-# TODO : 1/ Vérifier qu'il n'y a pas une clé inattendue
-
-
-LOCAL_FEATURES = "local_features"
-GLOBAL_FEATURES = "global_features"
-LOCAL_ADDRESSES = "local_addresses"
+GLOBAL = "global"
 ALL_ADDRESSES = "all_addresses"
 
 
 @register_pytree_node_class
 class H2MG(dict):
-    """Hyper Heterogeneous Multi Graph (H2MG)."""
+    """Hyper Heterogeneous Multi Graph (H2MG).
 
-    def __init__(self, data_dict=None, check_data=True, **kwargs):
-        data = data_dict if data_dict else kwargs
-        if data:
-            super().__init__({
-                LOCAL_FEATURES: data.get(LOCAL_FEATURES, {}),
-                GLOBAL_FEATURES: data.get(GLOBAL_FEATURES, {}),
-                LOCAL_ADDRESSES: data.get(LOCAL_ADDRESSES, {}),
-                ALL_ADDRESSES: data.get(ALL_ADDRESSES, [])
-            })
-            if check_data:
-                self._check_data(data)
-        else:
-            super().__init__({LOCAL_FEATURES: {}, GLOBAL_FEATURES: {}, LOCAL_ADDRESSES: {}, ALL_ADDRESSES: []})
+    It contains a series of local hyper-edges (local quantities, e.g. buses, generators, lines, etc.), a single global
+    hyper-edge (global quantities, e.g. power frequency), and a 'all_addresses' hyper-edges which contains all the
+    addresses contained in the said H2MG (this carries no additional information compared to the other hyper-edges,
+    but are necessary for the functioning of the H2MGNODE architecture).
+
+    By default, when building an H2MG, the addresses are represented by `str`. Calling the method `convert_str_to_int`
+    allows to convert addresses into integers.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __str__(self):
+        def build_str(h2mg):
+            r = ""
+            for k, hyper_edges in h2mg.items():
+                r += k + "\n" + hyper_edges.__str__() + "\n" + "\n"
+            return r
+        return build_str(self)
 
     def tree_flatten(self):
+        """Flattens a PyTree, required for JAX compatibility."""
         children = self.values()
         aux = self.keys()
-        return (children, aux)
+        return children, aux
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return H2MG({k: f for k, f in zip(aux_data, children)})
+        """Unflattens a PyTree, required for JAX compatibility."""
+        h2mg = H2MG()
+        for k, v in zip(aux_data, children):
+            h2mg._add_hyper_edges(k, v)
+        return h2mg
 
-    def __add__(self, other) -> 'H2MG':
-        """Element-wise addition of two H2MGs with same structure, or of one H2MG with a scalar quantity."""
-        if isinstance(other, H2MG):
-            return tree_map(lambda a, b: a + b, self, other)
-        else:
-            return tree_map(lambda a: a + other, self)
+    @classmethod
+    def from_structure(cls, structure: 'H2MGStructure', value: float = 0.):
+        """Creates a H2MG filled with `value` that has the structure specified in `structure`."""
+        h2mg = cls()
+        for k, v in structure.items():
+            h2mg._add_hyper_edges(k, HyperEdges.from_structure(v, value=value))
+        return h2mg
 
-    def __radd__(self, other) -> 'H2MG':
-        return self.__add__(other)
+    def add_local_hyper_edges(self, name: str, hyper_edges: HyperEdges):
+        """Adds a set of local hyper-edges to a H2MG under the `name` key."""
+        assert name not in {GLOBAL, ALL_ADDRESSES}
+        assert name not in self.keys()
+        self[name] = hyper_edges
 
-    def __sub__(self, other) -> 'H2MG':
-        """Element-wise subtraction of two H2MGs with same structure, or of one H2MG with a scalar quantity."""
-        if isinstance(other, H2MG):
-            return tree_map(lambda a, b: a - b, self, other)
-        else:
-            return tree_map(lambda a: a - other, self)
+    def add_global_hyper_edges(self, hyper_edges: HyperEdges):
+        """Adds global features defined as a set of hyper-edges."""
+        self[GLOBAL] = hyper_edges
 
-    def __rsub__(self, other) -> 'H2MG':
-        return - self.__sub__(other)
-
-    def __mul__(self, other) -> 'H2MG':
-        """Element-wise multiplication of two H2MGs with same structure, or of one H2MG with a scalar quantity."""
-        if isinstance(other, H2MG):
-            return tree_map(lambda a, b: a * b, self, other)
-        else:
-            return tree_map(lambda a: a * other, self)
-
-    def __rmul__(self, other) -> 'H2MG':
-        return self.__mul__(other)
-
-    def __truediv__(self, other) -> 'H2MG':
-        """Element-wise division of two H2MGs with same structure, or of one H2MG with a scalar quantity."""
-        if isinstance(other, H2MG):
-            return tree_map(lambda a, b: a / b, self, other)
-        else:
-            return tree_map(lambda a: a / other, self)
-
-    def __rtruediv__(self, other) -> 'H2MG':
-        if isinstance(other, H2MG):
-            return tree_map(lambda a, b: b / a, self, other)
-        else:
-            return tree_map(lambda a: other / a, self)
-
-    def __pow__(self, exponent) -> 'H2MG':
-        """Element-wise exponentiation of two H2MG with same structure, or of one H2MG with a scalar quantity."""
-        if isinstance(exponent, H2MG):
-            return tree_map(lambda a, b: a ** b, self, exponent)
-        else:
-            return tree_map(lambda a: a ** exponent, self)
-
-    def __rpow__(self, base) -> 'H2MG':
-        if isinstance(base, H2MG):
-            return tree_map(lambda a, b: a ** b, base, self)
-        else:
-            return tree_map(lambda a: base ** a, self)
-
-    def __neg__(self) -> 'H2MG':
-        """Returns an H2MG with opposite features."""
-        return self * (-1)
-
-    def __repr__(self) -> str:
-        return super().__repr__()
-
-    def __str__(self) -> str:
-        return str(shallow_repr(self))
-
-    def __getitem__(self, __key: Any) -> Any:
-        if isinstance(__key, str):
-            return super().__getitem__(__key)
-        return tree_map(lambda a: a.__getitem__(__key), [self])
+    def _add_hyper_edges(self, name: str, hyper_edges: HyperEdges):
+        """Adds a set of hyper-edges, either local, global or all_addresses."""
+        self[name] = hyper_edges
 
     @property
-    def local_features(self) -> Dict:
-        return self.get(LOCAL_FEATURES, {})
+    def hyper_edges(self) -> dict:
+        return self
 
     @property
-    def global_features(self) -> Dict:
-        return self.get(GLOBAL_FEATURES, {})
+    def local_hyper_edges(self) -> dict:
+        """Dictionary of local hyper-edges."""
+        return {k: self[k] for k in self if k not in {GLOBAL, ALL_ADDRESSES}}
 
     @property
-    def local_addresses(self) -> Dict:
-        return self.get(LOCAL_ADDRESSES, {})
+    def global_hyper_edges(self) -> HyperEdges:
+        """Hyper-edges containing all the global features of the H2MG."""
+        return self.get(GLOBAL, None)
 
     @property
-    def all_addresses(self):
-        return self.get(ALL_ADDRESSES, {})
-
-    @local_features.setter
-    def local_features(self, value):
-        self[LOCAL_FEATURES] = value
-
-    @global_features.setter
-    def global_features(self, value):
-        self[GLOBAL_FEATURES] = value
-
-    @local_addresses.setter
-    def local_addresses(self, value):
-        self[LOCAL_ADDRESSES] = value
-
-    @all_addresses.setter
-    def all_addresses(self, value):
-        self[ALL_ADDRESSES] = value
+    def all_addresses_hyper_edges(self) -> HyperEdges:
+        """Hyper-edges of the H2MG containing all the addresses used in the said H2MG."""
+        return self.get(ALL_ADDRESSES, None)
 
     @property
-    def local_features_iterator(self) -> Iterator:
-        for obj_name in self.get(LOCAL_FEATURES, {}):
-            for feat_name, value in self[LOCAL_FEATURES][obj_name].items():
-                yield LOCAL_FEATURES, obj_name, feat_name, value
-
-    @property
-    def local_addresses_iterator(self) -> Iterator:
-        for obj_name in self.get(LOCAL_ADDRESSES, {}):
-            for addr_name, value in self[LOCAL_ADDRESSES][obj_name].items():
-                yield LOCAL_ADDRESSES, obj_name, addr_name, value
-
-    @property
-    def global_features_iterator(self) -> Iterator:
-        for feat_name, value in self.get(GLOBAL_FEATURES, {}).items():
-            yield GLOBAL_FEATURES, feat_name, value
-
-    @property
-    def all_addresses_iterator(self) -> Iterator:
+    def all_addresses_array(self) -> np.array:
+        """Array containing all the addresses used in an H2MG."""
         if ALL_ADDRESSES in self:
-            yield ALL_ADDRESSES, self[ALL_ADDRESSES]
-
-    @property
-    def shape(self) -> 'H2MG':
-        return tree_map(lambda a: a.shape, self)
-
-    @property
-    def size(self) -> 'H2MG':
-        return tree_map(lambda a: a.size, self)
-
-    @property
-    def class_count(self) -> 'H2MG':
-        shape_0 = self.shape[0]
-        local_features_count = {k: max(max([v for v in d.values()])) for k, d in shape_0.local_features.items()}
-        local_addresses_count = {k: max(max([v for v in d.values()])) for k, d in shape_0.local_features.items()}
-        local_count = {k: max(local_features_count[k], local_addresses_count[k]) for k in local_features_count | local_addresses_count}
-        global_count = max(max([d for d in shape_0.global_features.values()]))
-        return local_count | {'global': global_count}
-
-    def update(self, other) -> 'H2MG':
-        self.global_features = self.global_features | other.global_features
-        self.local_features = {k: self.local_features.get(k, {}) | other.local_features.get(k, {})
-            for k in self.local_features | other.local_features}
-        self.local_addresses = {k: self.local_addresses.get(k, {}) | other.local_addresses.get(k, {})
-            for k in self.local_addresses | other.local_addresses}
-        self.all_addresses = self.all_addresses if self.all_addresses else other.all_addresses
-
-    def apply(self, fn: Callable | 'H2MG') -> 'H2MG':
-        """Apply a single scalar function to all features, or a H2MG of functions with one function per tree_leaf. """
-        if isinstance(fn, H2MG):
-            return tree_map(lambda f, x: f(x), fn, self)
+            return self[ALL_ADDRESSES].addresses["id"]
         else:
-            return tree_map(fn, self)
+            return None
+
+    @property
+    def flat_array(self) -> np.array:
+        """Array made of the concatenation of all numerical features contained in an H2MG."""
+        return jnp.concatenate([self[k].flat_array for k in self if self[k].flat_array is not None], axis=-1)
+
+    @flat_array.setter
+    def flat_array(self, value: np.array):
+        lengths = [self[k].flat_array.shape[-1] for k in self if self[k].flat_array is not None]
+        split_indices = [sum(lengths[:i]) for i in range(1, len(lengths))]
+        new_values = jnp.split(value, split_indices, axis=-1)
+        for k_, v in zip([k for k in self if self[k].flat_array is not None], new_values):
+            self[k_].flat_array = v
+
+    @property
+    def structure(self) -> 'H2MGStructure':
+        """Dictionary containing the structure of each Hyper-Edges."""
+        _structure = H2MGStructure()
+        for name, he in self.local_hyper_edges.items():
+            _structure.add_local_hyper_edges_structure(name, he.structure)
+        if self.global_hyper_edges is not None:
+            _structure.add_global_hyper_edges_structure(self.global_hyper_edges.structure)
+        if self.all_addresses_hyper_edges is not None:
+            _structure.add_all_addresses_structure(self.all_addresses_hyper_edges.structure)
+        return _structure
+
+    def convert_str_to_int(self) -> dict:
+        """Converts the addresses of hyper-edges contained in an H2MG into integer. Also returns int_to_str dict."""
+        all_addresses = []
+        for hyper_edges_name, hyper_edges in self.local_hyper_edges.items():
+            if hyper_edges.addresses is not None:
+                for address_name, values in hyper_edges.addresses.items():
+                    all_addresses.append(values)
+        if all_addresses:
+            all_addresses = list(np.unique(np.concatenate(all_addresses)))
+            str_to_int = {address: i for i, address in enumerate(all_addresses)}
+            int_to_str = {i: address for i, address in enumerate(all_addresses)}
+            converter = np.vectorize(str_to_int.get)
+
+            for hyper_edges_name in self.local_hyper_edges:
+                for address_name in self.local_hyper_edges[hyper_edges_name].addresses:
+                    self[hyper_edges_name].addresses[address_name] = np.array(converter(self[hyper_edges_name].addresses[address_name]))
+            self[ALL_ADDRESSES] = HyperEdges(addresses={"id": np.array(converter(all_addresses))})
+        else:
+            int_to_str = {}
+        return int_to_str
+
+    def add_suffix(self, suffix: str) -> None:
+        """Modifies a H2MG by adding a suffix to all features."""
+        for hyper_edges in self.values():
+            hyper_edges.add_suffix(suffix)
+
+    def combine(self, other: 'H2MG') -> 'H2MG':
+        """Returns an H2MG that is the combination of `self` and `other`.
+
+        The output contains all hyper-edges and addresses and features contained in either one of them.
+        """
+        h2mg = H2MG()
+        for k in (self | other):
+            if (k in self) and (k in other):
+                h2mg._add_hyper_edges(k, self[k].combine(other[k]))
+            elif k in self.spaces:
+                h2mg._add_hyper_edges(k, self[k])
+            else:
+                h2mg._add_hyper_edges(k, other[k])
+        return h2mg
+
+    def extract_from_structure(self, structure: 'H2MGStructure') -> 'H2MG':
+        """Keeps only the parts of the H2MG that are compliant with the provided `structure`."""
+        h2mg = H2MG()
+        for k, hyper_edge_structure in structure.items():
+            if k not in self:
+                raise ValueError("Object class {} not available in current H2MG".format(k))
+            else:
+                h2mg._add_hyper_edges(k, self[k].extract_from_structure(hyper_edge_structure))
+        return h2mg
+
+    def pad_with_nans(self, structure: 'H2MGStructure') -> 'H2MG':
+        """Appends a series of fictitious objects (represented by NaNs) to match `structure`."""
+        h2mg = H2MG()
+        for k in structure.hyper_edges_structure:
+            if k in self.hyper_edges:
+                h2mg._add_hyper_edges(k, self[k].pad_with_nans(structure[k]))
+            else:
+                h2mg._add_hyper_edges(k, HyperEdges.from_structure(structure[k], value=np.nan))
+        return h2mg
+
+    def unpad_nans(self) -> 'H2MG':
+        """Deletes fictitious objects in each Hyper-Edges."""
+        h2mg = H2MG()
+        for k in self.hyper_edges:
+            hyper_edges = self[k].unpad_nans()
+            if not hyper_edges.is_empty():
+                h2mg._add_hyper_edges(k, hyper_edges)
+        return h2mg
 
     def plot(self):
+        """Plots an H2MG."""
         raise NotImplementedError
 
-    def shallow_repr(self) -> Dict[str, Any]:
-        return shallow_repr(self)
 
-    def extract_like(self, other: 'H2MG') -> 'H2MG':
-        """Extracts the features """
-        r = H2MG()
-        r.local_features = {k: {f: self.local_features[k][f] for f in d} for k, d in other.local_features.items()}
-        r.local_addresses = {k: {f: self.local_addresses[k][f] for f in d} for k, d in other.local_addresses.items()}
-        r.global_features = {k: self.global_features[k] for k in other.global_features}
-        r.all_addresses = self.all_addresses
-        return r
+@register_pytree_node_class
+class H2MGStructure(dict):
+    """Hyper Heterogeneous Multi Graph Structure.
 
-    def _check_data(self, data):
-        if isinstance(data, list):
-            return self._check_data(dict(data))
-        valid_keys = [LOCAL_FEATURES, LOCAL_ADDRESSES, GLOBAL_FEATURES, ALL_ADDRESSES]
-        if not set(data.keys()).issubset(set(valid_keys)):
-            raise ValueError(f"Unknown keys in data: {data.keys()}, expected in {valid_keys}")
+    Represents the structure of an H2MG, by only representing the keys and the features/addresses sizes.
+    """
+
+    def __init__(self):
+        super().__init__({})
+
+    def tree_flatten(self):
+        """Flattens a PyTree, required for JAX compatibility."""
+        children = self.values()
+        aux = self.keys()
+        return children, aux
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Unflattens a PyTree, required for JAX compatibility."""
+        h2mg_structure = H2MGStructure()
+        for k, v in zip(aux_data, children):
+            h2mg_structure._add_hyper_edges_structure(k, v)
+        return h2mg_structure
+
+    def _add_hyper_edges_structure(self, name, structure):
+        """Adds a hyper-edges structure under the key `name`."""
+        self[name] = structure
+
+    def add_local_hyper_edges_structure(self, name, structure):
+        """Adds a local hyper-edges structure under the key `name`."""
+        assert name not in {GLOBAL, ALL_ADDRESSES}
+        self[name] = structure
+
+    def add_global_hyper_edges_structure(self, structure):
+        """Adds a global hyper-edges structure."""
+        self[GLOBAL] = structure
+
+    def add_all_addresses_structure(self, structure):
+        """Adds a all addresses hyper-edges structure."""
+        self[ALL_ADDRESSES] = structure
+
+    @property
+    def hyper_edges_structure(self):
+        """Dictionary containing all hyper-edges structures and their associated keys."""
+        return self
+
+    @property
+    def local_hyper_edges_structure(self):
+        """Dictionary of local hyper-edges structure and their associated keys."""
+        return {k: self[k] for k in self.keys() if k not in {GLOBAL, ALL_ADDRESSES}}
+
+    @property
+    def global_hyper_edges_structure(self):
+        """Global hyper-edges structure."""
+        return self.get(GLOBAL, None)
+
+    @property
+    def all_addresses_structure(self):
+        """All addresses hyper-edges structure."""
+        return self.get(ALL_ADDRESSES, None)
+
+    def max(self, other: 'H2MGStructure') -> 'H2MGStructure':
+        """Compares a H2MGStructure with another and returns the largest structure with the largest leaf values."""
+        max_structure = H2MGStructure()
+        for k in self | other:
+            if (k in self) and (k in other):
+                max_structure._add_hyper_edges_structure(k, self[k].max(other[k]))
+            elif k in self:
+                max_structure._add_hyper_edges_structure(k, self[k])
+            else:
+                max_structure._add_hyper_edges_structure(k, other[k])
+        return max_structure
+
+    def combine(self, other: 'H2MGStructure') -> 'H2MGStructure':
+        """Returns an H2MGStructure that is the combination of `self` and `other`.
+
+        The output contains all hyper-edges and addresses and features contained in either one of them.
+        """
+        h2mg_structure = H2MGStructure()
+        for k in (self | other):
+            if (k in self) and (k in other):
+                h2mg_structure._add_hyper_edges_structure(k, self[k].combine(other[k]))
+            elif k in self.spaces:
+                h2mg_structure._add_hyper_edges_structure(k, self[k])
+            else:
+                h2mg_structure._add_hyper_edges_structure(k, other[k])
+        return h2mg_structure
 
 
-def shallow_repr(h2mg, local_features: bool = True, global_features: bool = True, local_addresses: bool = False,
-                 all_addresses: bool = False) -> Dict[str, Any]:
-    results = {}
-    if local_features:
-        for key, obj_name, feat_name, value in h2mg.local_features_iterator:
-            results[obj_name + "_" + feat_name] = value
-    if global_features:
-        for key, feat_name, value in h2mg.global_features_iterator:
-            results[feat_name] = value
-    if local_addresses:
-        for key, obj_name, feat_name, value in h2mg.local_addresses_iterator:
-            results[obj_name + "_" + feat_name] = value
-    if all_addresses:
-        for key, value in h2mg.all_addresses_iterator:
-            results[key] = value
-    return results
+def collate_h2mgs(h2mgs_list):
+    """Collates together a list of H2MGs by collating Hyper-Edges together."""
+    r = H2MG()
+    for k, hyper_edges in h2mgs_list[0].items():
+        r[k] = collate_hyper_edges([h2mg[k] for h2mg in h2mgs_list])
+    return r
+
+
+def separate_h2mgs(h2mg_batch):
+    """Separates a batch of collated H2MGs into a list of H2MGs."""
+    remaining, i, r = True, 0, []
+    while remaining:
+        try:
+            h2mg = H2MG()
+            for k in h2mg_batch:
+                h2mg[k] = separate_hyper_edges(h2mg_batch[k])[i]
+            r.append(h2mg)
+            i += 1
+        except:
+            remaining = False
+    return r

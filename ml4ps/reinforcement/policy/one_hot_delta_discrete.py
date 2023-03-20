@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import ml4ps
 import numpy as np
-from ml4ps import Normalizer, h2mg
+from ml4ps import h2mg
 from ml4ps.reinforcement.policy.base import BasePolicy
 
 

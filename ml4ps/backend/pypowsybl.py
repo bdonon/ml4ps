@@ -1,5 +1,4 @@
 from ml4ps.backend.interface import AbstractBackend
-from ml4ps.utils import clean_dict, convert_addresses_to_integers
 
 import pypowsybl.loadflow as pl
 import pypowsybl.network as pn

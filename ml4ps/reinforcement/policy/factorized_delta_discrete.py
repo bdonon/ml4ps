@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import ml4ps
 import numpy as np
 from gymnasium import spaces
-from ml4ps import Normalizer, h2mg
+from ml4ps import h2mg
 from ml4ps.reinforcement.policy.base import BasePolicy
 
 from .utils import (add_prefix, combine_feature_names, flatten_dict,

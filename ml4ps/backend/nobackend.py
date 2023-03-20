@@ -2,7 +2,6 @@ from ml4ps.backend.interface import AbstractBackend
 import os
 import json
 import numpy as np
-from ml4ps.utils import clean_dict, convert_addresses_to_integers
 
 
 class NoBackend(AbstractBackend):

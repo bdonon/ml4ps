@@ -6,7 +6,7 @@ from gymnasium import spaces
 from ..VoltageManagement import VoltageManagementState
 from .VoltageManagementPandapower import VoltageManagementPandapower
 
-from ml4ps.reinforcement import H2MGSpace
+from ml4ps.h2mg import H2MGSpace
 
 # TODO: How to use delta and instantaneous action forlulation with the same environment.
 class VoltageManagementPandapowerV2(VoltageManagementPandapower):
@@ -64,5 +64,4 @@ class VoltageManagementPandapowerV2(VoltageManagementPandapower):
         return ctrl_var
 
     def run_power_grid(self, power_grid):
-        return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0., init="result",
-                                           recycle={"bus_pq":False, "gen":True, "trafo": False})
+        return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0., init="result")

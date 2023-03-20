@@ -1,1 +1,3 @@
-from ml4ps.reinforcement.algorithm import reinforce
+from ml4ps.reinforcement.algorithm.reinforce import Reinforce
+# from ml4ps.reinforcement.algorithm.reinforce_baseline import ReinforceWithBaseline
+# from ml4ps.reinforcement.algorithm.buffer import ReplayBuffer

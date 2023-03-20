@@ -8,7 +8,6 @@ import jax.numpy as jnp
 import ml4ps
 import numpy as np
 from gymnasium import spaces
-from ml4ps import Normalizer, h2mg
 from ml4ps.h2mg import H2MG, H2MGStructure, H2MGSpace, H2MGNormalizer, h2mg_normal_sample, h2mg_normal_logprob
 from ml4ps.reinforcement.policy.base import BasePolicy
 from .utils import add_prefix, combine_space

@@ -1,11 +1,15 @@
 from typing import Dict
 
-import numpy as np
 from gymnasium import spaces
 
 from ..VoltageManagement import VoltageManagementState
 from .VoltageManagementPandapower import VoltageManagementPandapower
-from ml4ps.reinforcement import H2MGSpace
+from ml4ps.h2mg import H2MG, H2MGStructure, H2MGSpace, HyperEdgesStructure, HyperEdgesSpace
+
+
+CONTROL_STRUCTURE = H2MGStructure()
+CONTROL_STRUCTURE.add_local_hyper_edges_structure("gen", HyperEdgesStructure(features=["vm_pu"]))
+CONTROL_STRUCTURE.add_local_hyper_edges_structure("ext_grid", HyperEdgesStructure(features=["vm_pu"]))
 
 
 class VoltageManagementPandapowerV1(VoltageManagementPandapower):
@@ -35,29 +39,29 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
         eps_v: The float cost hyperparameter corresponding to voltage penalty margins.
         c_div: The float cost hyperparameter corresponding to the penalty for diverging power grid simulations.
     """
+    empty_control_structure = CONTROL_STRUCTURE
 
-    def __init__(self, data_dir, n_obj=None, max_steps=None, cost_hparams=None, soft_reset=True):
-        super().__init__(data_dir, n_obj=n_obj, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
-        self.vlow = 0.8
-        self.vhigh = 1.2
-        self.ctrl_var_names = {"gen": ["vm_pu"],
-                               "ext_grid": ["vm_pu"]}
-        self.action_space = H2MGSpace({"local_features":
-            spaces.Dict({"gen":      spaces.Dict({"vm_pu":
-                                      spaces.Box(low=self.vlow,
-                                                 high=self.vhigh,
-                                                 shape=(self.n_obj["gen"],))}),
-             "ext_grid": spaces.Dict({"vm_pu":
-                                      spaces.Box(low=self.vlow,
-                                                 high=self.vhigh,
-                                                 shape=(self.n_obj["ext_grid"],))})})})
+    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True):
+        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
 
-    def initialize_control_variables(self) -> Dict:
+    def _build_action_space(self, control_structure):
+
+        gen_vm_pu_space = spaces.Box(low=0.8, high=1.2, shape=(control_structure["gen"].features["vm_pu"],))
+        ext_grid_vm_pu_space = spaces.Box(low=0.8, high=1.2, shape=(control_structure["ext_grid"].features["vm_pu"],))
+
+        action_space = H2MGSpace()
+        action_space._add_hyper_edges_space('gen', HyperEdgesSpace(features=spaces.Dict({"vm_pu": gen_vm_pu_space})))
+        action_space._add_hyper_edges_space('ext_grid', HyperEdgesSpace(features=spaces.Dict(
+            {"vm_pu": ext_grid_vm_pu_space})))
+        return action_space
+
+    def initialize_control_variables(self, power_grid) -> Dict:
         """Inits control variable with default heuristics."""
-        return {"local_features":{"gen": {"vm_pu": np.ones(shape=(self.n_obj["gen"],), dtype=np.float64)},
-                "ext_grid": {"vm_pu": np.ones(shape=(self.n_obj["ext_grid"],), dtype=np.float64)}}}
+        initial_control = self.backend.get_h2mg_from_power_grid(power_grid, self.control_structure)
+        initial_control.flat_array = 1. + 0. * initial_control.flat_array
+        return initial_control
 
-    def update_ctrl_var(self, ctrl_var: Dict, action: Dict, state: VoltageManagementState) -> Dict:
+    def update_ctrl_var(self, ctrl_var: H2MG, action: H2MG, state: VoltageManagementState) -> Dict:
         """Updates control variables with action."""
         return action
     

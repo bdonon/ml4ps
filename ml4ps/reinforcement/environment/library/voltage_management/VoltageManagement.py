@@ -2,11 +2,12 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 from numbers import Number
 from typing import Any, Dict, NamedTuple, Optional, Tuple
+import os
 
 import numpy as np
 from gymnasium import spaces
 from ml4ps.reinforcement.environment.ps_environment import PSBaseEnv
-from ml4ps.reinforcement import H2MGSpace
+from ml4ps.h2mg.spaces import H2MGSpace
 from ml4ps.h2mg import H2MG
 from ml4ps import h2mg
 
@@ -48,24 +49,9 @@ class VoltageManagement(PSBaseEnv, ABC):
     ctrl_var_names: Dict
     obs_feature_names: Dict
 
-    def __init__(self, data_dir, address_names, obs_feature_names, n_obj=None,
-                 max_steps=None, cost_hparams=None, soft_reset=True):
-        super().__init__()
+    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True):
+        super().__init__(data_dir)
         self.soft_reset = soft_reset
-        if self.address_names is None:
-            raise NotImplementedError("Subclasses must define address_names")
-        if self.backend is None:
-            raise NotImplementedError("Subclasses must define backend")
-        if self.obs_feature_names is None:
-            raise NotImplementedError(
-                "Subclasses must define obs_feature_names")
-
-        self.data_dir = data_dir
-        self._n_obj = self.backend.max_n_obj.copy()
-        if n_obj is not None:
-            self._n_obj.update(n_obj)
-        self.observation_space = self.build_observation_space(
-            address_names, obs_feature_names)
         self.max_steps = max_steps
         self.state = VoltageManagementState(power_grid=None,
                                             cost=None,
@@ -74,9 +60,6 @@ class VoltageManagement(PSBaseEnv, ABC):
 
         self.init_cost_hparams(cost_hparams)
 
-    @property
-    def n_obj(self):
-        return self._n_obj
 
     def init_cost_hparams(self, cost_hparams: Dict = None) -> None:
         """Inits cost hparams and overrides default values with given cost_hparams dictionary."""
@@ -92,29 +75,6 @@ class VoltageManagement(PSBaseEnv, ABC):
         self.eps_v = cost_hparams["eps_v"]
         self.c_div = cost_hparams["c_div"]
 
-    def build_observation_space(self, address_names: Dict, obs_feature_names: Dict = None) -> spaces.Space:
-        """Return observation space depending on the data in data_dir."""
-        max_n_obj = self.n_obj
-
-        feat_space = spaces.Dict({obj_name: spaces.Dict({feat_name: spaces.Box(-np.inf,
-                                                                               np.inf,
-                                                                               shape=(
-                                                                                   max_n_obj[obj_name],),
-                                                                               dtype=np.float64)
-                                                        for feat_name in obj})
-                                 for obj_name, obj in obs_feature_names.items() if obj_name in max_n_obj})
-
-        addr_space = spaces.Dict({obj_name: spaces.Dict({addr_name: spaces.Box(-np.inf,
-                                                                               np.inf,
-                                                                               shape=(
-                                                                                   max_n_obj[obj_name],),
-                                                                               dtype=np.float64)
-                                                        for addr_name in obj})
-                                 for obj_name, obj in address_names.items()if obj_name in max_n_obj})
-
-        all_addr_space = spaces.Box(low=-np.inf, high=np.inf, shape=( max_n_obj["max_address"],), dtype=np.int64)
-
-        return H2MGSpace({"local_addresses": addr_space, "local_features": feat_space, "all_addresses": all_addr_space})
 
     def random_power_grid_path(self) -> str:
         """Returns the path of a random power grid in self.data_dir"""
@@ -131,8 +91,8 @@ class VoltageManagement(PSBaseEnv, ABC):
         power_grid = self.state.power_grid
         if not self.soft_reset or (power_grid is None or options is not None and options.get("load_new_power_grid", False)):
             power_grid = self.get_next_power_grid(options)
-        ctrl_var = self.initialize_control_variables()
-        self.backend.set_data_power_grid(power_grid, ctrl_var)
+        ctrl_var = self.initialize_control_variables(power_grid)
+        self.backend.set_h2mg_into_power_grid(power_grid, ctrl_var)
         self.run_power_grid(power_grid)
         iteration = 0
         cost = self.compute_cost(power_grid)
@@ -156,10 +116,9 @@ class VoltageManagement(PSBaseEnv, ABC):
 
     def dynamics(self, state: NamedTuple, action: Dict) -> NamedTuple:
         """Return new state for a given action"""
-        old_ctrl_var = self.backend.get_data_power_grid(
-            state.power_grid, local_feature_names=self.ctrl_var_names)
+        old_ctrl_var = self.backend.get_h2mg_from_power_grid(state.power_grid, structure=self.control_structure)
         ctrl_var = self.update_ctrl_var(old_ctrl_var, action, state)
-        self.backend.set_data_power_grid(state.power_grid, ctrl_var)
+        self.backend.set_h2mg_into_power_grid(state.power_grid, ctrl_var)
         self.run_power_grid(state.power_grid)
         cost = self.compute_cost(state.power_grid)
         iteration = state.iteration + 1
@@ -173,10 +132,12 @@ class VoltageManagement(PSBaseEnv, ABC):
         return False
 
     def is_stop(self, action) -> bool:
-        if "stop" in h2mg.global_features(action):
-            return bool(h2mg.global_features(action)["stop"])
-        else:
-            return True
+        pass
+        # TODO
+        # if "stop" in h2mg.global_features(action):
+        #     return bool(h2mg.global_features(action)["stop"])
+        # else:
+        #     return True
 
     def compute_cost(self, power_grid) -> Number:
         """Computes cost of a power grid."""
@@ -195,13 +156,11 @@ class VoltageManagement(PSBaseEnv, ABC):
 
     def get_observation(self, state) -> Dict:
         """Return observation of state wrt self.observation_space."""
-        return H2MG(self.backend.get_data_power_grid(state.power_grid, local_feature_names=self.obs_feature_names,
-                                                              local_address_names=self.address_names))
+        return self.backend.get_h2mg_from_power_grid(state.power_grid, self.observation_structure)
 
     @property
     def default_cost_hparams(self) -> Dict:
-        return {"lmb_i": 1.0, "lmb_q": 1.0, "lmb_v": 1.0,
-                "eps_i": .0, "eps_q": 0.0, "eps_v": 0.0, "c_div": 1.0}
+        return {"lmb_i": 1.0, "lmb_q": 1.0, "lmb_v": 1.0, "eps_i": .0, "eps_q": 0.0, "eps_v": 0.0, "c_div": 1.0}
     
     @abstractmethod
     def run_power_grid(self, power_grid):
@@ -222,8 +181,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         pass
 
     @abstractmethod
-    def update_ctrl_var(self, ctrl_var: Dict, action: Dict,
-                        state: VoltageManagementState = None) -> Dict:
+    def update_ctrl_var(self, ctrl_var: H2MG, action: H2MG, state: VoltageManagementState = None) -> Dict:
         """Updates control variables with action."""
         raise NotImplementedError()
 

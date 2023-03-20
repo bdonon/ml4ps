@@ -5,9 +5,46 @@ from typing import Any, Dict, Tuple
 import numpy as np
 from gymnasium import spaces
 from ml4ps import PaddingWrapper, PandaPowerBackend
-from ml4ps.h2mg import local_features
+from ml4ps.h2mg import H2MG, H2MGStructure, HyperEdgesStructure
 
 from ..VoltageManagement import VoltageManagement, VoltageManagementState
+
+
+OBSERVATION_STRUCTURE = H2MGStructure()
+
+bus_structure = HyperEdgesStructure(addresses=["id"], features=["in_service", "max_vm_pu", 'min_vm_pu', "vn_kv"])
+OBSERVATION_STRUCTURE.add_local_hyper_edges_structure("bus", bus_structure)
+
+load_structure = HyperEdgesStructure(addresses=["bus_id"], features=["const_i_percent", "const_z_percent",
+    "controllable", "in_service", "p_mw", "q_mvar", "scaling", "sn_mva"])
+OBSERVATION_STRUCTURE.add_local_hyper_edges_structure("load", load_structure)
+
+sgen_structure = HyperEdgesStructure(addresses=["bus_id"], features=["in_service", "p_mw", "q_mvar", "scaling",
+    "sn_mva", "current_source"])
+OBSERVATION_STRUCTURE.add_local_hyper_edges_structure("sgen", sgen_structure)
+
+gen_structure = HyperEdgesStructure(addresses=["bus_id"], features=["controllable", "in_service", "p_mw",
+    "scaling", "sn_mva", "vm_pu", "slack", "max_p_mw", "min_p_mw", "max_q_mvar", "min_q_mvar", "slack_weight"])
+OBSERVATION_STRUCTURE.add_local_hyper_edges_structure("gen", gen_structure)
+
+shunt_structure = HyperEdgesStructure(addresses=["bus_id"], features=["q_mvar", "p_mw", "vn_kv", "step",
+    "max_step", "in_service"])
+OBSERVATION_STRUCTURE.add_local_hyper_edges_structure("shunt", shunt_structure)
+
+ext_grid_structure = HyperEdgesStructure(addresses=["bus_id"], features=["in_service", "va_degree", "vm_pu",
+    "max_p_mw", "min_p_mw", "max_q_mvar", "min_q_mvar", "slack_weight"])
+OBSERVATION_STRUCTURE.add_local_hyper_edges_structure("ext_grid", ext_grid_structure)
+
+line_structure = HyperEdgesStructure(addresses=["from_bus_id", "to_bus_id"], features=["c_nf_per_km", "df",
+    "g_us_per_km", "in_service", "length_km", "max_i_ka", "max_loading_percent", "parallel", "r_ohm_per_km",
+    "x_ohm_per_km"])
+OBSERVATION_STRUCTURE.add_local_hyper_edges_structure("line", line_structure)
+
+trafo_structure = HyperEdgesStructure(addresses=["hv_bus_id", "lv_bus_id"], features=["df", "i0_percent", "in_service",
+    "max_loading_percent", "parallel", "pfe_kw", "shift_degree", "sn_mva", "tap_max", "tap_neutral", "tap_min",
+    "tap_phase_shifter", "tap_pos", "tap_side", "tap_step_degree", "tap_step_percent", "vn_hv_kv", "vn_lv_kv",
+    "vk_percent", "vkr_percent"])
+OBSERVATION_STRUCTURE.add_local_hyper_edges_structure("trafo", trafo_structure)
 
 
 class VoltageManagementPandapower(VoltageManagement):
@@ -34,92 +71,40 @@ class VoltageManagementPandapower(VoltageManagement):
         eps_v: The float cost hyperparameter corresponding to voltage penalty margins.
         c_div: The float cost hyperparameter corresponding to the penalty for diverging power grid simulations.
     """
-    # Set these in subclasses
-    action_space: spaces.Space
-    address_names: Dict
-    backend: Any
-    ctrl_var_names: Dict
-    obs_feature_names: Dict
+    backend = PaddingWrapper(PandaPowerBackend())
+    empty_observation_structure = OBSERVATION_STRUCTURE
 
-    def __init__(self, data_dir, n_obj=None, max_steps=None, cost_hparams=None, soft_reset=True):
-        self.address_names = {
-            "bus": ["id"],
-            "load": ["bus_id"],
-            "sgen": ["bus_id"],
-            "gen": ["bus_id"],
-            "shunt": ["bus_id"],
-            "ext_grid": ["bus_id"],
-            "line": ["from_bus_id", "to_bus_id"],
-            "trafo": ["hv_bus_id", "lv_bus_id"]
-        }
-        self.obs_feature_names = {
-            "bus": ["in_service", "max_vm_pu", "min_vm_pu", "vn_kv"],
-            "load": ["const_i_percent", "const_z_percent", "controllable", "in_service",
-                     "p_mw", "q_mvar", "scaling", "sn_mva"],
-            "sgen": ["controllable", "in_service", "p_mw", "q_mvar", "scaling", "sn_mva",
-                     "current_source"],
-            "gen": ["controllable", "in_service", "p_mw", "scaling", "sn_mva",
-                    "slack", "max_p_mw", "min_p_mw", "max_q_mvar", "min_q_mvar",
-                    "slack_weight"],
-            "shunt": ["q_mvar", "p_mw", "vn_kv", "step", "max_step", "in_service"],
-            "ext_grid": ["in_service", "va_degree", "max_p_mw", "min_p_mw", "max_q_mvar",
-                         "min_q_mvar", "slack_weight"],
-            "line": ["c_nf_per_km", "df", "g_us_per_km", "in_service", "length_km", "max_i_ka",
-                     "max_loading_percent", "parallel", "r_ohm_per_km", "x_ohm_per_km"],
-            "trafo": ["df", "i0_percent", "in_service", "max_loading_percent", "parallel",
-                      "pfe_kw", "shift_degree", "sn_mva", "tap_max", "tap_neutral", "tap_min",
-                      "tap_phase_shifter", "tap_pos", "tap_side", "tap_step_degree",
-                      "tap_step_percent", "vn_hv_kv", "vn_lv_kv", "vk_percent", "vkr_percent"],
-        }
-        self.backend = PaddingWrapper(PandaPowerBackend(), data_dir=data_dir)
-        super().__init__(data_dir, address_names=self.address_names, obs_feature_names=self.obs_feature_names,
-                         n_obj=n_obj, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
+
+    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True):
+        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
 
     def has_diverged(self, power_grid) -> bool:
         return not power_grid.converged
 
     def compute_current_cost(self, power_grid, eps_i) -> Number:
-        all_data = self.backend.get_data_power_grid(power_grid, local_feature_names={"line":  ["res_loading_percent"],
-                                                                           "trafo": ["res_loading_percent"]})
-        data = local_features(all_data)
-        line_loading_percent = data["line"]["res_loading_percent"]
-        transfo_loading_percent = data["trafo"]["res_loading_percent"]
+        line_loading_percent = power_grid.res_line.loading_percent
+        transfo_loading_percent = power_grid.res_trafo.loading_percent
         loading_percent = np.concatenate([line_loading_percent, transfo_loading_percent], axis=-1)
         return self.normalized_cost(loading_percent, 0, 100, 0, eps_i)
 
     def compute_reactive_cost(self, power_grid, eps_q) -> Number:
-        all_data = self.backend.get_data_power_grid(power_grid,
-                                local_feature_names={"gen":  ["max_q_mvar", "min_q_mvar", "res_q_mvar"],
-                                               "ext_grid":  ["max_q_mvar", "min_q_mvar", "res_q_mvar"]})
-        data = local_features(all_data)
-        q = np.concatenate(
-            [data["gen"]["res_q_mvar"], data["ext_grid"]["res_q_mvar"]], axis=-1)
-        qmin = np.concatenate(
-            [data["gen"]["min_q_mvar"], data["ext_grid"]["min_q_mvar"]], axis=-1)
-        qmax = np.concatenate(
-            [data["gen"]["max_q_mvar"], data["ext_grid"]["max_q_mvar"]], axis=-1)
+        q = np.concatenate([power_grid.res_gen.q_mvar, power_grid.res_ext_grid.q_mvar], axis=-1)
+        qmin = np.concatenate([power_grid.gen.min_q_mvar, power_grid.ext_grid.min_q_mvar], axis=-1)
+        qmax = np.concatenate([power_grid.gen.max_q_mvar, power_grid.ext_grid.max_q_mvar], axis=-1)
         return self.normalized_cost(q, qmin, qmax, eps_q, eps_q)
 
     def compute_voltage_cost(self, power_grid, eps_v) -> Number:
-        all_data = self.backend.get_data_power_grid(
-            power_grid, local_feature_names={"bus": ["res_vm_pu", "max_vm_pu", "min_vm_pu"]})
-        data = local_features(all_data)
-        v = data["bus"]["res_vm_pu"]
-        vmin = data["bus"]["min_vm_pu"]
-        vmax = data["bus"]["max_vm_pu"]
+        v = power_grid.res_bus.vm_pu
+        vmin = power_grid.bus.min_vm_pu
+        vmax = power_grid.bus.max_vm_pu
         return self.normalized_cost(v, vmin, vmax, eps_v, eps_v)
 
-    def compute_joule_cost(self, power_grid)  -> Number:
-        all_data = self.backend.get_data_power_grid(power_grid,
-                                                local_feature_names={"line":  ["res_pl_mw"],
-                                                               "trafo": ["res_pl_mw"], "load": ["res_p_mw"]})
-        
-        data = local_features(all_data)
-        line_losses = data["line"]["res_pl_mw"]
-        transfo_losses = data["trafo"]["res_pl_mw"]
-        loads = data["load"]["res_p_mw"]
+    def compute_joule_cost(self, power_grid) -> Number:
+        line_losses = power_grid.res_line.pl_mw
+        transfo_losses = power_grid.res_trafo.pl_mw
+        loads = power_grid.res_load.p_mw
         joule_losses = np.nansum(line_losses) + np.nansum(transfo_losses)
-        total_load = np.nansum(loads) # np.where(np.isnan(loads), 1e-8, loads)
+        total_load = np.nansum(loads)
         return joule_losses / total_load
 
     def normalized_cost(self, value, min_value, max_value, eps_min_threshold, eps_max_threshold)  -> Number:
@@ -156,31 +141,18 @@ class VoltageManagementPandapower(VoltageManagement):
             The second one indicates the percentage of constraint violation 
             w.r.t the number of objects.
         """
-        all_data = self.backend.get_data_power_grid(power_grid,
-                                                local_feature_names={
-                                                    "bus": ["res_vm_pu", "max_vm_pu", "min_vm_pu"],
-                                                    "line":  ["res_pl_mw", "res_loading_percent"],
-                                                    "trafo": ["res_pl_mw", "res_loading_percent"],
-                                                    "gen":  ["max_q_mvar", "min_q_mvar", "res_q_mvar"],
-                                                    "ext_grid":  ["max_q_mvar", "min_q_mvar", "res_q_mvar"],
-                                                    "load": ["res_p_mw"]},
-                                                    global_feature_names=["converged"])
-        data= local_features(all_data)
-        voltage_violated_bus = np.logical_or(data["bus"]["res_vm_pu"] > data["bus"]["max_vm_pu"],
-                                             data["bus"]["res_vm_pu"] < data["bus"]["min_vm_pu"])
+        voltage_violated_bus = np.logical_or(power_grid.res_bus.vm_pu > power_grid.bus.max_vm_pu,
+                                             power_grid.res_bus.vm_pu < power_grid.bus.min_vm_pu)
         voltage_violated_percentage = voltage_violated_bus.mean()
         voltage_violated = voltage_violated_bus.any().astype(int)
         loading_connexion = np.concatenate(
-            [data["line"]["res_loading_percent"], data["trafo"]["res_loading_percent"]], axis=-1)
+            [power_grid.res_line.loading_percent, power_grid.res_trafo.loading_percent], axis=-1)
         loading_violated_connexion = loading_connexion > 100
         loading_violated_percentage = loading_violated_connexion.mean()
         loading_violated = (loading_violated_connexion>1).any().astype(int)
-        q = np.concatenate(
-            [data["gen"]["res_q_mvar"], data["ext_grid"]["res_q_mvar"]], axis=-1)
-        qmin = np.concatenate(
-            [data["gen"]["min_q_mvar"], data["ext_grid"]["min_q_mvar"]], axis=-1)
-        qmax = np.concatenate(
-            [data["gen"]["max_q_mvar"], data["ext_grid"]["max_q_mvar"]], axis=-1)
+        q = np.concatenate([power_grid.res_gen.q_mvar, power_grid.res_ext_grid.q_mvar], axis=-1)
+        qmin = np.concatenate([power_grid.gen.min_q_mvar, power_grid.ext_grid.min_q_mvar], axis=-1)
+        qmax = np.concatenate([power_grid.gen.max_q_mvar, power_grid.ext_grid.max_q_mvar], axis=-1)
         reactive_power_violated_gen = np.logical_or(q > qmax, q < qmin)
         reactive_power_violated_percentage = reactive_power_violated_gen.mean()
         reactive_power_violated = reactive_power_violated_gen.any().astype(int)
@@ -195,11 +167,11 @@ class VoltageManagementPandapower(VoltageManagement):
         return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0.)
 
     @abstractmethod
-    def update_ctrl_var(self, ctrl_var: Dict, action: Dict) -> Dict:
+    def update_ctrl_var(self, ctrl_var: H2MG, action: H2MG) -> Dict:
         """Updates control variables with action."""
         pass
 
     @abstractmethod
-    def initialize_control_variables(self) -> Dict:
+    def initialize_control_variables(self, power_grid) -> Dict:
         """Inits control variable with default heuristics."""
         pass

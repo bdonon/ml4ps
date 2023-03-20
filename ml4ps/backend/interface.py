@@ -20,7 +20,7 @@ class AbstractBackend(ABC):
                 proper backend implementation.
     """
 
-    def __init__(self):
+    def __init__(self, default_structure=None):
         """Initializes a Power Systems backend."""
         pass
 
@@ -31,17 +31,7 @@ class AbstractBackend(ABC):
 
     @property
     @abstractmethod
-    def valid_local_address_names(self):
-        pass
-
-    @property
-    @abstractmethod
-    def valid_local_feature_names(self):
-        pass
-
-    @property
-    @abstractmethod
-    def valid_global_feature_names(self):
+    def valid_structure(self):
         pass
 
     @abstractmethod
@@ -70,7 +60,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def set_data_power_grid(self, power_grid, y):
+    def set_h2mg_into_power_grid(self, power_grid, h2mg):
         """Modifies a power grid with the feature values contained in y.
 
         Should be overridden in a proper backend implementation.
@@ -79,20 +69,13 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def get_data_power_grid(self, power_grid, global_feature_names=None, local_feature_names=None, local_address_names=None):
+    def get_h2mg_from_power_grid(self, power_grid, structure=None, str_to_int=True):
         """Returns feature values from a single power grid instance.
 
         Should be overridden in a proper backend implementation.
         Should be consistent with `valid_data_structure`.
         """
         pass
-
-    def assert_names(self, feature_names=None, address_names=None):
-        """Asserts that `object_names`, `feature_names` and `address_names` are valid w.r.t. the backend."""
-        if feature_names is not None:
-            assert_substructure(feature_names, self.valid_feature_names)
-        if address_names is not None:
-            assert_substructure(address_names, self.valid_address_names)
 
     def get_valid_files(self, path, shuffle=False, n_samples=None):
         """Gets file that have a valid extension w.r.t. the backend, from path."""

@@ -2,7 +2,6 @@ from ml4ps.backend.interface import AbstractBackend
 import os
 import json
 import numpy as np
-from ml4ps.utils import clean_dict, convert_addresses_to_integers
 
 
 class NoBackend(AbstractBackend):
@@ -97,7 +96,7 @@ class NoBackend(AbstractBackend):
                     else:
                         x[object_name][feature_name] = np.array(net[object_name][feature_name], dtype=np.float32)
 
-        clean_dict(x)
-        convert_addresses_to_integers(x, address_names)
+        # clean_dict(x)
+        # convert_addresses_to_integers(x, address_names)
         return x
 

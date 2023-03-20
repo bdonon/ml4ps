@@ -1,108 +1,31 @@
 import jax.numpy as jnp
 import jax.nn as jnn
-import jax
-from flax import linen as nn
 import diffrax
-from dataclasses import field
+import jax
 import flax
+
+from flax import linen as nn
 from typing import Sequence
-from ml4ps.h2mg import local_addresses_iterator, H2MG
 
-def gather_x_v(x, k):
-    """Gets local input from `x` for object class `k`."""
-    x_v = []
-    for v in x["local_features"].get(k, {}).values():
-        if len(jnp.shape(v)) == 1:
-            x_v.append(jnp.expand_dims(v, axis=1))
-        elif len(jnp.shape(v)) == 2:
-            x_v.append(v)
-        else:
-            raise ValueError("Hyper-edge {} features have too many dimensions.".format(k))
-    if x_v:
-        return jnp.concatenate(x_v, axis=1)
-    else:
-        return jnp.array([[]])
+from ml4ps.h2mg import H2MG, H2MGStructure, HyperEdges
 
-def gather_h_v_local(x, h, k):
-    """Gathers local hidden variables in `h` located at addresses of objects of class `k` according to `x`."""
-    h_v = []
-    for a in x["local_addresses"].get(k, {}).values():
-        h_v.append(h["local"].at[a.astype(int)].get(mode='drop'))
-    if h_v:
-        return jnp.concatenate(h_v, axis=1)
-    else:
-        return jnp.array([[]])
+LOCAL_KEY = "local"
+GLOBAL_KEY = "global"
+LOCAL_ENCODER_KEY = "local_encoder"
+GLOBAL_ENCODER_KEY = "global_encoder"
+LOCAL_DYNAMICS_KEY = "local_dynamics"
+GLOBAL_DYNAMICS_KEY = "global_dynamics"
+LOCAL_DECODER_KEY = "local_decoder"
+GLOBAL_DECODER_KEY = "global_decoder"
 
-def gather_h_v_mean(h):
-    """Returns the mean of local hidden variables `h`."""
-    if "local" in h:
-        return jnp.mean(h["local"], axis=0, keepdims=True)
-    else:
-        return jnp.array([[]])
+MAX_INTEGER = 2147483647
 
-def gather_x_g(x):
-    """Gathers global input features in `x`."""
-    x_g = []
-    for v in x.get("global_features", {}).values():
-        if len(jnp.shape(v)) == 1:
-            x_g.append(jnp.expand_dims(v, axis=1))
-        elif len(jnp.shape(v)) == 2:
-            x_g.append(v)
-        else:
-            raise ValueError("Global features have too many dimensions.")
-        x_g.append(v)
-    if x_g:
-        return jnp.stack(x_g, axis=1)
-    else:
-        return jnp.array([[]])
 
-def gather_h_g(h):
-    """Gathers global latent variables in `h`."""
-    if "global" in h:
-        return h["global"]
-    else:
-        return jnp.array([[]])
-
-def build_one_like(x, k):
-    """Creates a vector filled with 1. that has the size of the amount of objects of class `k` in `x`."""
-    return jnp.expand_dims(jnp.ones_like(list(x["local_addresses"][k].values())[0]), axis=1)
-
-def gather_global_input(x, h, t):
-    """Gathers input to global neural networks (both decoder and dynamics)."""
-    h_v = gather_h_v_mean(h)
-    h_g = gather_h_g(h)
-    x_g = gather_x_g(x)
-    t_vec = t * jnp.ones([1, 1])
-    return jnp.nan_to_num(jnp.concatenate([h_v, h_g, x_g, t_vec], axis=1), nan=0)
-
-def gather_local_input(x, h, t, k):
-    """Gathers input to local neural networks (both decoder and dynamics)."""
-    one_vec = build_one_like(x, k)
-    h_v = gather_h_v_local(x, h, k)
-    x_v = gather_x_v(x, k)
-    h_g = gather_h_g(h) * one_vec
-    x_g = gather_x_g(x) * one_vec
-    t_vec = t * one_vec
-    return jnp.nan_to_num(jnp.concatenate([h_v, x_v, h_g, x_g, t_vec], axis=1), nan=0)
-
-def local_output_filter(y_local, x):
-    """Reduces the output dimensionality, and replaces fictitious objects with NaN, while allowing to back-propagate."""
-    for k in y_local:
-        values = list(x["local_addresses"][k].values())[0]
-        values = jnp.expand_dims(values, axis=1)
-        for f in y_local[k]:
-            y_local[k][f] = jnp.where(jnp.isnan(values+0.*y_local[k][f]), jnp.nan, y_local[k][f]) # TODO : c'est pas trivial ...
-            if jnp.shape(y_local[k][f])[1] == 1:
-                y_local[k][f] = y_local[k][f][:,0]
-    return y_local
-
-def global_output_filter(y_global):
-    """Reduces the global output dimensionality."""
-    for f in y_global:
-        y_global[f] = y_global[f]
-        if jnp.shape(y_global[f])[1] == 1:
-            y_global[f] = y_global[f][:,0]
-    return y_global
+def nan_mean_at(h, a):
+    clean_a = jnp.nan_to_num(a, nan=MAX_INTEGER).astype(int)
+    sum = jnp.nansum(h.at[clean_a].get(mode='drop', fill_value=0.), axis=0, keepdims=True)
+    count = jnp.nansum((1+0*h).at[clean_a].get(mode='drop', fill_value=0.), axis=0, keepdims=True)
+    return sum / count
 
 
 class MLP(nn.Module):
@@ -111,17 +34,47 @@ class MLP(nn.Module):
     Attributes:
         hidden_size (:obj:`typing.Sequence` of :obj:`int`): List of sizes of the MLP.
         out_size (:obj:`int`): Output size of the MLP.
+        sigma (:obj:`nn.activation`): Non-linearity
     """
 
     hidden_size: Sequence[int]
     out_size: int
+    sigma: nn.activation
 
     @nn.compact
     def __call__(self, x):
         for i, d in enumerate(self.hidden_size):
             x = nn.Dense(d)(x)
-            x = nn.tanh(x)
+            x = self.sigma(x)
         return nn.Dense(self.out_size)(x)
+
+
+class LocalEncoder(nn.Module):
+    """Encodes local hyper-edges variables."""
+    hidden_size: Sequence[int]
+    out_size: int
+
+    @nn.compact
+    def __call__(self, h2mg_in: H2MG):
+        r = {}
+        for k, hyper_edges in h2mg_in.local_hyper_edges.items():
+            mlp = MLP(self.hidden_size, self.out_size, nn.leaky_relu, name="{}".format(k))
+            r[k] = mlp(hyper_edges.array)
+        return r
+
+
+class GlobalEncoder(nn.Module):
+    """Encodes global variables."""
+    hidden_size: Sequence[int]
+    out_size: int
+
+    @nn.compact
+    def __call__(self, h2mg_in: H2MG):
+        if h2mg_in.global_hyper_edges is not None:
+            mlp = MLP(self.hidden_size, self.out_size, nn.leaky_relu, name="global")
+            return mlp(h2mg_in.global_hyper_edges.array)
+        else:
+            return jnp.array([[]])
 
 
 class LocalDynamics(nn.Module):
@@ -137,16 +90,26 @@ class LocalDynamics(nn.Module):
         out_size (:obj:`int`): Output size of the MLPs
             :math:`(\Phi_\theta^{c,o})_{c \in \mathcal{C}, o\in \mathcal{O}^c}`.
     """
-
     hidden_size: Sequence[int]
     out_size: int
 
     @nn.compact
-    def __call__(self, x, h, t):
-        delta_sum = 0 * h['local']
-        for _, k, f, a in local_addresses_iterator(x):
-            delta = MLP(self.hidden_size, self.out_size, name="{}-{}".format(k, f))(gather_local_input(x, h, t, k))
-            delta_sum = delta_sum.at[a.astype(int)].add(jnn.tanh(delta))
+    def __call__(self, h2mg_in: H2MG, h2mg_encoded: dict, h: dict, t: float):
+        delta_sum = 0 * h[LOCAL_KEY]
+        for hyper_edge_name, hyper_edges in h2mg_in.local_hyper_edges.items():
+            if hyper_edges.addresses is not None:
+                for address_name, address_values in hyper_edges.addresses.items():
+                    mlp = MLP(self.hidden_size, self.out_size, nn.tanh, name="{}-{}".format(hyper_edge_name, address_name))
+                    ones = jnp.ones_like(h2mg_encoded[LOCAL_KEY][hyper_edge_name])[:, :1]
+                    clean_address_values = jnp.nan_to_num(address_values, nan=MAX_INTEGER).astype(int)
+                    nn_input = jnp.concatenate([
+                        h[LOCAL_KEY].at[clean_address_values].get(mode='drop', fill_value=0.),
+                        h[GLOBAL_KEY] * ones,
+                        h2mg_encoded[LOCAL_KEY][hyper_edge_name],
+                        h2mg_encoded[GLOBAL_KEY] * ones,
+                        t * ones
+                    ], axis=1)
+                    delta_sum = delta_sum.at[clean_address_values].add(jnn.tanh(mlp(nn_input)), mode='drop')
         return jnn.tanh(delta_sum)
 
 
@@ -165,16 +128,30 @@ class LocalDecoder(nn.Module):
         local_output_feature_names (:obj:`dict` of :obj:`float`): Provides for every object class a list of
             features for which a prediction should be output.
     """
-
     hidden_size: Sequence[int]
-    #out_size: int
-    #local_output_feature_names: dict
-    local_output_feature_dimensions: dict
+    local_output_features_dict: dict
 
     @nn.compact
-    def __call__(self, x, h):
-        return {k: {f: MLP(self.hidden_size, dim, name="{}-{}".format(k,f))(gather_local_input(x, h, 0., k))
-            for f, dim in v.items()} for k, v in self.local_output_feature_dimensions.items()}
+    def __call__(self, h2mg_in: H2MG, h2mg_encoded: dict, h: dict):
+
+        r = {}
+        for hyper_edges_name, feature_list in self.local_output_features_dict.items():
+            latent_variable_input_list = []
+            for address_name, address_values in h2mg_in[hyper_edges_name].addresses.items():
+                clean_address_values = jnp.nan_to_num(address_values, nan=MAX_INTEGER).astype(int)
+                latent_variable_input_list.append(h[LOCAL_KEY].at[clean_address_values].get(mode='drop', fill_value=0.))
+            ones = jnp.ones_like(h2mg_encoded[LOCAL_KEY][hyper_edges_name])[:, :1]
+            nn_input = jnp.concatenate([
+                *latent_variable_input_list,
+                h[GLOBAL_KEY] * ones,
+                h2mg_encoded[LOCAL_KEY][hyper_edges_name],
+                h2mg_encoded[GLOBAL_KEY] * ones], axis=1)
+            features_dict = {}
+            for feature_name in feature_list:
+                mlp = MLP(self.hidden_size, 1, nn.leaky_relu, name="{}-{}".format(hyper_edges_name, feature_name))
+                features_dict[feature_name] = mlp(nn_input)[:, 0]
+            r[hyper_edges_name] = HyperEdges(features=features_dict)
+        return r
 
 
 class GlobalDynamics(nn.Module):
@@ -188,13 +165,18 @@ class GlobalDynamics(nn.Module):
             MLPs :math:`\Phi^g_\theta`.
         out_size (:obj:`int`): Output size of the global dynamics MLPs :math:`\Phi^g_\theta`.
     """
-
     hidden_size: Sequence[int]
     out_size: int
 
     @nn.compact
-    def __call__(self, x, h, t):
-        return MLP(self.hidden_size, self.out_size)(gather_global_input(x, h, t))
+    def __call__(self, h2mg_in: H2MG, h2mg_encoded: dict, h: dict, t: float):
+        nn_input = jnp.concatenate([
+            nan_mean_at(h[LOCAL_KEY], h2mg_in.all_addresses_array),
+            h[GLOBAL_KEY],
+            h2mg_encoded[GLOBAL_KEY],
+            t * jnp.ones([1, 1])
+        ], axis=1)
+        return MLP(self.hidden_size, self.out_size, nn.tanh)(nn_input)
 
 
 class GlobalDecoder(nn.Module):
@@ -203,16 +185,18 @@ class GlobalDecoder(nn.Module):
     .. math::
         \hat{y}^g = \Psi^g_\theta (x^g, h^g(t=1), \frac{1}{N}\sum_{i=1}^N h_i(t=1), t)
     """
-
     hidden_size: Sequence[int]
-    #out_size: int
-    #global_output_feature_names: list
-    local_output_feature_dimensions: dict
+    global_output_features_list: list
 
     @nn.compact
-    def __call__(self, x, h):
-        return {k: MLP(self.hidden_size, dim, name="{}".format(k))(gather_global_input(x, h, 0.))
-            for k, dim in self.local_output_feature_dimensions.items()}
+    def __call__(self, h2mg_in, h2mg_encoded, h):
+        features_dict = {}
+        nn_input = jnp.concatenate(
+            [nan_mean_at(h[LOCAL_KEY], h2mg_in.all_addresses_array), h[GLOBAL_KEY], h2mg_encoded[GLOBAL_KEY]], axis=1)
+        for k in self.global_output_features_list:
+            mlp = MLP(self.hidden_size, 1, nn.leaky_relu, name="{}".format(k))
+            features_dict[k] = mlp(nn_input)[:, 0]
+        return HyperEdges(features=features_dict)
 
 
 class H2MGNODE(flax.struct.PyTreeNode):
@@ -242,7 +226,8 @@ class H2MGNODE(flax.struct.PyTreeNode):
         adjoint (:obj:`diffrax.adjoint`): Neural Ordinary Differential Equation adjoint method.
         max_steps (:obj:`int`): Neural Ordinary Differential Equation max amount of steps.
     """
-
+    local_encoder: nn.Module = None
+    global_encoder: nn.Module = None
     local_dynamics: nn.Module = None
     global_dynamics: nn.Module = None
     local_decoder: nn.Module = None
@@ -257,13 +242,17 @@ class H2MGNODE(flax.struct.PyTreeNode):
 
     @classmethod
     def make(cls,
-             feature_dimension: H2MG,
+             output_structure: H2MGStructure,
+             local_encoder_hidden_size: Sequence[int] = None,
+             global_encoder_hidden_size: Sequence[int] = None,
              local_dynamics_hidden_size: Sequence[int] = None,
              global_dynamics_hidden_size: Sequence[int] = None,
              local_decoder_hidden_size: Sequence[int] = None,
              global_decoder_hidden_size: Sequence[int] = None,
-             local_latent_dimension: int = 4,
-             global_latent_dimension: int = 4,
+             local_encoder_output: int = 16,
+             global_encoder_output: int = 16,
+             local_latent_dimension: int = 16,
+             global_latent_dimension: int = 16,
              solver_name: str = "Euler",
              dt0: float = 0.1,
              stepsize_controller_name: str = "ConstantStepSize",
@@ -271,72 +260,109 @@ class H2MGNODE(flax.struct.PyTreeNode):
              adjoint_name: str = "RecursiveCheckpointAdjoint",
              max_steps: int = 4096):
 
+        if local_encoder_hidden_size is None:
+            local_encoder_hidden_size = [32, 32]
+
+        if global_encoder_hidden_size is None:
+            global_encoder_hidden_size = [32, 32]
+
         if local_dynamics_hidden_size is None:
-            local_dynamics_hidden_size = [16]
+            local_dynamics_hidden_size = []
 
         if global_dynamics_hidden_size is None:
-            global_dynamics_hidden_size = [16]
+            global_dynamics_hidden_size = []
 
         if local_decoder_hidden_size is None:
-            local_decoder_hidden_size = [16]
+            local_decoder_hidden_size = [32, 32]
 
         if global_decoder_hidden_size is None:
-            global_decoder_hidden_size = [16]
+            global_decoder_hidden_size = [32, 32]
 
         if stepsize_controller_kwargs is None:
             stepsize_controller_kwargs = dict()
 
+        local_encoder = LocalEncoder(local_encoder_hidden_size, local_encoder_output)
+        global_encoder = GlobalEncoder(global_encoder_hidden_size, global_encoder_output)
         local_dynamics = LocalDynamics(local_dynamics_hidden_size, local_latent_dimension)
         global_dynamics = GlobalDynamics(global_dynamics_hidden_size, global_latent_dimension)
-        local_decoder = LocalDecoder(local_decoder_hidden_size, feature_dimension.local_features)#output_feature_names["local_features"])
-        global_decoder = GlobalDecoder(global_decoder_hidden_size, feature_dimension.global_features)#output_feature_names["global_features"])
+        if any([(he_struct.features is not None) for he_struct in output_structure.local_hyper_edges_structure.values()]):
+            local_output_features_dict = {k: list(he_struct.features.keys())
+                for k, he_struct in output_structure.local_hyper_edges_structure.items()
+                if he_struct.features is not None}
+            local_decoder = LocalDecoder(local_decoder_hidden_size, local_output_features_dict)
+
+        else:
+            local_decoder = None
+        if output_structure.global_hyper_edges_structure is not None:
+            if output_structure.global_hyper_edges_structure.features is not None:
+                global_decoder = GlobalDecoder(global_decoder_hidden_size,
+                                               global_output_features_list=list(output_structure.global_hyper_edges_structure.features.keys()))
+        else:
+            global_decoder = None
         solver = eval("diffrax.{}()".format(solver_name))
         stepsize_controller = eval("diffrax.{}".format(stepsize_controller_name))(**stepsize_controller_kwargs)
         adjoint = eval("diffrax.{}()".format(adjoint_name))
 
-        return cls(local_dynamics, global_dynamics, local_decoder, global_decoder, local_latent_dimension,
-                   global_latent_dimension, solver, dt0, stepsize_controller, adjoint, max_steps)
+        return cls(local_encoder, global_encoder, local_dynamics, global_dynamics, local_decoder, global_decoder,
+                   local_latent_dimension, global_latent_dimension, solver, dt0, stepsize_controller, adjoint,
+                   max_steps)
 
+    def init(self, rng, h2mg_in: H2MG):
+        params = {}
 
-    def init(self, rng, x):
-        rng1, rng2, rng3, rng4 = jax.random.split(rng, 4)
-        h = self._initialize_latent_variables(x)
-        return {
-            "local_dynamics": self.local_dynamics.init(rng1, x, h, 0.),
-            "global_dynamics": self.global_dynamics.init(rng2, x, h, 0.),
-            "local_decoder": self.local_decoder.init(rng3, x, h),
-            "global_decoder": self.global_decoder.init(rng4, x, h)
-        }
+        rng1, rng2, rng3, rng4, rng5, rng6 = jax.random.split(rng, 6)
+        h = self._initialize_latent_variables(h2mg_in)
 
-    def apply(self, params, x, **kwargs):
+        h2mg_local_encoded, params[LOCAL_ENCODER_KEY] = self.local_encoder.init_with_output(rng1, h2mg_in)
+        h2mg_global_encoded, params[GLOBAL_ENCODER_KEY] = self.global_encoder.init_with_output(rng2, h2mg_in)
+        h2mg_encoded = {LOCAL_KEY: h2mg_local_encoded, GLOBAL_KEY: h2mg_global_encoded}
+
+        params[LOCAL_DYNAMICS_KEY] = self.local_dynamics.init(rng3, h2mg_in, h2mg_encoded, h, 0.)
+        params[GLOBAL_DYNAMICS_KEY] = self.global_dynamics.init(rng4, h2mg_in, h2mg_encoded, h, 0.)
+        if self.local_decoder is not None:
+            params[LOCAL_DECODER_KEY] = self.local_decoder.init(rng5, h2mg_in, h2mg_encoded, h)
+        if self.global_decoder is not None:
+            params[GLOBAL_DECODER_KEY] = self.global_decoder.init(rng6, h2mg_in, h2mg_encoded, h)
+
+        return params
+
+    def apply(self, params, h2mg_in, **kwargs):
+
+        h2mg_local_encoded = self.local_encoder.apply(params[LOCAL_ENCODER_KEY], h2mg_in)
+        h2mg_global_encoded = self.global_encoder.apply(params[GLOBAL_ENCODER_KEY], h2mg_in)
+        h2mg_encoded = {LOCAL_KEY: h2mg_local_encoded, GLOBAL_KEY: h2mg_global_encoded}
 
         def f(t, y, args):
-            local_delta = self.local_dynamics.apply(params["local_dynamics"], args, y, t)
-            global_delta = self.global_dynamics.apply(params["global_dynamics"], args, y, t)
-            return {"global": global_delta, "local": local_delta}
+            h2mg_in, h2mg_encoded = args
+            local_delta = self.local_dynamics.apply(params[LOCAL_DYNAMICS_KEY], h2mg_in, h2mg_encoded, y, t)
+            global_delta = self.global_dynamics.apply(params[GLOBAL_DYNAMICS_KEY], h2mg_in, h2mg_encoded, y, t)
+            return {GLOBAL_KEY: global_delta, LOCAL_KEY: local_delta}
 
         term = diffrax.ODETerm(f)
+        h0 = self._initialize_latent_variables(h2mg_in)
         solution = diffrax.diffeqsolve(term,
                                        kwargs.get("solver", self.solver),
                                        t0=0,
                                        t1=1,
                                        dt0=kwargs.get("dt0", self.dt0),
-                                       y0=self._initialize_latent_variables(x),
-                                       args=x,
+                                       y0=h0,
+                                       args=(h2mg_in, h2mg_encoded),
                                        stepsize_controller=kwargs.get("stepsize_controller", self.stepsize_controller),
                                        adjoint=kwargs.get("adjoint", self.adjoint),
                                        max_steps=kwargs.get("max_steps", self.max_steps))
+        h1 = {GLOBAL_KEY: solution.ys[GLOBAL_KEY][0], LOCAL_KEY: solution.ys[LOCAL_KEY][0]}
 
-        h1 = {"global": solution.ys["global"][0], "local": solution.ys["local"][0]}
+        h2mg_out = H2MG()
+        if self.global_decoder is not None:
+            global_hyper_edges = self.global_decoder.apply(params[GLOBAL_DECODER_KEY], h2mg_in, h2mg_encoded, h1)
+            h2mg_out.add_global_hyper_edges(global_hyper_edges)
+        if self.local_decoder is not None:
+            local_hyper_edges = self.local_decoder.apply(params[LOCAL_DECODER_KEY], h2mg_in, h2mg_encoded, h1)
+            for k, hyper_edges in local_hyper_edges.items():
+                h2mg_out.add_local_hyper_edges(k, hyper_edges)
 
-        y_local = self.local_decoder.apply(params["local_decoder"], x, h1)
-        y_global = self.global_decoder.apply(params["global_decoder"], x, h1)
+        return h2mg_out
 
-        y_local = local_output_filter(y_local, x)
-        y_global = global_output_filter(y_global)
-
-        return H2MG({"global_features": y_global, "local_features": y_local})
-
-    def _initialize_latent_variables(self, x):
-        return {"global": jnp.zeros([1, self.global_latent_dimension]),
-            "local": jnp.zeros([jnp.shape(x["all_addresses"])[0], self.local_latent_dimension])}
+    def _initialize_latent_variables(self, h2mg_in):
+        return {GLOBAL_KEY: jnp.zeros([1, self.global_latent_dimension]),
+            LOCAL_KEY: jnp.zeros([jnp.shape(h2mg_in.all_addresses_array)[0], self.local_latent_dimension])}

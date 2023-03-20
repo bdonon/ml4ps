@@ -1,5 +1,5 @@
 from ml4ps.backend.interface import AbstractBackend
-from ml4ps.utils import clean_dict, convert_addresses_to_integers
+# from ml4ps.utils import clean_dict, convert_addresses_to_integers
 
 import pypowsybl.loadflow as pl
 import pypowsybl.network as pn
@@ -158,9 +158,9 @@ class PyPowSyblBackend(AbstractBackend):
                     except Exception as e : 
                         print(e, object_name, feature_name)
 
-        clean_dict(x)
-        if address_to_int:
-            convert_addresses_to_integers(x, address_names)
+        # clean_dict(x)
+        # if address_to_int:
+        #     convert_addresses_to_integers(x, address_names)
         return x
 
     def load_network(self, file_path):

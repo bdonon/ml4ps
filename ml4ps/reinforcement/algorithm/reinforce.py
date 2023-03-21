@@ -2,6 +2,7 @@ from typing import Dict, List, Tuple, Any, Sequence
 from ml4ps.reinforcement.policy import get_policy, BasePolicy
 from jax.random import PRNGKey, split
 from jax import vmap, jit, value_and_grad
+from gymnasium.vector.utils.spaces import iterate
 from ml4ps.reinforcement.environment import PSBaseEnv
 import optax
 from tqdm import tqdm
@@ -12,12 +13,19 @@ import os
 from flax.training import train_state
 from collections import defaultdict
 
+import jax
+import jax.numpy as jnp
+
+
 class ReinforceTrainState(train_state.TrainState):
     pass
 
-def create_train_state(*, module, apply_fn, rng, learning_rate, init_obs):
+
+def create_train_state(*, env, module, apply_fn, rng, learning_rate):
     """Creates an initial `TrainState`."""
-    params = module.init(rng, init_obs)
+    batch_obs, _ = env.reset()
+    single_obs = next(iterate(env.observation_space, batch_obs))
+    params = module.init(rng, single_obs)
     tx = optax.adam(learning_rate=learning_rate)
     return ReinforceTrainState.create(apply_fn=apply_fn, params=params, tx=tx)
 
@@ -31,10 +39,11 @@ def remove_underscore_keys(d: Dict[str, Any]) -> Dict[str, Any]:
         del d[k]
     return d
 
-class Reinforce():
+
+class Reinforce:
     policy: BasePolicy
     env: PSBaseEnv
-    def __init__(self, env: PSBaseEnv, seed=0, *, init_obs, val_env: PSBaseEnv=None, test_env: PSBaseEnv=None, policy_type: str=None, logger=None, validation_interval=100) -> None:
+    def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv=None, test_env: PSBaseEnv=None, policy_type: str=None, logger=None, validation_interval=100) -> None:
         super().__init__()
         self.policy = get_policy(policy_type, env, {})
         self.env = env
@@ -44,7 +53,7 @@ class Reinforce():
         self.logger = logger
         self.validation_interval = validation_interval
         self.train_state = create_train_state(module=self.policy, apply_fn=self.vmap_sample, rng=PRNGKey(seed), learning_rate=1e-3, init_obs=init_obs)
-    
+
     @property
     def hparams(self):
         return {"validation_interval": self.validation_interval, "seed": self.seed}
@@ -55,7 +64,7 @@ class Reinforce():
         self.seed = value.get("seed", self.seed)
         
     def train_step(self, state, batch, *, rng, batch_size):
-        action, _, sample_info = state.apply_fn(state.params, batch, split(rng, batch_size))
+        action, _, sample_info = self.vmap_sample(state.params, batch, split(rng, batch_size))
         next_obs, rewards, done, _, step_info = self.env.step(action)
         value, grad = self.value_and_grad_fn(state.params, batch, action, rewards)
         state = state.apply_gradients(grads=grad)
@@ -73,19 +82,19 @@ class Reinforce():
         
         rng_key = PRNGKey(seed)
         rng_key, rng_key_val = split(rng_key)
-        obs, _ = self.env.reset(seed=seed) 
-        if self.val_env is not None:
-            self.val_env.reset(seed=seed)
+        obs, _ = self.env.reset(seed=seed)
+        #if self.val_env is not None:
+        #    self.val_env.reset(seed=seed)
         for i in tqdm(range(n_iterations)):
             # Train step
             rng_key, subkey = split(rng_key)
             self.train_state, obs, rewards, sample_info, step_info = self.train_step(self.train_state, obs, rng=subkey, batch_size=batch_size)
-            
+            print(obs['gen']['features'])
             # Logging
-            self.log_dicts(logger, i, "train_", sample_info, step_info, {"reward": rewards})
+            # TODO self.log_dicts(logger, i, "train_", sample_info, step_info, {"reward": rewards})
 
             # Val step
-            if i % validation_interval==0 and self.val_env is not None:
+            if False:#i % validation_interval==0 and self.val_env is not None:
                 self.val_env.reset()
                 val_metrics = defaultdict(list)
                 for _ in range(10):

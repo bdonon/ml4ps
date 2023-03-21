@@ -30,17 +30,18 @@ def instantiate_algorithm(algo_cfg):
 
 def get_algorithm(*, env, policy_type, **kwargs):
     # ml4ps.reinforcement.algorithm.get(env, **kwargs)
-    return ml4ps.reinforcement.algorithm.Reinforce(env, policy_type=policy_type, **kwargs)
+    return ml4ps.reinforcement.algorithm.reinforce.Reinforce(env, policy_type=policy_type, **kwargs)
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
+
     # Training environment
     env = get_vector_env(env_name=cfg.env.name, data_dir =cfg.env.data_dir, num_envs=cfg.env.num_envs, train=True)
 
     # RL algorithm
-    single_env = get_single_env(env_name=cfg.env.name, data_dir=cfg.env.data_dir, train=True)
-    single_obs = single_env.reset()[0]
-    algorithm = get_algorithm(env=env, init_obs=single_obs, **cfg.algorithm)
+    #single_env = get_single_env(env_name=cfg.env.name, data_dir=cfg.env.data_dir, train=True)
+    #single_obs = single_env.reset()[0]
+    algorithm = get_algorithm(env=env, **cfg.algorithm)
 
 
     # Logger

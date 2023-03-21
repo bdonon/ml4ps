@@ -12,6 +12,12 @@ from ml4ps.h2mg import H2MG, H2MGStructure, H2MGSpace, H2MGNormalizer, h2mg_norm
 from ml4ps.reinforcement.policy.base import BasePolicy
 from .utils import add_prefix, combine_space
 
+def shallow_repr(h2mg: H2MG) -> Dict[str, Any]:
+    results = {}
+    for obj_name, hyper_edge in h2mg.hyper_edges.items():
+        for feature_name, feature_value in hyper_edge.features.items():
+            results[obj_name + "_" + feature_name] = feature_value
+    return results
 
 class ContinuousPolicy(BasePolicy):
     """ Continuous policy for power system control.
@@ -93,22 +99,15 @@ class ContinuousPolicy(BasePolicy):
         else:
             action = [h2mg_normal_sample(rng, mu_norm, log_sigma_norm, deterministic=deterministic) for rng in jax.random.split(rng, n_action)]
             log_prob = [h2mg_normal_logprob(a, mu_norm, log_sigma_norm) for a in action]
-        info = None #h2mg.shallow_repr(h2mg.map_to_features(lambda x: jnp.asarray(jnp.mean(x)), [self.compute_info(mu_norm, log_sigma_norm)]))
+        info = self.compute_info(mu_norm, log_sigma_norm)
         return action, log_prob, info
 
-    # def compute_info(self, mu_norm, log_sigma_norm):
-    #     mu_norm = add_prefix(mu_norm, "mu_")
-    #     log_sigma_norm = add_prefix(log_sigma_norm, "log_sigma_")
-    #     return combine_space(mu_norm, log_sigma_norm)
-
-    # def _sample_from_distrib_params(self, rng, mu, log_sigma, deterministic=False):
-    #     if deterministic:
-    #         return mu
-    #     else:
-    #         return mu + h2mg.normal_like(rng, mu) * log_sigma.exp()
-
-
-
+    def compute_info(self, mu_norm: H2MG, log_sigma_norm: H2MG) -> Dict[str, float]:
+        mu_norm.add_suffix("_mu")
+        log_sigma_norm.add_suffix("_log_sigma")
+        info = shallow_repr(mu_norm.apply(lambda x: jnp.asarray(jnp.nanmean(x))))
+        info = info | shallow_repr(log_sigma_norm.apply(lambda x: jnp.asarray(jnp.mean(x))))
+        return info
 
     def _build_normalizer(self, env, normalizer_args=None):
         if isinstance(env, gymnasium.vector.VectorEnv):

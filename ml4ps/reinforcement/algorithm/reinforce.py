@@ -1,20 +1,35 @@
-from typing import Dict, List, Tuple, Any, Sequence
-from ml4ps.reinforcement.policy import get_policy, BasePolicy
-from jax.random import PRNGKey, split
-from jax import vmap, jit, value_and_grad
-from gymnasium.vector.utils.spaces import iterate
-from ml4ps.reinforcement.environment import PSBaseEnv
-import optax
-from tqdm import tqdm
-import numpy as np
-from functools import partial
-import pickle
 import os
-from flax.training import train_state
+import pickle
 from collections import defaultdict
+from copy import deepcopy
+from functools import partial
+from typing import Any, Dict, List, Sequence, Tuple
 
+import gymnasium as gym
 import jax
 import jax.numpy as jnp
+import numpy as np
+import optax
+from flax.training import train_state
+from gymnasium.vector.utils.spaces import iterate
+from jax import jit
+from jax import numpy as jnp
+from jax import value_and_grad, vmap
+from jax.random import PRNGKey, split
+from ml4ps.neural_network import get as get_neural_network
+from ml4ps.reinforcement import test_policy
+from ml4ps.reinforcement.environment import PSBaseEnv
+from ml4ps.reinforcement.policy import BasePolicy, get_policy
+from tqdm import tqdm
+
+
+def get_states(env: gym.vector.VectorEnv) -> Any:
+    return env.get_attr('state')
+
+def set_states(env: gym.vector.VectorEnv, states) -> Any:
+    return env.set_attr('state', states)
+
+
 
 
 class ReinforceTrainState(train_state.TrainState):
@@ -26,7 +41,7 @@ def create_train_state(*, env, module, apply_fn, rng, learning_rate):
     batch_obs, _ = env.reset()
     single_obs = next(iterate(env.observation_space, batch_obs))
     params = module.init(rng, single_obs)
-    tx = optax.adam(learning_rate=learning_rate)
+    tx = optax.chain(optax.clip_by_global_norm(0.1), optax.adam(learning_rate=learning_rate))
     return ReinforceTrainState.create(apply_fn=apply_fn, params=params, tx=tx)
 
 
@@ -43,32 +58,69 @@ def remove_underscore_keys(d: Dict[str, Any]) -> Dict[str, Any]:
 class Reinforce:
     policy: BasePolicy
     env: PSBaseEnv
-    def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv=None, test_env: PSBaseEnv=None, policy_type: str=None, logger=None, validation_interval=100) -> None:
+    def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv, test_env: PSBaseEnv, policy_type: str=None, logger=None, validation_interval=100, baseline=None) -> None:
         super().__init__()
         self.policy = get_policy(policy_type, env, {})
         self.env = env
         self.seed = seed
-        self.val_env = val_env or env
-        self.test_env = test_env or env
+        self.baseline = baseline
+        self.val_env = val_env
+        self.test_env = test_env
         self.logger = logger
         self.validation_interval = validation_interval
-        self.train_state = create_train_state(module=self.policy, apply_fn=self.vmap_sample, rng=PRNGKey(seed), learning_rate=1e-3, init_obs=init_obs)
-
+        self.train_state = create_train_state(env=env, module=self.policy, apply_fn=self.vmap_sample, rng=PRNGKey(seed), learning_rate=1e-3)
+        self.init_baseline()
+    
     @property
     def hparams(self):
-        return {"validation_interval": self.validation_interval, "seed": self.seed}
+        return {"validation_interval": self.validation_interval, "seed": self.seed, "baseline": self.baseline}
     
     @hparams.setter
     def hparams(self, value):
         self.validation_interval = value.get("validation_interval", self.validation_interval)
         self.seed = value.get("seed", self.seed)
+    
+    def init_baseline(self):
+        if self.baseline is None:
+            return
+        if self.baseline != "model":
+            return
+
+    def compute_baseline(self, state, batch, rng, batch_size):
+        if self.baseline is None:
+            raise ValueError("Baseline must be specified")
+        elif self.baseline == "mean" or self.baseline == "median":
+            actions = self.vmap_sample_mupltiple(state.params, batch, split(rng, batch_size))
+            rewards = []
+            states = deepcopy(get_states(self.env))
+            for action in actions:
+                _, reward, _, _, _ = self.env.step(action)
+                rewards.append(reward)
+                set_states(self.env, deepcopy(states))
+            baseline_rewards = jnp.mean(jnp.array(rewards), axis=1) if self.baseline == "mean" else jnp.median(jnp.array(rewards), axis=1)
+        elif self.baseline == "deterministic":
+            baseline_action, _, _ = self.vmap_sample_det(state.params, batch, split(rng, batch_size))
+            states = deepcopy(get_states(self.env))
+            _, baseline_rewards, _, _, _ = self.env.step(baseline_action)
+            set_states(self.env, states)
+        else:
+            raise ValueError(f"Unknown baseline: {self.baseline}")
+        return baseline_rewards
+
         
     def train_step(self, state, batch, *, rng, batch_size):
-        action, _, sample_info = self.vmap_sample(state.params, batch, split(rng, batch_size))
+        if self.baseline is not None:
+            baseline = self.compute_baseline(self, state, batch, rng, batch_size)
+        else:
+            baseline = 0
+        action, log_probs, sample_info = state.apply_fn(state.params, batch, split(rng, batch_size))
         next_obs, rewards, done, _, step_info = self.env.step(action)
-        value, grad = self.value_and_grad_fn(state.params, batch, action, rewards)
+        value, grad = self.value_and_grad_fn(state.params, batch, action, rewards, baseline)
         state = state.apply_gradients(grads=grad)
-        return state, next_obs, rewards, sample_info, step_info
+        other_info = {"grad_norm": optax._src.linear_algebra.global_norm(grad),
+                     "loss_value": value,
+                     "log_probs": jnp.mean(log_probs)}
+        return state, next_obs, rewards, sample_info, step_info, other_info
     
     def validation_step(self, state, batch, *, rng, batch_size):
         action, _, sample_info = self.vmap_sample_det(state.params, batch, split(rng, batch_size))
@@ -83,18 +135,17 @@ class Reinforce:
         rng_key = PRNGKey(seed)
         rng_key, rng_key_val = split(rng_key)
         obs, _ = self.env.reset(seed=seed)
-        #if self.val_env is not None:
-        #    self.val_env.reset(seed=seed)
+        self.val_env.reset(seed=seed)
         for i in tqdm(range(n_iterations)):
             # Train step
             rng_key, subkey = split(rng_key)
-            self.train_state, obs, rewards, sample_info, step_info = self.train_step(self.train_state, obs, rng=subkey, batch_size=batch_size)
-            print(obs['gen']['features'])
+            self.train_state, obs, rewards, sample_info, step_info, other_info = self.train_step(self.train_state, obs, rng=subkey, batch_size=batch_size)
+            
             # Logging
-            # TODO self.log_dicts(logger, i, "train_", sample_info, step_info, {"reward": rewards})
+            self.log_dicts(logger, i, "train_", sample_info, step_info, {"reward": rewards}, other_info)
 
             # Val step
-            if False:#i % validation_interval==0 and self.val_env is not None:
+            if i % validation_interval==0 and self.val_env is not None:
                 self.val_env.reset()
                 val_metrics = defaultdict(list)
                 for _ in range(10):
@@ -111,33 +162,24 @@ class Reinforce:
     
 
     def test(self, step, logger=None, seed=None, batch_size=None, test_env=None, rng_key=None):
-        # [WIP]
-        test_env = test_env or self.test_env
-        old_cyclic_mode = test_env.cyclic_mode
-        old_max_iter = test_env.max_iter
-        test_env.cyclic_mode = True
-        test_env.max_iter = 100
-        obs = test_env.reset(seed=seed)
-        while not test_env.empty():
-            rng_key, subkey = split(rng_key)
-            action, _, sample_info = self.vmap_sample_det(self.params, obs, split(subkey, batch_size))
-            next_obs, rewards, done, _, step_info = test_env.step(action)
-            self.log_dicts(logger, step, "test_", sample_info, step_info, {"reward": rewards})
-        test_env.cyclic_mode = old_cyclic_mode
-        test_env.max_iter = old_max_iter
+        test_policy(self.single_env, self.policy, self.train_state.params, seed=self.seed, output_dir=self.res_dir)
     
 
     @partial(jit, static_argnums=(0,))
-    def value_and_grad_fn(self, params, observations, actions, rewards):
-        return value_and_grad(self.loss_fn)(params, observations, actions, rewards)
+    def value_and_grad_fn(self, params, observations, actions, rewards, baseline=0):
+        return value_and_grad(self.loss_fn)(params, observations, actions, rewards, baseline)
     
-    def loss_fn(self, params, observations, actions, rewards):
+    def loss_fn(self, params, observations, actions, rewards, baseline=0):
         log_probs = self.vmap_log_prob(params, observations, action=actions)
-        return - (log_probs * rewards).mean()
+        return - (log_probs * (rewards -  baseline)).mean()
     
     @partial(jit, static_argnums=(0,))
     def vmap_sample(self, params, obs, seed) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
         return vmap(self.policy.sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0))(params, obs, seed, False, 1)
+    
+    @partial(jit, static_argnums=(0,))
+    def vmap_sample_mupltiple(self, params, obs, seed, n_actions) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
+        return vmap(self.policy.sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0))(params, obs, seed, False, n_actions)
         
     @partial(jit, static_argnums=(0,))
     def vmap_sample_det(self, params, obs, seed) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
@@ -177,7 +219,10 @@ class Reinforce:
         res = {}
         not_none_infos = [info for info in infos if info is not None]
         for key in not_none_infos[0]:
-            res[prefix+"final_"+key] = np.nanmean([info[key] for info in not_none_infos])
+            try:
+                res[prefix+"final_"+key] = np.nanmean([info[key] for info in not_none_infos])
+            except:
+                continue
         return res
     
     def log_final_info(self, logger, infos, step, prefix):
@@ -186,20 +231,27 @@ class Reinforce:
 
     def log(self, key, value, step):
         self.logger.log_metrics(key, value, step)
+    
+    def _policy_filename(self, folder):
+        return os.path.join(folder, "policy.pkl")
+    
+    def _hparams_filename(self, folder):
+        return os.path.join(folder, "hparams.pkl")
+    
+    def _train_state_filename(self, folder):
+        return os.path.join(folder, "train_state.pkl")
 
-    def load(self, filename):
-        # [WIP]
-        pass
-        with open(filename, 'rb') as f:
-            data = pickle.load(f)
-        self.__dict__.update(data)
+
+    def load(self, folder):
+        self.env = PSBaseEnv.load(self._policy_filename(folder))
+        with open(self._hparams_filename(folder), 'rb') as f:
+            self.hparams = pickle.load(f)
+        with open(self._train_state_filename(folder), 'rb') as f:
+            self.train_state = pickle.load(f)
 
     def save(self, folder):
-        # [WIP]
-        pass
-        self.policy.save(folder)
-        self.env.save(folder)
-        with open(os.path.join(folder, "hparams.pkl"), 'wb') as f:
+        self.env.save(self._policy_filename(folder))
+        with open(os.path.join(folder, self._hparams_filename(folder)), 'wb') as f:
             pickle.dump(self.hparams, f)
-        with open(os.path.join(folder, "train_state.pkl"), 'wb') as f:
+        with open(os.path.join(folder, self._train_state_filename(folder)), 'wb') as f:
             pickle.dump(self.train_state, f)

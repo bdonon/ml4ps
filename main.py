@@ -37,11 +37,12 @@ def main(cfg):
 
     # Training environment
     env = get_vector_env(env_name=cfg.env.name, data_dir =cfg.env.data_dir, num_envs=cfg.env.num_envs, train=True)
+    val_env = get_vector_env(env_name=cfg.env.name, data_dir =cfg.val_env.data_dir, num_envs=cfg.env.num_envs, train=True)
+    test_env = get_vector_env(env_name=cfg.env.name, data_dir =cfg.val_env.data_dir, num_envs=cfg.env.num_envs, train=True)
+
 
     # RL algorithm
-    #single_env = get_single_env(env_name=cfg.env.name, data_dir=cfg.env.data_dir, train=True)
-    #single_obs = single_env.reset()[0]
-    algorithm = get_algorithm(env=env, **cfg.algorithm)
+    algorithm = get_algorithm(env=env, val_env=val_env, test_env=test_env, **cfg.algorithm)
 
 
     # Logger

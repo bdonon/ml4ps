@@ -2,6 +2,7 @@ import numpy as np
 import jax.numpy as jnp
 import pandas as pd
 from jax.tree_util import register_pytree_node_class
+from typing import Callable
 
 
 FEATURES = "features"
@@ -41,6 +42,9 @@ class HyperEdges(dict):
     def tree_unflatten(cls, aux_data, children):
         """Unflattens a PyTree, required for JAX compatibility."""
         return HyperEdges(**{k: f for k, f in zip(aux_data, children)})
+    
+    def apply(self, fn: Callable):
+        self.features = {k: fn(v) for k, v in self.features.items()}
 
     @classmethod
     def from_structure(cls, structure: 'HyperEdgesStructure', value: float = 0.) -> 'HyperEdges':
@@ -130,7 +134,7 @@ class HyperEdges(dict):
         feature_keys = list(self.features.keys())
         for k in feature_keys:
             self.features[k+suffix] = self.features.pop(k)
-        address_keys = list(self.addresses.keys())
+        address_keys = list(self.addresses.keys()) if self.addresses else []
         for k in address_keys:
             self.addresses[k+suffix] = self.addresses.pop(k)
 

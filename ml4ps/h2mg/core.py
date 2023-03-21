@@ -3,6 +3,7 @@ import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 
 from ml4ps.h2mg.hyper_edges import HyperEdges, collate_hyper_edges, separate_hyper_edges
+from typing import Callable
 
 
 GLOBAL = "global"
@@ -29,7 +30,7 @@ class H2MG(dict):
         def build_str(h2mg):
             r = ""
             for k, hyper_edges in h2mg.items():
-                r += k + "\n" + hyper_edges.__str__() + "\n" + "\n"
+                r += k + "\n" + str(hyper_edges) + "\n" + "\n"
             return r
         return build_str(self)
 
@@ -74,7 +75,7 @@ class H2MG(dict):
         return self
 
     @property
-    def local_hyper_edges(self) -> dict:
+    def local_hyper_edges(self) -> dict[str, HyperEdges]:
         """Dictionary of local hyper-edges."""
         return {k: self[k] for k in self if k not in {GLOBAL, ALL_ADDRESSES}}
 
@@ -146,6 +147,11 @@ class H2MG(dict):
         """Modifies a H2MG by adding a suffix to all features."""
         for hyper_edges in self.values():
             hyper_edges.add_suffix(suffix)
+    
+    def apply(self, fn: Callable):
+        for hyper_edges in self.values():
+            hyper_edges.apply(fn)
+        return self
 
     def combine(self, other: 'H2MG') -> 'H2MG':
         """Returns an H2MG that is the combination of `self` and `other`.

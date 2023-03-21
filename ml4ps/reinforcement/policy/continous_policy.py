@@ -28,11 +28,17 @@ class ContinuousPolicy(BasePolicy):
         # TODO save normalizer, action, obs space, nn args
         self.box_to_sigma_ratio = box_to_sigma_ratio
         self.nn_args = nn_args
+        if isinstance(env, gymnasium.vector.VectorEnv):
+            self.action_space = env.single_action_space.continuous
+        else:
+            self.action_space = env.action_space.continuous
+
+
         if normalizer is None:
             self.normalizer = self._build_normalizer(env, normalizer_args=normalizer_args)
         else:
             self.normalizer = normalizer
-        self.action_space = env.action_space.continuous
+
         self.mu_structure = self.action_space.add_suffix("_mu").structure
         self.log_sigma_structure = self.action_space.add_suffix("_log_sigma").structure
 

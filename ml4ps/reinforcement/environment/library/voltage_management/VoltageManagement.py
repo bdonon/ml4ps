@@ -7,9 +7,7 @@ import os
 import numpy as np
 from gymnasium import spaces
 from ml4ps.reinforcement.environment.ps_environment import PSBaseEnv
-from ml4ps.h2mg.spaces import H2MGSpace
 from ml4ps.h2mg import H2MG
-from ml4ps import h2mg
 
 VoltageManagementState = namedtuple("VoltageSetPointManagementState",
                                     ["power_grid",
@@ -131,13 +129,11 @@ class VoltageManagement(PSBaseEnv, ABC):
     def is_truncated(self, state: NamedTuple) -> bool:
         return False
 
-    def is_stop(self, action) -> bool:
-        pass
-        # TODO
-        # if "stop" in h2mg.global_features(action):
-        #     return bool(h2mg.global_features(action)["stop"])
-        # else:
-        #     return True
+    def is_stop(self, action: H2MG) -> bool:
+        if action.global_hyper_edges is not None and "stop" in action.global_hyper_edges.features:
+            return bool(action.global_hyper_edges.features["stop"])
+        else:
+            return True
 
     def compute_cost(self, power_grid) -> Number:
         """Computes cost of a power grid."""

@@ -159,9 +159,9 @@ class VoltageManagementPandapower(VoltageManagement):
         return {"voltage_violated": voltage_violated,
                 "loading_violated": loading_violated,
                 "reactive_power_violated": reactive_power_violated}, \
-               {"voltage_violated_percentage": voltage_violated_percentage,
-               "loading_violated_percentage": loading_violated_percentage,
-               "reactive_power_violated_percentage": reactive_power_violated_percentage}
+               {"voltage_violated_percentage": voltage_violated_percentage * 100,
+               "loading_violated_percentage": loading_violated_percentage * 100,
+               "reactive_power_violated_percentage": reactive_power_violated_percentage * 100}, \
     
     def run_power_grid(self, power_grid):
         return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0.)

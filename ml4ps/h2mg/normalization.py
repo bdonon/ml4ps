@@ -125,10 +125,9 @@ class H2MGNormalizer:
 
     def load(self, filename):
         """Loads a normalizer."""
-        file = open(filename, 'rb')
-        self.functions = pickle.loads(file.read())
-        self.inverse_functions = pickle.loads(file.read())
-        file.close()
+        with open(filename, 'rb') as file:
+            self.functions = pickle.load(file)
+            self.inverse_functions = pickle.load(file)
 
     def __call__(self, h2mg: H2MG) -> H2MG:
         """Normalizes input data."""

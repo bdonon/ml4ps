@@ -8,12 +8,16 @@ import numpy as np
 from gymnasium import spaces
 from ml4ps.reinforcement.environment.ps_environment import PSBaseEnv
 from ml4ps.h2mg import H2MG
+from dataclasses import dataclass
+import pandapower as pp
 
-VoltageManagementState = namedtuple("VoltageSetPointManagementState",
-                                    ["power_grid",
-                                     "cost",
-                                     "iteration",
-                                     "stop"])
+@dataclass
+class VoltageManagementState:
+    power_grid: pp.pandapowerNet
+    cost: float
+    iteration: int
+    stop: bool
+
 
 
 class VoltageManagement(PSBaseEnv, ABC):

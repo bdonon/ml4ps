@@ -109,17 +109,3 @@ class ContinuousPolicy(BasePolicy):
         info = info | shallow_repr(log_sigma_norm.apply(lambda x: jnp.asarray(jnp.mean(x))))
         return info
 
-    def _build_normalizer(self, env, normalizer_args=None):
-        if isinstance(env, gymnasium.vector.VectorEnv):
-            backend = env.get_attr("backend")[0]
-            data_dir = env.get_attr("data_dir")[0]
-            observation_structure = env.get_attr("observation_structure")[0]
-        else:
-            backend = env.backend
-            data_dir = env.data_dir
-            observation_structure = env.observation_structure
-
-        if normalizer_args is None:
-            return H2MGNormalizer(backend=backend, structure=observation_structure, data_dir=data_dir)
-        else:
-            return H2MGNormalizer(backend=backend, structure=observation_structure, data_dir=data_dir, **normalizer_args)

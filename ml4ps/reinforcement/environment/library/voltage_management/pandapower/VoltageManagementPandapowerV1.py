@@ -43,6 +43,7 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
 
     def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True):
         super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
+        self.name = "VoltageManagementPandapowerV1"
 
     def _build_action_space(self, control_structure):
 

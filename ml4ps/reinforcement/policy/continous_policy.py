@@ -49,7 +49,7 @@ class ContinuousPolicy(BasePolicy):
         self.log_sigma_structure = self.action_space.add_suffix("_log_sigma").structure
 
         self.nn_output_structure = self.mu_structure.combine(self.log_sigma_structure)
-        self.nn = ml4ps.neural_network.get(nn_type, output_structure=self.nn_output_structure)
+        self.nn = ml4ps.neural_network.get(nn_type, output_structure=self.nn_output_structure, **nn_args)
         self.mu_0, self.log_sigma_0 = self._build_postprocessor(self.action_space)
 
     def _build_postprocessor(self, h2mg_space: H2MGSpace):

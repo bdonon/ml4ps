@@ -8,7 +8,7 @@ def test_policy(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed, o
     obs, info = test_env.reset()
     with tqdm.tqdm(total=test_env.maxlen) as pbar:
         while True:
-            action = policy.sample(params, obs, seed=seed, deterministic=True)
+            action, _, _ = policy.sample(params, obs, seed, deterministic=True)
             observation, reward, terminated, truncated, info = test_env.step(action)
             if terminated:
                 pbar.update(1)

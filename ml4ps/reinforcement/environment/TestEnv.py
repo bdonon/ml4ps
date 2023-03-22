@@ -68,6 +68,17 @@ class TestEnv(PSBaseEnv):
     def state(self):
         return self.env.state
     
+    def _build_action_space(self, control_structure) -> spaces.Space:
+        return self.env._build_action_space(control_structure)
+    
+    @property
+    def empty_control_structure(self):
+        return self.env.empty_control_structure
+    
+    @property
+    def empty_observation_structure(self):
+        return self.env.empty_observation_structure
+    
     def __len__(self):
         return len(self.filelist)
     

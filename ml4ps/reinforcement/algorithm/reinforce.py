@@ -22,7 +22,7 @@ from ml4ps.reinforcement.environment import PSBaseEnv
 from ml4ps.reinforcement.policy import BasePolicy, get_policy
 from ml4ps.logger import BaseLogger, dict_mean, process_venv_dict
 from tqdm import tqdm
-
+from .algorithm import Algorithm
 
 def get_states(env: gym.vector.VectorEnv) -> Any:
     return env.get_attr('state')
@@ -51,7 +51,7 @@ def create_train_state(*, env, module, apply_fn, rng, learning_rate) -> Reinforc
 def count_params(params):
     return sum(x.size for x in tree_leaves(params))
 
-class Reinforce:
+class Reinforce(Algorithm):
     policy: BasePolicy
     env: PSBaseEnv
     logger: BaseLogger

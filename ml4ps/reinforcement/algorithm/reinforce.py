@@ -17,10 +17,10 @@ from jax import numpy as jnp
 from jax import value_and_grad, vmap
 from jax.random import PRNGKey, split
 from jax.tree_util import tree_leaves
-from ml4ps.neural_network import get as get_neural_network
 from ml4ps.reinforcement.test_policy import test_policy
 from ml4ps.reinforcement.environment import PSBaseEnv
 from ml4ps.reinforcement.policy import BasePolicy, get_policy
+from ml4ps.logger import BaseLogger, dict_mean, process_venv_dict
 from tqdm import tqdm
 
 
@@ -37,7 +37,7 @@ class ReinforceTrainState(train_state.TrainState):
     pass
 
 
-def create_train_state(*, env, module, apply_fn, rng, learning_rate):
+def create_train_state(*, env, module, apply_fn, rng, learning_rate) -> ReinforceTrainState:
     """Creates an initial `TrainState`."""
     batch_obs, _ = env.reset()
     single_obs = next(iterate(env.observation_space, batch_obs))
@@ -46,14 +46,7 @@ def create_train_state(*, env, module, apply_fn, rng, learning_rate):
     return ReinforceTrainState.create(apply_fn=apply_fn, params=params, tx=tx)
 
 
-def remove_underscore_keys(d: Dict[str, Any]) -> Dict[str, Any]:
-    keys_to_remove = []
-    for k in d.keys():
-        if k.startswith('_'):
-            keys_to_remove.append(k)
-    for k in keys_to_remove:
-        del d[k]
-    return d
+
 
 def count_params(params):
     return sum(x.size for x in tree_leaves(params))
@@ -61,6 +54,8 @@ def count_params(params):
 class Reinforce:
     policy: BasePolicy
     env: PSBaseEnv
+    logger: BaseLogger
+    train_state: ReinforceTrainState
     def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv, test_env: PSBaseEnv, policy_type: str=None, logger=None, validation_interval=100, baseline=None, nn_args={}, clip_norm=0.1, learning_rate=0.0003) -> None:
         super().__init__()
         self.policy_type = policy_type
@@ -121,7 +116,7 @@ class Reinforce:
         return baseline_rewards
 
         
-    def train_step(self, state, batch, *, rng, batch_size):
+    def train_step(self, state: ReinforceTrainState, batch, *, rng, batch_size):
         if self.baseline is not None:
             baseline = self.compute_baseline(state, batch, rng, batch_size)
         else:
@@ -164,13 +159,13 @@ class Reinforce:
                 for _ in range(10):
                     rng_key_val, subkey_val = split(rng_key_val)
                     sample_info, step_info, rewards = self.validation_step(self.train_state, obs, rng=subkey_val, batch_size=batch_size)
-                    sample_info, step_info = self.process_dict(sample_info, "val_") ,self.process_dict(step_info, "val_")
+                    sample_info, step_info = process_venv_dict(sample_info, "val_"), process_venv_dict(step_info, "val_")
                     for k, v in sample_info.items():
                         val_metrics[k].append(v)
                     for k, v in step_info.items():
                         val_metrics[k].append(v)
                     val_metrics["val_reward"].append(np.mean(rewards))
-                val_metrics = self.dict_mean(val_metrics)
+                val_metrics = dict_mean(val_metrics)
                 logger.log_metrics_dict(val_metrics, i)
     
 
@@ -208,49 +203,10 @@ class Reinforce:
     def vmap_log_prob(self, params, obs, action):
         return vmap(self.policy.log_prob, in_axes=(None, 0, 0), out_axes=0)(params, obs, action)
 
-    def log_dicts(self, logger, step, prefix, *dicts):
+    def log_dicts(self, logger: BaseLogger, step, prefix, *dicts):
         for d in dicts:
-            d = self.process_dict(d, prefix)
+            d = process_venv_dict(d, prefix)
             logger.log_metrics_dict(d, step)
-    
-    def process_dict(self, d: Dict[str, Any], prefix) -> Dict[str, Any]:
-        d = remove_underscore_keys(d)
-        d = {prefix + k: v for (k, v) in d.items()}
-        d = self.handle_vector_env( d, prefix)
-        return  self.dict_mean(d)
-    
-    def dict_mean(self, d):
-        return {k: np.nanmean(v) for (k, v) in d.items()}
-    
-    def handle_vector_env(self, d, prefix):
-        keys_to_remove = []
-        final_info = {}
-        for k, v  in d.items():
-            if k.endswith("final_observation"):
-                keys_to_remove.append(k)
-            elif k.endswith("final_info"):
-                keys_to_remove.append(k)
-                final_info = self.get_final_info_dict(v, prefix)
-        for k in keys_to_remove:
-            del d[k]
-        return {**d, **final_info}
-    
-    def get_final_info_dict(self, infos, prefix):
-        res = {}
-        not_none_infos = [info for info in infos if info is not None]
-        for key in not_none_infos[0]:
-            try:
-                res[prefix+"final_"+key] = np.nanmean([info[key] for info in not_none_infos])
-            except:
-                continue
-        return res
-    
-    def log_final_info(self, logger, infos, step, prefix):
-        res = self.get_final_info_dict(infos, prefix)
-        logger.log_metrics_dict(res, step=step)
-
-    def log(self, key, value, step):
-        self.logger.log_metrics(key, value, step)
     
     def _policy_filename(self, folder):
         return os.path.join(folder, "policy.pkl")

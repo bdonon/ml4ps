@@ -1,19 +1,64 @@
-from typing import Dict
 import datetime
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List
+
+import jax.numpy as jnp
 import mlflow
 import numpy as np
-import jax.numpy as jnp
-from abc import ABC, abstractmethod
 
+
+def dict_mean(d: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: np.nanmean(v) for (k, v) in d.items()}
+
+
+def process_venv_dict(d: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+        d = _remove_underscore_keys(d)
+        d = {prefix + k: v for (k, v) in d.items()}
+        d = _handle_venv_finals( d, prefix)
+        return  dict_mean(d)
+
+def _remove_underscore_keys(d: Dict[str, Any]) -> Dict[str, Any]:
+    keys_to_remove = []
+    for k in d.keys():
+        if k.startswith('_'):
+            keys_to_remove.append(k)
+    for k in keys_to_remove:
+        del d[k]
+    return d
+        
+def _handle_venv_finals(d: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+    keys_to_remove = []
+    final_info = {}
+    for k, v  in d.items():
+        if k.endswith("final_observation"):
+            keys_to_remove.append(k)
+        elif k.endswith("final_info"):
+            keys_to_remove.append(k)
+            final_info = _get_final_info_dict(v, prefix)
+    for k in keys_to_remove:
+        del d[k]
+    return {**d, **final_info}
+
+def _get_final_info_dict(infos: List[Dict[str, Any]], prefix: str) -> Dict[str, Any]:
+    res = {}
+    not_none_infos = [info for info in infos if info is not None]
+    for key in not_none_infos[0]:
+        # TODO: check
+        try:
+            res[prefix+"final_"+key] = np.nanmean([info[key] for info in not_none_infos])
+        except:
+            continue
+    return res
 
 class BaseLogger(ABC):
     def log_hyperparams(params):
         pass
     
-    def log_metrics(metrics, step=None):
+    def log_metrics(metrics: Dict[str, Any], step: int=None) -> None:
         pass
     
-    def log_metrics_dict(metrics: Dict, step=None):
+    @abstractmethod
+    def log_metrics_dict(metrics: Dict[str, Any], step: int=None) -> None:
         pass
     
     def finalize(self):

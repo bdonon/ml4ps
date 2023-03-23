@@ -69,8 +69,8 @@ class PyPowSyblBackend(AbstractBackend):
     valid_extensions = (".xiidm", "xiidm.gz", ".mat")
 
     valid_structure = H2MGStructure()
-    for key in VALID_ADDRESSE_NAMES.keys():
-        hyper_edges_structure = HyperEdgesStructure(addresses=VALID_ADDRESSE_NAMES[key], features=VALID_FEATURE_NAMES[key])
+    for key in VALID_ADDRESSE_NAMES | VALID_FEATURE_NAMES:
+        hyper_edges_structure = HyperEdgesStructure(addresses=VALID_ADDRESSE_NAMES.get(key, None), features=VALID_FEATURE_NAMES.get(key, None))
         valid_structure.add_local_hyper_edges_structure(key, hyper_edges_structure)
 
     def __init__(self):

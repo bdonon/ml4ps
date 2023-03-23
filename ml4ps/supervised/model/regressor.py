@@ -1,15 +1,8 @@
-from collections import defaultdict
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, Tuple, List
 
-import gymnasium
-import jax
-import jax.numpy as jnp
 import ml4ps
 import numpy as np
-from gymnasium import spaces
-from ml4ps import Normalizer, h2mg
 from ml4ps.supervised.model.base import BaseModel
+from ml4ps.h2mg import H2MGNormalizer
 
 
 
@@ -17,23 +10,32 @@ class Regressor(BaseModel):
     """
     """
 
-    def __init__(self, problem=None, normalizer=None, normalizer_args=None, nn_type="h2mgnode", np_random=None, **nn_args) -> None:
+    def __init__(self, problem=None, normalizer_args=None, nn_type="h2mgnode", np_random=None, **nn_args) -> None:
         self.nn_args = nn_args
         self.np_random = np_random or np.random.default_rng()
-        self.normalizer = normalizer or Normalizer(backend=problem.backend, data_dir=problem.data_dir)# TODO, **normalizer_args)
-        self.nn = ml4ps.neural_network.get(nn_type, {"feature_dimension":problem.output_space.continuous.feature_dimension, **nn_args})
+        self.pb = problem
+        self.input_normalizer = self._build_normalizer(problem, self.pb.input_structure, normalizer_args=normalizer_args)
+        self.output_normalizer = self._build_normalizer(problem, self.pb.output_structure,
+                                                        normalizer_args=normalizer_args)
 
+        self.nn = ml4ps.neural_network.get(nn_type, output_structure=problem.output_space.continuous.structure, **nn_args)
 
     def init(self, rng, obs):
         return self.nn.init(rng, obs)
 
     def loss(self, params, x, y):
-        x_norm = self.normalizer(x)
+        x_norm = self.input_normalizer(x)
         y_hat_norm = self.nn.apply(params, x_norm) / 8.
-        y_norm = self.normalizer(y)
-        return ((y_hat_norm-y_norm)**2).nansum()
+        y_norm = self.output_normalizer(y)
+        return ((y_hat_norm.flat_array-y_norm.flat_array)**2).nansum()
 
     def predict(self, params, x):
-        x_norm = self.normalizer(x)
+        x_norm = self.input_normalizer(x)
         y_hat_norm = self.nn.apply(params, x_norm) / 8.
-        return self.normalizer.inverse(y_hat_norm)
+        return self.output_normalizer.inverse(y_hat_norm)
+
+    def _build_normalizer(self, pb, structure, normalizer_args=None):
+        if normalizer_args is None:
+            return H2MGNormalizer(backend=pb.backend, structure=structure, data_dir=pb.data_dir)
+        else:
+            return H2MGNormalizer(backend=pb.backend, structure=structure, data_dir=pb.data_dir, **normalizer_args)

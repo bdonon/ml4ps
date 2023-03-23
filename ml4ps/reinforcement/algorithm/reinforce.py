@@ -16,8 +16,9 @@ from jax import jit
 from jax import numpy as jnp
 from jax import value_and_grad, vmap
 from jax.random import PRNGKey, split
+from jax.tree_util import tree_leaves
 from ml4ps.neural_network import get as get_neural_network
-from ml4ps.reinforcement import test_policy
+from ml4ps.reinforcement.test_policy import test_policy
 from ml4ps.reinforcement.environment import PSBaseEnv
 from ml4ps.reinforcement.policy import BasePolicy, get_policy
 from tqdm import tqdm
@@ -54,26 +55,30 @@ def remove_underscore_keys(d: Dict[str, Any]) -> Dict[str, Any]:
         del d[k]
     return d
 
+def count_params(params):
+    return sum(x.size for x in tree_leaves(params))
 
 class Reinforce:
     policy: BasePolicy
     env: PSBaseEnv
-    def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv, test_env: PSBaseEnv, policy_type: str=None, logger=None, validation_interval=100, baseline=None) -> None:
+    def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv, test_env: PSBaseEnv, policy_type: str=None, logger=None, validation_interval=100, baseline=None, nn_args={}, clip_norm=0.1, learning_rate=0.0003) -> None:
         super().__init__()
-        self.policy = get_policy(policy_type, env, {})
+        self.policy = get_policy(policy_type, env, nn_args)
         self.env = env
         self.seed = seed
         self.baseline = baseline
         self.val_env = val_env
         self.test_env = test_env
         self.logger = logger
+        self.clip_norm = clip_norm
+        self.learning_rate = learning_rate
         self.validation_interval = validation_interval
-        self.train_state = create_train_state(env=env, module=self.policy, apply_fn=self.vmap_sample, rng=PRNGKey(seed), learning_rate=1e-3)
+        self.train_state = create_train_state(env=env, module=self.policy, apply_fn=self.vmap_sample, rng=PRNGKey(seed), learning_rate=learning_rate)
         self.init_baseline()
     
     @property
     def hparams(self):
-        return {"validation_interval": self.validation_interval, "seed": self.seed, "baseline": self.baseline}
+        return {"validation_interval": self.validation_interval, "seed": self.seed, "baseline": self.baseline, "clip_norm": self.clip_norm, "learning_rate": self.learning_rate}
     
     @hparams.setter
     def hparams(self, value):
@@ -90,14 +95,16 @@ class Reinforce:
         if self.baseline is None:
             raise ValueError("Baseline must be specified")
         elif self.baseline == "mean" or self.baseline == "median":
-            actions = self.vmap_sample_mupltiple(state.params, batch, split(rng, batch_size))
+            n_action = 5
             rewards = []
-            states = deepcopy(get_states(self.env))
-            for action in actions:
-                _, reward, _, _, _ = self.env.step(action)
-                rewards.append(reward)
-                set_states(self.env, deepcopy(states))
-            baseline_rewards = jnp.mean(jnp.array(rewards), axis=1) if self.baseline == "mean" else jnp.median(jnp.array(rewards), axis=1)
+            for _ in range(n_action):
+                baseline_action, _, _ = self.vmap_sample(state.params, batch, split(rng, batch_size))
+                states = deepcopy(get_states(self.env))
+                _, baseline_reward, _, _, _ = self.env.step(baseline_action)
+                rewards.append(baseline_reward)
+                set_states(self.env, states)
+            rewards = jnp.stack(rewards, axis=0)
+            baseline_rewards = jnp.mean(jnp.array(rewards), axis=0) if self.baseline == "mean" else jnp.median(jnp.array(rewards), axis=0)
         elif self.baseline == "deterministic":
             baseline_action, _, _ = self.vmap_sample_det(state.params, batch, split(rng, batch_size))
             states = deepcopy(get_states(self.env))
@@ -110,7 +117,7 @@ class Reinforce:
         
     def train_step(self, state, batch, *, rng, batch_size):
         if self.baseline is not None:
-            baseline = self.compute_baseline(self, state, batch, rng, batch_size)
+            baseline = self.compute_baseline(state, batch, rng, batch_size)
         else:
             baseline = 0
         action, log_probs, sample_info = state.apply_fn(state.params, batch, split(rng, batch_size))
@@ -161,8 +168,12 @@ class Reinforce:
                 logger.log_metrics_dict(val_metrics, i)
     
 
-    def test(self, step, logger=None, seed=None, batch_size=None, test_env=None, rng_key=None):
-        test_policy(self.single_env, self.policy, self.train_state.params, seed=self.seed, output_dir=self.res_dir)
+    def test(self, test_env, res_dir, test_name=None):
+        test_name = test_name or "test"
+        test_dir = os.path.join(res_dir, test_name)
+        if not os.path.exists(test_dir):
+            os.mkdir(test_dir)
+        return test_policy(test_env, self.policy, self.train_state.params, seed=self.seed, output_dir=test_dir)
     
 
     @partial(jit, static_argnums=(0,))
@@ -171,13 +182,16 @@ class Reinforce:
     
     def loss_fn(self, params, observations, actions, rewards, baseline=0):
         log_probs = self.vmap_log_prob(params, observations, action=actions)
+        # for action in actions:
+        #     log_prob = ...
+        # log_probs = stack
         return - (log_probs * (rewards -  baseline)).mean()
     
     @partial(jit, static_argnums=(0,))
     def vmap_sample(self, params, obs, seed) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
         return vmap(self.policy.sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0))(params, obs, seed, False, 1)
     
-    @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,4))
     def vmap_sample_mupltiple(self, params, obs, seed, n_actions) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
         return vmap(self.policy.sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0))(params, obs, seed, False, n_actions)
         

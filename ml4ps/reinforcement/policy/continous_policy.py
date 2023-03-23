@@ -32,7 +32,9 @@ class ContinuousPolicy(BasePolicy):
             nn produce ditribution parameters from observation input.
     """
 
-    def __init__(self, env, normalizer=None, normalizer_args=None, nn_type="h2mgnode", box_to_sigma_ratio=8, **nn_args) -> None:
+    def __init__(self, env, normalizer=None, normalizer_args=None, nn_type="h2mgnode", box_to_sigma_ratio=8, file=None, **nn_args) -> None:
+        if file is not None:
+            self.load(file)
         # TODO save normalizer, action, obs space, nn args
         self.box_to_sigma_ratio = box_to_sigma_ratio
         if isinstance(env, gymnasium.vector.VectorEnv):

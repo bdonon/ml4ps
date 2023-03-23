@@ -1,47 +1,66 @@
 
 experiment_name: "default_experiment"
 run_name: null
-save_dir: null
-train_dir: ../data/test
-val_dir: ../data/val
-test_dir: ../data/test
+res_dir: "output_folder"
+train_dir: ../data/case60nordic_easy_small/train #../data/test
+val_dir: ../data/case60nordic_easy_small/test
+test_dir: ../data/case60nordic_easy_small/test
+# train_dir: ../data/case60nordic_debug/train #../data/test
+# val_dir: ../data/case60nordic_debug/train
+# test_dir: ../data/case60nordic_debug/test
 seed: 0
 debug: False
 shuffle: False
 batch_size: 8
 env_name: "VoltageManagementPandapowerV1"
+soft_reset: False
 env:
   name: ${env_name}
   data_dir: ${train_dir}
   num_envs: ${batch_size}
-  soft_reset: True
+  soft_reset: ${soft_reset}
 val_env:
   name: ${env_name}
   data_dir: ${val_dir}
   num_envs: ${batch_size}
-  soft_reset: True
+  soft_reset: ${soft_reset}
 test_env:
   name: ${env_name}
   data_dir: ${test_dir}
   num_envs: ${batch_size}
-  soft_reset: True
+  soft_reset: ${soft_reset}
 algorithm:
   # name: "reinforce"
   policy_type: "continuous"
-  # learning_rate: 0.0003
-  # clip_norm: 0.1
+  baseline: null
+  clip_norm: 0.1
+  learning_rate: 0.0003
+  nn_args:
+    local_encoder_hidden_size: [32]
+    global_encoder_hidden_size: [32]
+    local_dynamics_hidden_size: []
+    global_dynamics_hidden_size: []
+    local_decoder_hidden_size: [32]
+    global_decoder_hidden_size: [32]
+    local_encoder_output: 16
+    global_encoder_output: 16
+    local_latent_dimension: 16
+    global_latent_dimension: 16
+    solver_name: "Euler" # other methods ?
+    dt0: 0.05 # at least for nordic 32 0.005
+    stepsize_controller_name: "ConstantStepSize"
+    stepsize_controller_kwargs: null
+    adjoint_name: "RecursiveCheckpointAdjoint"
+    max_steps: 4096
   # fixed_sigma: false
   # n_actions_per_state: 1
-  # model:
-  #   name: "h2mgnode"
-  #   latent_dimension: 16
   # normalizer:
   #   data_dir: ${train_dir}
   #   n_samples: 1000
 logger:
   experiment_name: ${experiment_name}
   run_name: ${run_name}
-  save_dir: ${save_dir}
+  res_dir: ${res_dir}
 learn:
   n_iterations: 6000
 # algorithm_hydra:

@@ -33,9 +33,9 @@ def get_algorithm(*, env, policy_type, **kwargs):
 def main(cfg):
 
     # Training environment
-    env = get_vector_env(env_name=cfg.env.name, data_dir =cfg.env.data_dir, num_envs=cfg.env.num_envs, train=True)
-    val_env = get_vector_env(env_name=cfg.val_env.name, data_dir =cfg.val_env.data_dir, num_envs=cfg.val_env.num_envs, train=True)
-    test_env = get_single_env(env_name=cfg.test_env.name, data_dir =cfg.test_env.data_dir)
+    env = get_vector_env(env_name=cfg.env.name, data_dir=cfg.env.data_dir, num_envs=cfg.env.num_envs, train=True)
+    val_env = get_vector_env(env_name=cfg.val_env.name, data_dir=cfg.val_env.data_dir, num_envs=cfg.val_env.num_envs, train=True)
+    test_env = get_single_env(env_name=cfg.test_env.name, data_dir=cfg.test_env.data_dir)
 
 
     # RL algorithm

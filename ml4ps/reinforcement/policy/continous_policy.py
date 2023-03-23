@@ -112,22 +112,22 @@ class ContinuousPolicy(BasePolicy):
 
     def save(self, filename):
         with open(filename, 'wb') as f:
-            pickle.dumps(self.box_to_sigma_ratio)
-            pickle.dumps(self.action_space)
-            pickle.dumps(self.normalizer)
-            pickle.dumps(self.mu_structure)
-            pickle.dumps(self.log_sigma_structure)
-            pickle.dumps(self.nn)
-            pickle.dumps(self.mu_0)
-            pickle.dumps(self.log_sigma_0)
+            pickle.dump(self.box_to_sigma_ratio, f)
+            pickle.dump(self.action_space, f)
+            pickle.dump(self.normalizer, f)
+            pickle.dump(self.mu_structure, f)
+            pickle.dump(self.log_sigma_structure, f)
+            pickle.dump(self.nn, f)
+            pickle.dump(self.mu_0, f)
+            pickle.dump(self.log_sigma_0, f)
     
-    def save(self, filename):
+    def load(self, filename):
         with open(filename, 'rb') as f:
-            pickle.loads(self.box_to_sigma_ratio)
-            pickle.loads(self.action_space)
-            pickle.loads(self.normalizer)
-            pickle.loads(self.mu_structure)
-            pickle.loads(self.log_sigma_structure)
-            pickle.loads(self.nn)
-            pickle.loads(self.mu_0)
-            pickle.loads(self.log_sigma_0)
+            self.box_to_sigma_ratio = pickle.load(f)
+            self.action_space = pickle.load(f)
+            self.normalizer = pickle.load(f)
+            self.mu_structure = pickle.load(f)
+            self.log_sigma_structure = pickle.load(f)
+            self.nn = pickle.load(f)
+            self.mu_0 = pickle.load(f)
+            self.log_sigma_0 = pickle.load(f)

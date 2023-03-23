@@ -2,83 +2,81 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, Dict, Tuple
 import tqdm
 from gymnasium import Env, spaces
-from ml4ps.h2mg.core import H2MG, collate_h2mgs
+from ml4ps.h2mg import H2MG, collate_h2mgs
 from torch.utils.data import Dataset, DataLoader
-from ml4ps.reinforcement.h2mg_space import H2MGSpace
+import os
 
 
 class PSBasePb(ABC):
     """
-        Power system base supervised learning problem.
-
-        Attributes:
-            data_dir: str
-            backend: Any
-            address_names: Dict[List]
-            input_var_names: Dict[List]
-            input_space: spaces.Space
-            output_var_names: Dict[List]
-            output_space: spaces.Space
     """
 
-
-    data_dir: str
-    backend: Any
-    global_input_feature_names: Dict
-    local_input_feature_names: Dict
-    local_address_names: Dict
-    global_output_feature_names: Dict
-    local_output_feature_names: Dict
-    output_space: H2MGSpace
-    n_obj: dict
-    batch_size: int = 1
-    shuffle: bool = True
-    load_in_memory: bool = False
-
-    def __init__(self):
+    def __init__(self, data_dir: str, batch_size: int = 8, shuffle: bool = True, load_in_memory: bool = True):
         """
             Initialize problem
         """
         super().__init__()
-        self._n_obj = self.backend.max_n_obj.copy()
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.load_in_memory = load_in_memory
+
+        path = os.path.join(data_dir, self.__class__.__name__)
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        input_structure_name = os.path.join(path, 'input_structure.pkl')
+        self.input_structure = self.backend.get_max_structure(input_structure_name, self.data_dir, self.empty_input_structure)
+
+        output_structure_name = os.path.join(path, 'output_structure.pkl')
+        self.output_structure = self.backend.get_max_structure(output_structure_name, self.data_dir, self.empty_output_structure)
+
+        self.output_space = self._build_output_space(self.output_structure)
+
         self.data_set = PSDataset(data_dir=self.data_dir,
                                   backend=self.backend,
-                                  global_input_feature_names=self.global_input_feature_names,
-                                  local_input_feature_names=self.local_input_feature_names,
-                                  local_address_names=self.local_address_names,
-                                  global_output_feature_names=self.global_output_feature_names,
-                                  local_output_feature_names=self.local_output_feature_names,
+                                  input_structure=self.input_structure,
+                                  output_structure=self.output_structure,
                                   load_in_memory=self.load_in_memory)
-        if self.batch_size == 1:
-            self.data_loader = DataLoader(self.data_set, batch_size=self.batch_size, shuffle=self.shuffle,
-                                           collate_fn=lambda xy: (xy[0][0], xy[0][1]))
-        else:
-            def collate_fn(list):
-                x_list = [a[0] for a in list]
-                y_list = [a[1] for a in list]
-                return collate_h2mgs(x_list), collate_h2mgs(y_list)
 
-            self.data_loader = DataLoader(self.data_set, batch_size=self.batch_size, shuffle=self.shuffle,
-                                          collate_fn=collate_fn)
-        # TODO : vérifier que le collate fonctionne, et qu'il renvoie bien des h2mg ?
+        def collate_fn(list):
+            x_list = [a[0] for a in list]
+            y_list = [a[1] for a in list]
+            return collate_h2mgs(x_list), collate_h2mgs(y_list)
+
+        self.data_loader = DataLoader(self.data_set, batch_size=self.batch_size,
+                                      shuffle=self.shuffle, collate_fn=collate_fn)
 
     def __iter__(self):
         return iter(self.data_loader)
 
+    @property
+    @abstractmethod
+    def backend(self):
+        pass
+
+    @property
+    @abstractmethod
+    def empty_input_structure(self):
+        pass
+
+    @property
+    @abstractmethod
+    def empty_output_structure(self):
+        pass
+
+    @abstractmethod
+    def _build_output_space(self, output_structure):
+        pass
+
 
 class PSDataset(Dataset):
-    def __init__(self, data_dir=None, backend=None, global_input_feature_names=None, local_input_feature_names=None,
-                 local_address_names=None, global_output_feature_names=None, local_output_feature_names=None,
-                 load_in_memory=False):
+    def __init__(self, data_dir=None, backend=None, input_structure=None, output_structure=None, load_in_memory=False):
         self.data_dir = data_dir
         self.backend = backend
 
-        self.global_input_feature_names = global_input_feature_names
-        self.local_input_feature_names = local_input_feature_names
-        self.local_address_names = local_address_names
-        self.global_output_feature_names = global_output_feature_names
-        self.local_output_feature_names = local_output_feature_names
-        #self.backend.assert_names(feature_names=self.feature_names, address_names=self.address_names)
+        self.input_structure = input_structure
+        self.output_structure = output_structure
         self.load_in_memory = load_in_memory
         self.files = self.backend.get_valid_files(data_dir)
 
@@ -99,17 +97,12 @@ class PSDataset(Dataset):
     def _get_item_from_memory(self, index):
         return self.dataset[index]
 
-    def _load_item(self, index):
+    def _load_item(self, index: int):
         filename = self.files[index]
         power_grid = self.backend.load_power_grid(filename)
-        x = self.backend.get_data_power_grid(power_grid,
-                                          global_feature_names=self.global_input_feature_names,
-                                          local_feature_names=self.local_input_feature_names,
-                                          local_address_names=self.local_address_names)
-        y = self.backend.get_data_power_grid(power_grid,
-                                          global_feature_names=self.global_output_feature_names,
-                                          local_feature_names=self.local_output_feature_names)
-        return H2MG(x), H2MG(y)
+        x = self.backend.get_h2mg_from_power_grid(power_grid, structure=self.input_structure)
+        y = self.backend.get_h2mg_from_power_grid(power_grid, structure=self.output_structure)
+        return x, y
 
     def __len__(self):
         """Length of the dataset."""

@@ -1,6 +1,8 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Tuple, List
+import json
+import pickle
 
 import gymnasium
 import jax
@@ -33,7 +35,6 @@ class ContinuousPolicy(BasePolicy):
     def __init__(self, env, normalizer=None, normalizer_args=None, nn_type="h2mgnode", box_to_sigma_ratio=8, **nn_args) -> None:
         # TODO save normalizer, action, obs space, nn args
         self.box_to_sigma_ratio = box_to_sigma_ratio
-        self.nn_args = nn_args
         if isinstance(env, gymnasium.vector.VectorEnv):
             self.action_space = env.single_action_space.continuous
         else:
@@ -48,8 +49,8 @@ class ContinuousPolicy(BasePolicy):
         self.mu_structure = self.action_space.add_suffix("_mu").structure
         self.log_sigma_structure = self.action_space.add_suffix("_log_sigma").structure
 
-        self.nn_output_structure = self.mu_structure.combine(self.log_sigma_structure)
-        self.nn = ml4ps.neural_network.get(nn_type, output_structure=self.nn_output_structure, **nn_args)
+        nn_output_structure = self.mu_structure.combine(self.log_sigma_structure)
+        self.nn = ml4ps.neural_network.get(nn_type, output_structure=nn_output_structure, **nn_args)
         self.mu_0, self.log_sigma_0 = self._build_postprocessor(self.action_space)
 
     def _build_postprocessor(self, h2mg_space: H2MGSpace):
@@ -109,3 +110,24 @@ class ContinuousPolicy(BasePolicy):
         info = info | shallow_repr(log_sigma_norm.apply(lambda x: jnp.asarray(jnp.mean(x))))
         return info
 
+    def save(self, filename):
+        with open(filename, 'wb') as f:
+            pickle.dumps(self.box_to_sigma_ratio)
+            pickle.dumps(self.action_space)
+            pickle.dumps(self.normalizer)
+            pickle.dumps(self.mu_structure)
+            pickle.dumps(self.log_sigma_structure)
+            pickle.dumps(self.nn)
+            pickle.dumps(self.mu_0)
+            pickle.dumps(self.log_sigma_0)
+    
+    def save(self, filename):
+        with open(filename, 'rb') as f:
+            pickle.loads(self.box_to_sigma_ratio)
+            pickle.loads(self.action_space)
+            pickle.loads(self.normalizer)
+            pickle.loads(self.mu_structure)
+            pickle.loads(self.log_sigma_structure)
+            pickle.loads(self.nn)
+            pickle.loads(self.mu_0)
+            pickle.loads(self.log_sigma_0)

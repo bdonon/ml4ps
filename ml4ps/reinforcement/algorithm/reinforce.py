@@ -63,6 +63,7 @@ class Reinforce:
     env: PSBaseEnv
     def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv, test_env: PSBaseEnv, policy_type: str=None, logger=None, validation_interval=100, baseline=None, nn_args={}, clip_norm=0.1, learning_rate=0.0003) -> None:
         super().__init__()
+        self.policy_type = policy_type
         self.policy = get_policy(policy_type, env, nn_args)
         self.env = env
         self.seed = seed
@@ -78,12 +79,17 @@ class Reinforce:
     
     @property
     def hparams(self):
-        return {"validation_interval": self.validation_interval, "seed": self.seed, "baseline": self.baseline, "clip_norm": self.clip_norm, "learning_rate": self.learning_rate}
+        return {"validation_interval": self.validation_interval, "seed": self.seed,
+        "baseline": self.baseline, "clip_norm": self.clip_norm, "learning_rate": self.learning_rate, "policy_type": self.policy_type}
     
     @hparams.setter
     def hparams(self, value):
         self.validation_interval = value.get("validation_interval", self.validation_interval)
         self.seed = value.get("seed", self.seed)
+        self.baseline = value.get("baseline", self.baseline)
+        self.clip_norm = value.get("clip_norm", self.clip_norm)
+        self.learning_rate = value.get("learning_rate", self.learning_rate)
+        self.policy_type = value.get("policy_type", self.policy_type)
     
     def init_baseline(self):
         if self.baseline is None:
@@ -254,18 +260,27 @@ class Reinforce:
     
     def _train_state_filename(self, folder):
         return os.path.join(folder, "train_state.pkl")
+    
+    def _params_filename(self, folder):
+        return os.path.join(folder, "params.pkl")
 
 
     def load(self, folder):
-        self.env = PSBaseEnv.load(self._policy_filename(folder))
         with open(self._hparams_filename(folder), 'rb') as f:
             self.hparams = pickle.load(f)
-        with open(self._train_state_filename(folder), 'rb') as f:
-            self.train_state = pickle.load(f)
+        self.policy = get_policy(self.policy_type, None, file=self._policy_filename(folder))
+        # with open(self._train_state_filename(folder), 'rb') as f:
+        #     self.train_state = pickle.load(f)
+        # with open(self._params_filename(folder), 'rb') as f:
+        #     self.params = pickle.load(f)
 
     def save(self, folder):
-        self.env.save(self._policy_filename(folder))
-        with open(os.path.join(folder, self._hparams_filename(folder)), 'wb') as f:
+        self.policy.save(self._policy_filename(folder))
+        with open(self._hparams_filename(folder), 'wb') as f:
             pickle.dump(self.hparams, f)
-        with open(os.path.join(folder, self._train_state_filename(folder)), 'wb') as f:
-            pickle.dump(self.train_state, f)
+        # with open(self._train_state_filename(folder), 'wb') as f:
+        #     pickle.dump(self.train_state, f)
+        # with open(self._params_filename(folder), 'wb') as f:
+        #     pickle.dump(self.train_state.params, f)
+
+

@@ -103,12 +103,13 @@ def to_mpc(net, path, format='.mat', **kwargs):
     heavily on this ordering.
     """
 
-    if not os.path.exists(os.path.join(path, MATPOWER_DIR)):
-        os.mkdir(os.path.join(path, MATPOWER_DIR))
-    if not os.path.exists(os.path.join(path, NAMES_DIR)):
-        os.mkdir(os.path.join(path, NAMES_DIR))
-    if not os.path.exists(os.path.join(path, SHUNTS_DIR)):
-        os.mkdir(os.path.join(path, SHUNTS_DIR))
+
+    if not os.path.exists(os.path.join(os.path.dirname(path), MATPOWER_DIR)):
+        os.mkdir(os.path.join(os.path.dirname(path), MATPOWER_DIR))
+    if not os.path.exists(os.path.join(os.path.dirname(path), NAMES_DIR)):
+        os.mkdir(os.path.join(os.path.dirname(path), NAMES_DIR))
+    if not os.path.exists(os.path.join(os.path.dirname(path), SHUNTS_DIR)):
+        os.mkdir(os.path.join(os.path.dirname(path), SHUNTS_DIR))
 
 
     net = copy.deepcopy(net)
@@ -126,7 +127,7 @@ def to_mpc(net, path, format='.mat', **kwargs):
     net.ext_grid.in_service = True
     net.line.in_service = True
     net.trafo.in_service = True
-    ppc = pp.converter.to_ppc(net, **kwargs)
+    ppc = pp.converter.to_ppc(net, take_slack_vm_limits=False)
 
     # Manually change the Gen and Branch status to reflect the actual in_service values
     ppc['gen'][:, 7] = ppc_gen_status
@@ -147,7 +148,7 @@ def to_mpc(net, path, format='.mat', **kwargs):
         savemat(filepath, mpc)
     elif format == '.m':
 
-        filepath = os.path.join(os.path.join(path, MATPOWER_DIR), net.name + ".m")
+        filepath = os.path.join(os.path.join(os.path.dirname(path), MATPOWER_DIR), net.name + ".m")
 
         def write_table(f, arr, max_col=None):
             for r in arr:
@@ -158,6 +159,7 @@ def to_mpc(net, path, format='.mat', **kwargs):
                         f.write("\t{:.6f}".format(v))
                 f.write(";\n")
             f.write("];\n")
+
 
         with open(filepath, "w") as f:
             f.write("function mpc = powergrid\n")
@@ -186,11 +188,11 @@ def to_mpc(net, path, format='.mat', **kwargs):
         'shunt': list(net.shunt.name.astype(str).values),
     }
 
-    names_path = os.path.join(os.path.join(path, NAMES_DIR), net.name + ".json")
+    names_path = os.path.join(os.path.join(os.path.dirname(path), NAMES_DIR), net.name + ".json")
     with open(names_path, "w") as outfile:
         json.dump(names, outfile)
 
-    shunts_path = os.path.join(os.path.join(path, SHUNTS_DIR), net.name + ".csv")
+    shunts_path = os.path.join(os.path.join(os.path.dirname(path), SHUNTS_DIR), net.name + ".csv")
     shunts.to_csv(shunts_path, index=False)
 
     return mpc
@@ -431,11 +433,11 @@ class PandaPowerBackend(AbstractBackend):
         """
         for k, hyper_edges in h2mg.local_hyper_edges.items():
             for f, v in hyper_edges.features.items():
-                try:
-                    power_grid[k][f] = v
-                except ValueError:
-                    print('Object class {} and feature {} are not available with PandaPower'.format(k, f))
-
+                #try:
+                #print(power_grid[k][f], v)
+                power_grid[k][f] = v
+                #except ValueError:
+                #    print('Object class {} and feature {} are not available with PandaPower'.format(k, f))
 
     @staticmethod
     def run_power_grid(power_grid, **kwargs):

@@ -204,7 +204,8 @@ class GlobalDecoder(nn.Module):
             [nan_mean_at(h[LOCAL_KEY], h2mg_in.all_addresses_array), h[GLOBAL_KEY], h2mg_encoded[GLOBAL_KEY]], axis=1)
         for k in self.global_output_features_list:
             mlp = MLP(self.hidden_size, 1, nn.leaky_relu, name="{}".format(k))
-            features_dict[k] = jnp.where(isnan_mask, jnp.nan, mlp(nn_input)[:, 0])
+            features_dict[k] = mlp(nn_input)[:, 0]
+            #features_dict[k] = jnp.where(isnan_mask, jnp.nan, mlp(nn_input)[:, 0])
         return HyperEdges(features=features_dict)
 
 

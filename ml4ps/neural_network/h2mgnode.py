@@ -198,7 +198,7 @@ class GlobalDecoder(nn.Module):
 
     @nn.compact
     def __call__(self, h2mg_in, h2mg_encoded, h):
-        isnan_mask = jnp.isnan(h2mg_in.global_hyper_edges.array[:,0])
+        #isnan_mask = jnp.isnan(h2mg_in.global_hyper_edges.array[:,0])
         features_dict = {}
         nn_input = jnp.concatenate(
             [nan_mean_at(h[LOCAL_KEY], h2mg_in.all_addresses_array), h[GLOBAL_KEY], h2mg_encoded[GLOBAL_KEY]], axis=1)

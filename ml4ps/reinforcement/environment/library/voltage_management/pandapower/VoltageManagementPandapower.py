@@ -149,7 +149,7 @@ class VoltageManagementPandapower(VoltageManagement):
             [power_grid.res_line.loading_percent, power_grid.res_trafo.loading_percent], axis=-1)
         loading_violated_connexion = loading_connexion > 100
         loading_violated_percentage = loading_violated_connexion.mean()
-        loading_violated = (loading_violated_connexion>1).any().astype(int)
+        loading_violated = loading_violated_connexion.any().astype(int)
         q = np.concatenate([power_grid.res_gen.q_mvar, power_grid.res_ext_grid.q_mvar], axis=-1)
         qmin = np.concatenate([power_grid.gen.min_q_mvar, power_grid.ext_grid.min_q_mvar], axis=-1)
         qmax = np.concatenate([power_grid.gen.max_q_mvar, power_grid.ext_grid.max_q_mvar], axis=-1)

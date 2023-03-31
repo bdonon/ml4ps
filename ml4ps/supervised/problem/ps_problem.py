@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, Dict, Tuple
 import tqdm
 from gymnasium import Env, spaces
-from ml4ps.h2mg import H2MG, collate_h2mgs
+from ml4ps.h2mg import H2MG, H2MGSpace, collate_h2mgs
 from torch.utils.data import Dataset, DataLoader
 import os
 
@@ -31,6 +31,7 @@ class PSBasePb(ABC):
         output_structure_name = os.path.join(path, 'output_structure.pkl')
         self.output_structure = self.backend.get_max_structure(output_structure_name, self.data_dir, self.empty_output_structure)
 
+        self.input_space = H2MGSpace.from_structure(self.input_structure)
         self.output_space = self._build_output_space(self.output_structure)
 
         self.data_set = PSDataset(data_dir=self.data_dir,

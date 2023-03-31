@@ -1,0 +1,53 @@
+
+experiment_name: "default_experiment"
+run_name: null
+res_dir: "output_folder"
+seed: 0
+debug: False
+problem_name: "ACPowerFlowProxyPandapower"
+train_problem:
+  name: ${problem_name}
+  data_dir: ../powerdatagen/data/test2
+  batch_size: 8
+  shuffle: True
+  load_in_memory: True
+val_problem:
+  name: ${problem_name}
+  data_dir: ../powerdatagen/data/test2
+  batch_size: 8
+  shuffle: False
+  load_in_memory: True
+test_problem:
+  name: ${problem_name}
+  data_dir: ../powerdatagen/data/test2
+  batch_size: 8
+  shuffle: False
+  load_in_memory: True
+algorithm:
+  algorithm_type: "vanilla"
+  model_type: "regressor"
+  clip_norm: 0.1
+  learning_rate: 0.0003
+  nn:
+    local_encoder_hidden_size: [32]
+    global_encoder_hidden_size: [32]
+    local_dynamics_hidden_size: [32]
+    global_dynamics_hidden_size: [32]
+    local_decoder_hidden_size: [32]
+    global_decoder_hidden_size: [32]
+    local_encoder_output: 16
+    global_encoder_output: 16
+    local_latent_dimension: 16
+    global_latent_dimension: 16
+    solver_name: "Euler"
+    dt0: 0.005
+    stepsize_controller_name: "ConstantStepSize"
+    stepsize_controller_kwargs: null
+    adjoint_name: "RecursiveCheckpointAdjoint"
+    max_steps: 4096
+logger:
+  experiment_name: ${experiment_name}
+  run_name: ${run_name}
+  res_dir: ${res_dir}
+learn:
+  n_epochs: 1000

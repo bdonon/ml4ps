@@ -37,7 +37,7 @@ class TestEnv(PSBaseEnv):
             self.env.backend.save_power_grid(self.state.power_grid, path=self.save_folder)
             if len(self.filelist) <= 0:
                 self._is_done=True
-            obs, info = self.reset()
+            obs, info = self.reset(options={"load_new_power_grid": True})
             path = self.save_folder
             
             

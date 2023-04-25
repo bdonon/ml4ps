@@ -41,14 +41,19 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
     """
     empty_control_structure = CONTROL_STRUCTURE
 
-    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True):
-        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
+    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True, additive=True):
         self.name = "VoltageManagementPandapowerV1"
+        self.additive = additive
+        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
 
     def _build_action_space(self, control_structure):
 
-        gen_vm_pu_space = spaces.Box(low=0.8, high=1.2, shape=(control_structure["gen"].features["vm_pu"],))
-        ext_grid_vm_pu_space = spaces.Box(low=0.8, high=1.2, shape=(control_structure["ext_grid"].features["vm_pu"],))
+        if self.additive:
+            offset=0.0
+        else:
+            offset=1.0
+        gen_vm_pu_space = spaces.Box(low=offset-0.2, high=offset+0.2, shape=(control_structure["gen"].features["vm_pu"],))
+        ext_grid_vm_pu_space = spaces.Box(low=offset-0.2, high=offset+0.2, shape=(control_structure["ext_grid"].features["vm_pu"],))
 
         action_space = H2MGSpace()
         action_space._add_hyper_edges_space('gen', HyperEdgesSpace(features=spaces.Dict({"vm_pu": gen_vm_pu_space})))
@@ -64,7 +69,12 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
 
     def update_ctrl_var(self, ctrl_var: H2MG, action: H2MG, state: VoltageManagementState) -> Dict:
         """Updates control variables with action."""
-        return action
+        if self.additive:
+            res = H2MG.from_structure(ctrl_var.structure)
+            res.flat_array = ctrl_var.flat_array + action.flat_array
+            return res
+        else:
+            return action
     
     def run_power_grid(self, power_grid):
         return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0.,

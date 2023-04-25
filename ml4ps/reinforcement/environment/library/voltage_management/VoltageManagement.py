@@ -1,15 +1,14 @@
 from abc import ABC, abstractmethod
-from collections import namedtuple
+from dataclasses import dataclass
 from numbers import Number
 from typing import Any, Dict, NamedTuple, Optional, Tuple
-import os
 
-import numpy as np
 from gymnasium import spaces
-from ml4ps.reinforcement.environment.ps_environment import PSBaseEnv
 from ml4ps.h2mg import H2MG
-from dataclasses import dataclass
+from ml4ps.reinforcement.environment.ps_environment import PSBaseEnv
+
 import pandapower as pp
+
 
 @dataclass
 class VoltageManagementState:
@@ -53,7 +52,7 @@ class VoltageManagement(PSBaseEnv, ABC):
 
     def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True):
         super().__init__(data_dir)
-        self.soft_reset = soft_reset
+        self._soft_reset = soft_reset
         self.max_steps = max_steps
         self.state = VoltageManagementState(power_grid=None,
                                             cost=None,
@@ -61,6 +60,14 @@ class VoltageManagement(PSBaseEnv, ABC):
                                             stop=False)
 
         self.init_cost_hparams(cost_hparams)
+    
+    @property
+    def soft_reset(self):
+        return self._soft_reset
+    
+    @soft_reset.setter
+    def soft_reset(self, value):
+        self._soft_reset = value
 
 
     def init_cost_hparams(self, cost_hparams: Dict = None) -> None:
@@ -90,8 +97,9 @@ class VoltageManagement(PSBaseEnv, ABC):
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple:
         """Resets environment to a new power grid for the given random seed."""
         super().reset(seed=seed)
+
         power_grid = self.state.power_grid
-        if not self.soft_reset or (power_grid is None or options is not None and options.get("load_new_power_grid", False)):
+        if (not self.soft_reset) or (power_grid is None) or (options is not None and options.get("load_new_power_grid", False)):
             power_grid = self.get_next_power_grid(options)
         ctrl_var = self.initialize_control_variables(power_grid)
         self.backend.set_h2mg_into_power_grid(power_grid, ctrl_var)
@@ -102,7 +110,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         self.state = VoltageManagementState(power_grid=power_grid,
                                             cost=cost, iteration=iteration, stop=stop)
         obs = self.get_observation(self.state)
-        info = self.get_information(state=self.state, action=None)
+        info = self.get_information(state=self.state, action=None) # TODO reward=None
         return obs, info
 
     def step(self, action) -> Tuple[H2MG, float, bool, bool, Dict]:
@@ -160,7 +168,7 @@ class VoltageManagement(PSBaseEnv, ABC):
 
     @property
     def default_cost_hparams(self) -> Dict:
-        return {"lmb_i": 1.0, "lmb_q": 1.0, "lmb_v": 1.0, "eps_i": .0, "eps_q": 0.0, "eps_v": 0.0, "c_div": 1.0}
+        return {"lmb_i": 1.0, "lmb_q": 1.0, "lmb_v": 1.0, "eps_i": .1, "eps_q": 0.5, "eps_v": 0.2, "c_div": 1.0}
     
     @abstractmethod
     def run_power_grid(self, power_grid):
@@ -176,7 +184,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         pass
 
     @abstractmethod
-    def get_information(self, state, action=None) -> Dict:
+    def get_information(self, state, action=None, reward=None) -> Dict:
         """Gets power grid statistics, cost decomposition, constraints violations and iteration."""
         pass
 

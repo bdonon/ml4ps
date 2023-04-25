@@ -85,7 +85,7 @@ class VoltageManagementPandapower(VoltageManagement):
         line_loading_percent = power_grid.res_line.loading_percent
         transfo_loading_percent = power_grid.res_trafo.loading_percent
         loading_percent = np.concatenate([line_loading_percent, transfo_loading_percent], axis=-1)
-        return self.normalized_cost(loading_percent, 0, 100, 0, eps_i)
+        return self.normalized_cost(loading_percent, 0, 100, 0, 2*eps_i)
 
     def compute_reactive_cost(self, power_grid, eps_q) -> Number:
         q = np.concatenate([power_grid.res_gen.q_mvar, power_grid.res_ext_grid.q_mvar], axis=-1)
@@ -109,6 +109,7 @@ class VoltageManagementPandapower(VoltageManagement):
 
     def normalized_cost(self, value, min_value, max_value, eps_min_threshold, eps_max_threshold)  -> Number:
         v = (value - min_value) / (max_value - min_value)
+        # TODO: change loss
         return np.nanmean(np.greater(v, 1-eps_max_threshold) * np.power(v - (1-eps_max_threshold), 2)
                 + np.greater(eps_min_threshold, v) * np.power(eps_min_threshold - v, 2))
 

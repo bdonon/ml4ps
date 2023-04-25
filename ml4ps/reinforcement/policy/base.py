@@ -21,6 +21,10 @@ class BasePolicy(ABC):
         # return both sample action and corresponding log probabilities
         pass
 
+    def vmap_sample(self, params: dict, observation: dict, rng, deterministic: bool=False, n_action: int=1) -> Tuple[H2MG, float, Dict]:
+        # return both sample action and corresponding log probabilities for a given batch
+        pass
+
     def _build_normalizer(self, env, normalizer_args=None):
         if isinstance(env, VectorEnv):
             backend = env.get_attr("backend")[0]

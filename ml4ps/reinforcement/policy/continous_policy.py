@@ -1,27 +1,17 @@
-from collections import defaultdict
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, Tuple, List
-import json
 import pickle
+from copy import deepcopy
+from functools import partial
 from numbers import Number
-
+from typing import Any, Dict
 
 import gymnasium
 import jax
 import jax.numpy as jnp
 import ml4ps
-import numpy as np
 from gymnasium import spaces
-from ml4ps.h2mg import H2MG, H2MGStructure, H2MGSpace, H2MGNormalizer, h2mg_normal_sample, h2mg_normal_logprob
+from jax import jit, vmap
+from ml4ps.h2mg import H2MG, H2MGSpace, h2mg_normal_logprob, h2mg_normal_sample, shallow_repr
 from ml4ps.reinforcement.policy.base import BasePolicy
-from .utils import add_prefix, combine_space
-
-def shallow_repr(h2mg: H2MG) -> Dict[str, Any]:
-    results = {}
-    for obj_name, hyper_edge in h2mg.hyper_edges.items():
-        for feature_name, feature_value in hyper_edge.features.items():
-            results[obj_name + "_" + feature_name] = feature_value
-    return results
 
 class ContinuousPolicy(BasePolicy):
     """ Continuous policy for power system control.
@@ -104,12 +94,16 @@ class ContinuousPolicy(BasePolicy):
         distrib_params = self.nn.apply(params, observation)
         mu_norm, log_sigma_norm = self._postprocess_distrib_params(distrib_params)
         return h2mg_normal_logprob(action, mu_norm, log_sigma_norm)
-
-    def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1):
-        """Sample an action and return it together with the corresponding log probability."""
+    
+    def forward(self, params, observation):
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)
-        mu_norm, log_sigma_norm = self._postprocess_distrib_params(distrib_params)
+        mu, log_sigma = self._postprocess_distrib_params(distrib_params)
+        return mu, log_sigma
+    
+    def _sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1):
+        """Sample an action and return it together with the corresponding log probability."""
+        mu_norm, log_sigma_norm = self.forward(params, observation)
         if n_action <= 1:
             action = h2mg_normal_sample(rng, mu_norm, log_sigma_norm, deterministic=deterministic)
             log_prob = h2mg_normal_logprob(action, mu_norm, log_sigma_norm)
@@ -117,14 +111,35 @@ class ContinuousPolicy(BasePolicy):
             action = [h2mg_normal_sample(rng, mu_norm, log_sigma_norm, deterministic=deterministic) for rng in jax.random.split(rng, n_action)]
             log_prob = [h2mg_normal_logprob(a, mu_norm, log_sigma_norm) for a in action]
         info = self.compute_info(mu_norm, log_sigma_norm)
+        return action, log_prob, info, mu_norm, log_sigma_norm
+    
+    def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1):
+        """Sample an action and return it together with the corresponding log probability."""
+        action, log_prob, info, _, _ = self._sample(params, observation, rng, deterministic, n_action)
         return action, log_prob, info
-
-    def compute_info(self, mu_norm: H2MG, log_sigma_norm: H2MG) -> Dict[str, float]:
-        mu_norm.add_suffix("_mu")
-        log_sigma_norm.add_suffix("_log_sigma")
-        info = shallow_repr(mu_norm.apply(lambda x: jnp.asarray(jnp.nanmean(x))))
-        info = info | shallow_repr(log_sigma_norm.apply(lambda x: jnp.asarray(jnp.mean(x))))
+    
+    @partial(jit, static_argnums=(0, 4, 5))
+    def vmap_sample(self, params, observation: spaces.Space, rngs, deterministic=False, n_action=1):
+        action, log_prob, _, mu, log_sigma = vmap(self._sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0, 0, 0))(params, observation, rngs, deterministic, n_action)
+        info = self.compute_info(mu, log_sigma)
+        batch_info = self.compute_batch_info(mu, log_sigma)
+        return action, log_prob, info | batch_info
+    
+    def compute_info(self, mu: H2MG, log_sigma: H2MG) -> Dict[str, float]:
+        mu = deepcopy(mu)
+        log_sigma = deepcopy(log_sigma)
+        mu.add_suffix("_mu")
+        log_sigma.add_suffix("_log_sigma")
+        info = shallow_repr(mu.apply(lambda x: jnp.asarray(jnp.nanmean(x))))
+        info = info | shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.mean(x))))
         return info
+    
+    def compute_batch_info(self, mu: H2MG, log_sigma: H2MG) -> Dict[str, float]:
+        mu.add_suffix("_mu_std")
+        mu_std_accross_batch = shallow_repr(mu.apply(lambda x: jnp.asarray(jnp.std(x, axis=0).mean())))
+        log_sigma.add_suffix("_log_sigma_std")
+        log_sigma_std_accross_batch = shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.std(x, axis=0).mean())))
+        return mu_std_accross_batch | log_sigma_std_accross_batch
 
     def save(self, filename):
         with open(filename, 'wb') as f:

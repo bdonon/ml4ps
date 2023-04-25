@@ -105,8 +105,8 @@ class Reinforce(Algorithm):
     def compute_baseline(self, state, batch, rng, batch_size):
         rewards = []
         baseline_actions = []
-        baseline_actions, _, _ = self.vmap_sample_mupltiple(
-            state.params, batch, split(rng, batch_size), self.n_actions)
+        baseline_actions, _, _ = self.vmap_sample(
+            state.params, batch, split(rng, batch_size), n_action=self.n_actions)
         for i in range(self.n_actions):
             baseline_action = baseline_actions[i]
             _, baseline_reward, _, _, _ = self.env.step(baseline_action)
@@ -136,15 +136,13 @@ class Reinforce(Algorithm):
                      "loss_value": value,
                      "log_probs": jnp.mean(log_probs),
                      "baseline": jnp.mean(baseline),
-                     "mean_reward": jnp.mean(b_rewards),
-                     # TODO: in policy ?
-                     "std_gen": self.std_accross_gen(action),
+                     "mean_baseline_reward": jnp.mean(b_rewards),
                      "std_baseline_reward": jnp.std(b_rewards, axis=0).mean()}
         return state, next_obs, rewards, policy_info, env_info, algo_info
 
     def validation_step(self, state, batch, *, rng, batch_size):
-        action, _, sample_info = self.vmap_sample_det(
-            self.policy_params, batch, split(rng, batch_size))
+        action, _, sample_info = self.vmap_sample(
+            self.policy_params, batch, split(rng, batch_size), determnistic=True)
         next_obs, rewards, done, _, step_info = self.val_env.step(action)
         return sample_info, step_info, rewards
 
@@ -210,7 +208,6 @@ class Reinforce(Algorithm):
     def value_and_grad_fn(self, params, observations, actions, rewards, baseline=0, multiple_actions=False):
         return value_and_grad(self.loss_fn)(params, observations, actions, rewards, baseline, multiple_actions)
 
-    # @partial(jit, static_argnums=(0,6))
     def loss_fn(self, params, observations, actions, rewards, baseline=0, multiple_actions: bool = False):
         if multiple_actions:
             log_probs = vmap(self.vmap_log_prob, in_axes=(
@@ -220,17 +217,9 @@ class Reinforce(Algorithm):
                 params, observations, action=actions)
         return - (log_probs * (rewards - baseline)).mean()
 
-    @partial(jit, static_argnums=(0,))
-    def vmap_sample(self, params, obs, seed) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
-        return vmap(self.policy.sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0))(params, obs, seed, False, 1)
-
-    @partial(jit, static_argnums=(0, 4))
-    def vmap_sample_mupltiple(self, params, obs, seed, n_actions) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
-        return vmap(self.policy.sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0))(params, obs, seed, False, n_actions)
-
-    @partial(jit, static_argnums=(0,))
-    def vmap_sample_det(self, params, obs, seed) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
-        return vmap(self.policy.sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0))(params, obs, seed, True, 1)
+    @partial(jit, static_argnums=(0, 4, 5))
+    def vmap_sample(self, params, obs, seed, deterministic=False, n_action=1) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
+        return self.policy.vmap_sample(params, obs, seed, deterministic, n_action)
 
     @partial(jit, static_argnums=(0,))
     def vmap_log_prob(self, params, obs, action):
@@ -263,12 +252,6 @@ class Reinforce(Algorithm):
         self.policy.save(self._policy_filename(folder))
         with open(self._params_filename(folder), 'wb') as f:
             pickle.dump(self.policy_params, f)
-
-    def std_accross_gen(self, actions: H2MG):
-        # TODO remove this function
-        mu_action_batch = actions.hyper_edges["gen"].features["vm_pu"]
-        mu_action_var = jnp.std(mu_action_batch, axis=0)
-        return jnp.mean(mu_action_var)
 
     def save_best_params(self, folder, params=None, step=None, value=None):
         if params is None:

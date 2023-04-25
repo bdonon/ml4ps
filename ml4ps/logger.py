@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 import jax.numpy as jnp
 import mlflow
 import numpy as np
+from omegaconf import DictConfig, ListConfig
 
 
 def dict_mean(d: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,6 +62,11 @@ class BaseLogger(ABC):
     def log_metrics_dict(metrics: Dict[str, Any], step: int=None) -> None:
         pass
     
+    def log_dicts(self, step, prefix, *dicts):
+        for d in dicts:
+            d = process_venv_dict(d, prefix)
+            self.log_metrics_dict(d, step)
+    
     def finalize(self):
         pass
 
@@ -77,14 +83,16 @@ class CSVLogger(BaseLogger):
     def log_metrics_dict(self, metrics: Dict, step=None):
         pass
 
-class MLFlowLogger():
-    def __init__(self, experiment_name) -> None:
+class MLFlowLogger(BaseLogger):
+    def __init__(self, experiment_name, run_name, res_dir=None) -> None:
         exp = mlflow.get_experiment_by_name(experiment_name)
         if exp:
             experiment_id = exp.experiment_id
         else:
             experiment_id = mlflow.create_experiment(name=experiment_name)
-        mlflow.start_run(experiment_id=experiment_id)
+        mlflow.start_run(experiment_id=experiment_id, run_name=run_name)
+        if res_dir is not None:
+            mlflow.set_tracking_uri(res_dir)
     
     def log_hyperparams(self, params):
         pass
@@ -93,17 +101,9 @@ class MLFlowLogger():
         pass
 
     def log_metrics_dict(self, metrics: Dict, step=None):
-        # Warning: removes nan !
         for key, value in metrics.items():
-            if key.startswith('_'):
-                continue
-            if key.endswith("final_info"):
-                self.log_final_info(value, step)
-                continue
-            if key.endswith("final_observation"):
-                continue
-            v = np.asarray(jnp.nanmean(value))
-            mlflow.log_metric(key, v, step=step)    
+            v = np.asarray(value)
+            mlflow.log_metric(key, v, step=step)
     
     def finalize(self):
         return mlflow.end_run()

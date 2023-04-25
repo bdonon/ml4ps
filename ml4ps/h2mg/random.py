@@ -66,7 +66,7 @@ def h2mg_normal_logprob(x: H2MG, mu: float | H2MG = 0., log_sigma: float | H2MG 
     x_array = jax.lax.stop_gradient(x.flat_array) if isinstance(x, H2MG) else jax.lax.stop_gradient(x)
     mu_array = mu.flat_array if isinstance(mu, H2MG) else mu
     log_sigma_array = log_sigma.flat_array if isinstance(log_sigma, H2MG) else log_sigma
-    return jnp.nansum(cst - log_sigma_array - 0.5 * jnp.exp(-2*log_sigma_array)*(x_array - mu_array)**2)
+    return jnp.nansum(cst - log_sigma_array - 0.5 * jnp.where(jnp.isnan(log_sigma_array), jnp.nan, jnp.exp(-2 * log_sigma_array)) * (x_array - mu_array) ** 2)
 
 
 def h2mg_categorical_sample(rng: jax.random.PRNGKey, logits: H2MG, deterministic: bool = False) -> H2MG:

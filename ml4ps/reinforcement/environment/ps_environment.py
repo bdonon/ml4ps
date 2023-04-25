@@ -82,7 +82,7 @@ class PSBaseEnv(Env, ABC):
     @abstractmethod
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[H2MG, Dict]:
         """Reset environement to a new power_grid for the given random seed."""
-        pass
+        super().reset(seed=seed, options=options)
 
     @abstractmethod
     def step(self, a) -> Tuple[H2MG, float, bool, bool, Dict]:

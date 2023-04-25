@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Tuple, List
 import json
 import pickle
+from numbers import Number
+
 
 import gymnasium
 import jax
@@ -32,7 +34,7 @@ class ContinuousPolicy(BasePolicy):
             nn produce ditribution parameters from observation input.
     """
 
-    def __init__(self, env, normalizer=None, normalizer_args=None, nn_type="h2mgnode", box_to_sigma_ratio=8, file=None, **nn_args) -> None:
+    def __init__(self, env, normalizer=None, normalizer_args=None, nn_type="h2mgnode", box_to_sigma_ratio=8, file=None, cst_sigma=None, clip_sigma=None, nn_args={}) -> None:
         if file is not None:
             self.load(file)
         # TODO save normalizer, action, obs space, nn args
@@ -55,6 +57,9 @@ class ContinuousPolicy(BasePolicy):
         self.nn = ml4ps.neural_network.get(nn_type, output_structure=nn_output_structure, **nn_args)
         self.mu_0, self.log_sigma_0 = self._build_postprocessor(self.action_space)
 
+        self.cst_sigma = cst_sigma
+        self.clip_sigma = clip_sigma
+
     def _build_postprocessor(self, h2mg_space: H2MGSpace):
         high = h2mg_space.high
         low = h2mg_space.low
@@ -63,6 +68,10 @@ class ContinuousPolicy(BasePolicy):
         log_sigma_0 = H2MG.from_structure(self.mu_structure)
         log_sigma_0.flat_array = jnp.log((high.flat_array - low.flat_array) / self.box_to_sigma_ratio)
         return mu_0, log_sigma_0
+    
+    def _clip_log_sigma(self, log_sigma, eps=0.01):
+        # return jax.numpy.clip(log_sigma, a_min=jnp.log(self.clip_sigma))
+        return jax.numpy.clip((1-eps)*log_sigma, a_min=jnp.log(self.clip_sigma)) + eps*log_sigma # soft clipping
 
     def _postprocess_distrib_params(self, distrib_params: H2MG):
         mu = distrib_params.extract_from_structure(self.mu_structure)
@@ -71,6 +80,11 @@ class ContinuousPolicy(BasePolicy):
         mu_norm.flat_array = jnp.exp(self.log_sigma_0.flat_array) * mu.flat_array + self.mu_0.flat_array
         log_sigma_norm = H2MG.from_structure(self.action_space.structure)
         log_sigma_norm.flat_array = log_sigma.flat_array + self.log_sigma_0.flat_array
+        if self.clip_sigma is not None and isinstance(self.clip_sigma, Number):
+            log_sigma_norm.flat_array = self._clip_log_sigma(log_sigma_norm.flat_array)
+        if self.cst_sigma is not None and isinstance(self.cst_sigma, Number):
+            log_sigma_norm.flat_array = jnp.full_like(log_sigma.flat_array, jnp.log(self.cst_sigma)) # constant sigma
+        # print(log_sigma_norm.flat_array))
         return mu_norm, log_sigma_norm
 
         # mu, log_sigma = distrib_params.extract_from_structure(self.mu_structure), distrib_params[..., 1]

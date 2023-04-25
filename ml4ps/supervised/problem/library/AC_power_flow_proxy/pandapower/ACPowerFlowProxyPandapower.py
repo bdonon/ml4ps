@@ -46,8 +46,7 @@ INPUT_STRUCTURE.add_local_hyper_edges_structure("trafo", trafo_structure)
 
 
 OUTPUT_STRUCTURE = H2MGStructure()
-
-bus_structure = HyperEdgesStructure(addresses=["id"], features=["res_vm_pu", "res_va_degree"])
+bus_structure = HyperEdgesStructure(features=["res_vm_pu", "res_va_degree"])
 OUTPUT_STRUCTURE.add_local_hyper_edges_structure("bus", bus_structure)
 
 
@@ -63,8 +62,8 @@ class ACPowerFlowProxyPandapower(PSBasePb):
     def _build_output_space(self, output_structure):
         gen_vm_pu_space = spaces.Box(low=0.8, high=1.2, shape=(output_structure["bus"].features["res_vm_pu"],))
         gen_va_degree_space = spaces.Box(low=0.8, high=1.2, shape=(output_structure["bus"].features["res_va_degree"],))
-
-        action_space = H2MGSpace()
-        action_space._add_hyper_edges_space('bus',
-            HyperEdgesSpace(features=spaces.Dict({"res_vm_pu": gen_vm_pu_space, "res_va_degree": gen_va_degree_space})))
-        return action_space
+        gen_hyper_edges = HyperEdgesSpace(features=spaces.Dict({"res_vm_pu": gen_vm_pu_space,
+                                                                   "res_va_degree": gen_va_degree_space}))
+        output_space = H2MGSpace()
+        output_space._add_hyper_edges_space('bus', gen_hyper_edges)
+        return output_space

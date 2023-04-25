@@ -17,7 +17,7 @@ class BasePolicy(ABC):
         # return log probability of actions
         pass
 
-    def sample(self, params, observation, seed=0, deterministic: bool = False) -> Tuple[H2MG, float, Dict]:
+    def sample(self, params: dict, observation: dict, rng, deterministic: bool=False, n_action: int=1) -> Tuple[H2MG, float, Dict]:
         # return both sample action and corresponding log probabilities
         pass
 

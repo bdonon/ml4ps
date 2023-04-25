@@ -1,6 +1,7 @@
 import numpy as np
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
+from typing import Dict, Any
 
 from ml4ps.h2mg.hyper_edges import HyperEdges, collate_hyper_edges, separate_hyper_edges
 from typing import Callable
@@ -312,3 +313,10 @@ def separate_h2mgs(h2mg_batch):
         except:
             remaining = False
     return r
+
+def shallow_repr(h2mg: H2MG) -> Dict[str, Any]:
+    results = {}
+    for obj_name, hyper_edge in h2mg.hyper_edges.items():
+        for feature_name, feature_value in hyper_edge.features.items():
+            results[obj_name + "_" + feature_name] = feature_value
+    return results

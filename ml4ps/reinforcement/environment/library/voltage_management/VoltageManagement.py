@@ -121,7 +121,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         observation = self.get_observation(self.state)
         terminated = self.is_terminal(self.state)
         truncated = self.is_truncated(self.state)
-        info = self.get_information(state=self.state, action=action)
+        info = self.get_information(state=self.state, action=action, reward=reward)
         return observation, reward, terminated, truncated, info
 
     def dynamics(self, state: NamedTuple, action: Dict) -> NamedTuple:

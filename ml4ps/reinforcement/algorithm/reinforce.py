@@ -169,8 +169,7 @@ class Reinforce(Algorithm):
                 self.train_state, obs, rng=subkey, batch_size=batch_size, step=i)
 
             # Logging
-            logger.log_dicts(i, "train_", policy_info, env_info, {"reward": jnp.mean(
-                rewards), "pos_reward_ratio": jnp.mean(rewards >= 0)}, algo_info)
+            logger.log_dicts(i, "train_", policy_info, env_info, algo_info)
 
             # Val step
             if i % validation_interval == 0 and self.val_env is not None:

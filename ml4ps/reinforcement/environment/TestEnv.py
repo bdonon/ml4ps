@@ -43,8 +43,8 @@ class TestEnv(PSBaseEnv):
             
         return obs, reward, terminated, truncated, info
     
-    def get_information(self, state: Any) -> Dict:
-        return self.env.get_information(state)
+    def get_information(self, state: Any, action=None, reward=None) -> Dict:
+        return self.env.get_information(state, action, reward)
 
     def build_observation_space(self, data_dir, observation_space: spaces.Space = None) -> Dict:
         return self.env.build_observation_space(data_dir, observation_space)

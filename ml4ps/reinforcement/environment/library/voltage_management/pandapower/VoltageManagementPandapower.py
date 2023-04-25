@@ -113,7 +113,7 @@ class VoltageManagementPandapower(VoltageManagement):
         return np.nanmean(np.greater(v, 1-eps_max_threshold) * np.power(v - (1-eps_max_threshold), 2)
                 + np.greater(eps_min_threshold, v) * np.power(eps_min_threshold - v, 2))
 
-    def get_information(self, state: VoltageManagementState, action: Dict = None) -> Dict:
+    def get_information(self, state: VoltageManagementState, action: Dict = None, reward: float = None) -> Dict:
         """Gets power grid statistics, cost decomposition, constraints violations and iteration."""
         power_grid = state.power_grid
         if not self.has_diverged(power_grid):
@@ -123,9 +123,14 @@ class VoltageManagementPandapower(VoltageManagement):
             c_v = self.compute_voltage_cost(power_grid, self.eps_v)
             c_j = self.compute_joule_cost(power_grid)
             is_violated_dict, violated_percentage_dict = self.compute_constraint_violation(power_grid)
-            return {"diverged": self.has_diverged(power_grid),
+
+            info = {"diverged": self.has_diverged(power_grid),
                 "cost": cost, "c_i": c_i, "c_q": c_q, "c_v": c_v, "c_j": c_j, "iteration": state.iteration,
                 **is_violated_dict, **violated_percentage_dict}
+            if reward is not None:
+                reward_info = {"reward": reward, "pos_reward": reward >= 0}
+                info = info | reward_info
+            return info
         else:
             return {"diverged": self.has_diverged(power_grid)}
 

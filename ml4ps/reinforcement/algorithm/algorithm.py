@@ -9,3 +9,9 @@ class Algorithm(ABC):
     @abstractmethod
     def test(*args, **kwargs):
         pass
+
+    def save_params(self, folder):
+        pass
+
+    def load_params(self, folder):
+        pass

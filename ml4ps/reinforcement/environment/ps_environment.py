@@ -62,6 +62,12 @@ class PSBaseEnv(Env, ABC):
         control_structure_name = os.path.join(path, 'control_structure.pkl')
         self.control_structure = self.backend.get_max_structure(control_structure_name,
                                                                 self.data_dir, self.empty_control_structure)
+        if self.empty_info_structure is not None:
+            info_structure_name = os.path.join(path, 'info_structure.pkl')
+            self.info_structure = self.backend.get_max_structure(info_structure_name,
+                                                                self.data_dir, self.empty_info_structure)
+        else:
+            self.info_structure = None
         self.action_space = self._build_action_space(self.control_structure)
 
     @property
@@ -77,6 +83,11 @@ class PSBaseEnv(Env, ABC):
     @property
     @abstractmethod
     def empty_control_structure(self):
+        pass
+
+    @property
+    @abstractmethod
+    def empty_info_structure(self):
         pass
 
     @abstractmethod

@@ -100,7 +100,9 @@ class H2MGSpace(spaces.Dict):
     def sample(self) -> H2MG:
         data = super().sample()
         dict_ = {k: HyperEdges(**{field: {f: data[k][field][f] for f in data[k][field]} for field in data[k]}) for k in data}
-        return H2MG(data=dict_)
+        res = H2MG()
+        res.update(dict_)
+        return res
 
 
 @gym.vector.utils.spaces.batch_space.register(H2MGSpace)

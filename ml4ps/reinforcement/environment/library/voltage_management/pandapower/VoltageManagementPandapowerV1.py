@@ -40,11 +40,12 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
         c_div: The float cost hyperparameter corresponding to the penalty for diverging power grid simulations.
     """
     empty_control_structure = CONTROL_STRUCTURE
+    empty_info_structure = None
 
-    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True, additive=True):
+    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True, additive=True, init_cost=None):
         self.name = "VoltageManagementPandapowerV1"
         self.additive = additive
-        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
+        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset, init_cost=init_cost)
 
     def _build_action_space(self, control_structure):
 
@@ -78,4 +79,4 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
     
     def run_power_grid(self, power_grid):
         return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0.,
-                                           recycle={"bus_pq":False, "gen":True, "trafo": False})
+                                           recycle={"bus_pq":False, "gen":True, "trafo": False}, init="results")

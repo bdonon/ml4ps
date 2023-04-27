@@ -75,8 +75,8 @@ class VoltageManagementPandapower(VoltageManagement):
     empty_observation_structure = OBSERVATION_STRUCTURE
 
 
-    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True):
-        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
+    def __init__(self, data_dir, *, max_steps, cost_hparams, soft_reset, init_cost):
+        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset, init_cost=init_cost)
 
     def has_diverged(self, power_grid) -> bool:
         return not power_grid.converged

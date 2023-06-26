@@ -7,7 +7,7 @@ from gymnasium.vector import VectorEnv
 from omegaconf import OmegaConf
 
 import ml4ps
-from ml4ps.logger import log_params_from_omegaconf_dict
+from ml4ps.logger import log_params_from_omegaconf_dict, get_logger
 from ml4ps.reinforcement.algorithm import get_algorithm
 
 os.environ["HYDRA_FULL_ERROR"] = "1"
@@ -24,8 +24,6 @@ def get_single_env(*, name, **kwargs):
     return gym.make(name, **kwargs)
 
 
-def get_logger(*, experiment_name, run_name, **kwargs):
-    return ml4ps.logger.MLFlowLogger(experiment_name=experiment_name, run_name=run_name, **kwargs)
 
 
 def save_config(cfg):
@@ -66,8 +64,8 @@ def main(cfg):
                               val_env=val_env, test_env=test_env, run_dir=run_dir, **cfg.algorithm)
 
     # Logger
-    logger = get_logger(**cfg.logger)
-    log_params_from_omegaconf_dict(cfg)
+    logger = get_logger(**cfg.logger, run_dir=run_dir)
+    logger.log_config(cfg)
 
     # Learning loop
     algorithm.learn(logger=logger, seed=cfg.seed,

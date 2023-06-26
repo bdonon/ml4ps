@@ -69,6 +69,7 @@ algorithm:
     max_steps: 4096
   value_nn_args: ${algorithm.policy_nn_args}
 logger:
+  name: "mlflow" # ["mlflow", "tensorboard"]
   experiment_name: ${experiment_name}
   run_name: ${run_name}
   res_dir: ${res_dir}

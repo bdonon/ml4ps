@@ -4,8 +4,17 @@ from typing import Any, Dict, List
 import mlflow
 import numpy as np
 from omegaconf import DictConfig, ListConfig
+from omegaconf import OmegaConf
 from torch.utils.tensorboard import SummaryWriter
+import pandas as pd
 
+def get_logger(*, name, **kwargs):
+    if name == "mlflow":
+        return MLFlowLogger(**kwargs)
+    elif name == "tensorboard":
+        return TensorboardLogger(**kwargs)
+    else:
+        raise ValueError(f"Unknown logger: {name}")
 
 def dict_mean(d: Dict[str, Any], nanmean=True) -> Dict[str, Any]:
     if nanmean:
@@ -66,20 +75,26 @@ def _get_final_info_dict(infos: List[Dict[str, Any]], prefix: str) -> Dict[str, 
 
 
 class BaseLogger(ABC):
-    def log_hyperparams(params):
+    def log_hyperparam(self, name, value):
         pass
 
-    def log_metrics(metrics: Dict[str, Any], step: int = None) -> None:
+    def log_hyperparam(self, params: Dict):
+        pass
+
+    def log_metrics(self, metrics: Dict[str, Any], step: int = None) -> None:
         pass
 
     @abstractmethod
-    def log_metrics_dict(metrics: Dict[str, Any], step: int = None) -> None:
+    def log_metrics_dict(self, metrics: Dict[str, Any], step: int = None) -> None:
         pass
 
     def log_dicts(self, step, prefix, *dicts):
         for d in dicts:
             d = process_venv_dict(d, prefix)
             self.log_metrics_dict(d, step)
+    
+    def log_config(self, config):
+        pass
 
     def finalize(self):
         pass
@@ -88,17 +103,31 @@ class BaseLogger(ABC):
 class TensorboardLogger(BaseLogger):
     log_summary_writer: SummaryWriter
 
-    def __init__(self, *, experiment_name=None, run_name=None, res_dir) -> None:
-        self.log_summary_writer = SummaryWriter(res_dir)
+    def __init__(self, *, experiment_name=None, run_name=None, res_dir, run_dir) -> None:
+        self.run_name = run_name
+        self.log_summary_writer = SummaryWriter(run_dir)
 
     def log_metrics_dict(self, metrics: Dict[str, Any], step: int = None) -> None:
         return self.log_summary_writer.add_scalars("", metrics, step)
 
-    def log_hyperparams(self, name, value):
-        return self.log_summary_writer.add_hparams({name: value})
+    def log_hyperparam(self, name, value):
+        if isinstance(value, ListConfig):
+            value = str(list(value))
+        return self.log_summary_writer.add_hparams({name: value}, {"hparam": 0}, run_name=self.run_name)
+    
+    def log_hyperparams(self, params : Dict):
+        return self.log_summary_writer.add_hparams(params, {"hparam": 0}, run_name=self.run_name)
 
     def finalize(self):
         self.log_summary_writer.close()
+    
+    def log_config(self, config):
+        flat_config = pd.json_normalize(OmegaConf.to_container(config), sep="_")
+        flat_config_dict = flat_config.to_dict(orient="records")[0]
+        for k, v in flat_config_dict.items():
+            if isinstance(v, list):
+                flat_config_dict[k] = str(v)
+        return self.log_hyperparams(flat_config_dict)
 
 
 class CSVLogger(BaseLogger):
@@ -136,8 +165,8 @@ class MLFlowLogger(BaseLogger):
             # mlflow.set_tracking_uri(res_dir)
         mlflow.start_run(experiment_id=experiment_id, run_name=run_name)
 
-    def log_hyperparams(self, params):
-        pass
+    def log_hyperparams(self, name: str, value):
+        return mlflow.log_param(name, value)
 
     def log_metrics(self, metrics, step=None):
         pass
@@ -146,6 +175,9 @@ class MLFlowLogger(BaseLogger):
         for key, value in metrics.items():
             v = np.asarray(value)
             mlflow.log_metric(key, v, step=step)
+    
+    def log_config(self, config):
+        return log_params_from_omegaconf_dict(self, config)
 
     def finalize(self):
         return mlflow.end_run()
@@ -153,19 +185,19 @@ class MLFlowLogger(BaseLogger):
 
 # Adapted from https://medium.com/optuna/easy-hyperparameter-management-with-hydra-mlflow-and-optuna-783730700e7d
 
-def log_params_from_omegaconf_dict(params):
+def log_params_from_omegaconf_dict(logger: BaseLogger, params):
     for param_name, element in params.items():
-        _explore_recursive(param_name, element)
+        _explore_recursive(logger, param_name, element)
 
 
-def _explore_recursive(parent_name, element):
+def _explore_recursive(logger: BaseLogger, parent_name, element):
     if isinstance(element, DictConfig):
         for k, v in element.items():
             if isinstance(v, DictConfig) or isinstance(v, ListConfig):
-                _explore_recursive(f'{parent_name}.{k}', v)
+                _explore_recursive(logger, f'{parent_name}.{k}', v)
             else:
-                mlflow.log_param(f'{parent_name}.{k}', v)
+                logger.log_hyperparam(f'{parent_name}.{k}', v)
     elif isinstance(element, ListConfig):
-        mlflow.log_param(f'{parent_name}', element)
+        logger.log_hyperparam(f'{parent_name}', element)
         # for i, v in enumerate(element):
         #     mlflow.log_param(f'{parent_name}.{i}', v)

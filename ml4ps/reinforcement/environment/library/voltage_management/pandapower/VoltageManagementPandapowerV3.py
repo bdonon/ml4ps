@@ -72,7 +72,7 @@ class VoltageManagementPandapowerV3(VoltageManagementPandapower):
         delta_step_space = spaces.MultiDiscrete(nvec=np.full(shape=(control_structure["shunt"].features["step"],), fill_value=3))
         action_space._add_hyper_edges_space("shunt", HyperEdgesSpace(features=spaces.Dict({"delta_step": delta_step_space})))
 
-        stop_space = spaces.MultiDiscrete(nvec=np.full(shape=(1,), fill_value=2))
+        stop_space = spaces.MultiBinary(n=np.ones(shape=(1,)))
         action_space._add_hyper_edges_space("global", HyperEdgesSpace(features=spaces.Dict({"stop": stop_space})))
         
         return action_space
@@ -80,10 +80,8 @@ class VoltageManagementPandapowerV3(VoltageManagementPandapower):
     def initialize_control_variables(self, power_grid) -> Dict:
         """Inits control variable with default heuristics."""
         initial_control = self.backend.get_h2mg_from_power_grid(power_grid, self.control_structure)
-        initial_control.flat_array = 1. + 0. * initial_control.flat_array
         initial_control.local_hyper_edges["gen"].flat_array = jnp.ones_like(initial_control.local_hyper_edges["gen"].flat_array)
         initial_control.local_hyper_edges["ext_grid"].flat_array = jnp.ones_like(initial_control.local_hyper_edges["ext_grid"].flat_array)
-        initial_control.local_hyper_edges["shunt"].flat_array = jnp.zeros_like(initial_control.local_hyper_edges["shunt"].flat_array)
         return initial_control
 
     def update_ctrl_var(self, ctrl_var: Dict, action: Dict, state: VoltageManagementState) -> Dict:
@@ -93,11 +91,11 @@ class VoltageManagementPandapowerV3(VoltageManagementPandapower):
         res.local_hyper_edges["shunt"].flat_array = ctrl_var.local_hyper_edges["shunt"].flat_array + action.local_hyper_edges["shunt"].flat_array - 1
         res.local_hyper_edges["shunt"].flat_array = np.clip(res.local_hyper_edges["shunt"].flat_array, 0, infos.local_hyper_edges["shunt"].flat_array)
         if self.additive:
-            res.local_hyper_edges["gen"].flat_array = ctrl_var.local_hyper_edges["gen"].flat_array + action.local_hyper_edges["gen"].flat_array
-            res.local_hyper_edges["ext_grid"].flat_array = ctrl_var.local_hyper_edges["ext_grid"].flat_array + action.local_hyper_edges["ext_grid"].flat_array
+            res.local_hyper_edges["gen"].flat_array = jnp.clip(ctrl_var.local_hyper_edges["gen"].flat_array + action.local_hyper_edges["gen"].flat_array, a_min=0.9, a_max=1.1)
+            res.local_hyper_edges["ext_grid"].flat_array = jnp.clip(ctrl_var.local_hyper_edges["ext_grid"].flat_array + action.local_hyper_edges["ext_grid"].flat_array, a_min=0.9, a_max=1.1)
         else:
-            res.local_hyper_edges["gen"].flat_array = action.local_hyper_edges["gen"].flat_array
-            res.local_hyper_edges["ext_grid"].flat_array = ctrl_var.local_hyper_edges["ext_grid"].flat_array
+            res.local_hyper_edges["gen"].flat_array = jnp.clip(action.local_hyper_edges["gen"].flat_array, a_min=0.9, a_max=1.1)
+            res.local_hyper_edges["ext_grid"].flat_array = jnp.clip(ctrl_var.local_hyper_edges["ext_grid"].flat_array, a_min=0.9, a_max=1.1)
         return res
 
     

@@ -1,0 +1,88 @@
+
+experiment_name: "ppo4"
+run_name: null
+res_dir: "ppo4"
+train_dir: ../data/case60nordic_definitive/vanilla/train
+# train_dir: ../data/case60nordic_definitive/vanilla/val_32
+val_dir: ../data/case60nordic_definitive/vanilla/val_32
+test_dir: ../data/case60nordic_definitive/vanilla/test_1000
+seed: 0
+debug: False
+shuffle: False
+batch_size: 8
+env_name: "VoltageManagementPandapowerV3"
+soft_reset: False
+max_steps: null
+init_cost: null # null by default or 0.0
+env:
+  name: ${env_name}
+  data_dir: ${train_dir}
+  num_envs: ${batch_size}
+  soft_reset: ${soft_reset}
+  init_cost: ${init_cost}
+  max_steps: ${max_steps}
+val_env:
+  name: ${env_name}
+  data_dir: ${val_dir}
+  soft_reset: ${soft_reset}
+  init_cost: ${init_cost}
+  max_steps: ${max_steps}
+test_env:
+  name: ${env_name}
+  data_dir: ${test_dir}
+  soft_reset: ${soft_reset}
+  init_cost: ${init_cost}
+  max_steps: ${max_steps}
+algorithm_type: "ppo"
+algorithm:
+  seed: ${seed}
+  policy_type: "continuous_and_discrete"
+  policy_clip_norm: 1000
+  value_clip_norm: 1000
+  value_learning_rate: 1e-5
+  policy_learning_rate: 1e-5
+  every_k_schedule: ${learn.T}
+  eps: 0.2
+  gamma: 0.9
+  lmbda: 0.95
+  value_scaling_factor: 0.1
+  cst_sigma: 1e-3
+  alpha_entropy: 1e-1
+  # policy_args:
+  #   cst_sigma: null
+  policy_nn_args:
+    local_encoder_hidden_size: [32]
+    global_encoder_hidden_size: [32]
+    local_dynamics_hidden_size: [64]
+    global_dynamics_hidden_size: [64]
+    local_decoder_hidden_size: []
+    global_decoder_hidden_size: []
+    local_encoder_output: 16
+    global_encoder_output: 16
+    local_latent_dimension: 16
+    global_latent_dimension: 16
+    solver_name: "Euler" # other methods ?
+    dt0: 0.05 # at least for nordic 32 0.005
+    stepsize_controller_name: "ConstantStepSize"
+    stepsize_controller_kwargs: null
+    adjoint_name: "RecursiveCheckpointAdjoint"
+    max_steps: 4096
+  value_nn_args: ${algorithm.policy_nn_args}
+logger:
+  experiment_name: ${experiment_name}
+  run_name: ${run_name}
+  res_dir: ${res_dir}
+learn:
+  n_iterations: 1500
+  N: ${batch_size}
+  M: ${batch_size}
+  T: 20
+  K: 4
+  validation_interval: 40
+  log_interval: 160
+test:
+  max_steps: ${learn.T}
+
+# python main.py --config-name config_ppo learn.n_iterations=100
+# python main.py --config-name config_ppo experiment_name=temp run_name=temp res_dir=temp learn.n_iterations=100 algorithm.nn_args.dt0=0.1
+# python main.py --multirun --config-name config_ppo experiment_name=temp +algorithm.policy_args.clip_sigma=4e-3 algorithm.nn_args.dt0=0.2,0.1 learn.n_iterations=100

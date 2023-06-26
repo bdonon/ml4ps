@@ -1,17 +1,24 @@
 from abc import ABC, abstractmethod
 
+
 class Algorithm(ABC):
 
-    @abstractmethod
-    def learn(*args, **kwargs):
+    def __init__(self, env, seed=None, val_env=None, test_env=None, run_dir=None,):
         pass
 
     @abstractmethod
-    def test(*args, **kwargs):
+    def learn(*args, logger=None, seed=None, batch_size=None, **kwargs):
+        pass
+
+    @abstractmethod
+    def test(*args, test_env=None, res_dir=None, max_steps=None, **kwargs):
         pass
 
     def save_params(self, folder):
         pass
 
     def load_params(self, folder):
+        pass
+
+    def save(self, run_dir):
         pass

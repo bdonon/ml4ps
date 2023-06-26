@@ -116,8 +116,8 @@ class VoltageManagementPandapower(VoltageManagement):
     def get_information(self, state: VoltageManagementState, action: Dict = None, reward: float = None) -> Dict:
         """Gets power grid statistics, cost decomposition, constraints violations and iteration."""
         power_grid = state.power_grid
+        cost = self.compute_cost(power_grid)
         if not self.has_diverged(power_grid):
-            cost = self.compute_cost(power_grid)
             c_i = self.compute_current_cost(power_grid, self.eps_i)
             c_q = self.compute_reactive_cost(power_grid, self.eps_q)
             c_v = self.compute_voltage_cost(power_grid, self.eps_v)
@@ -127,12 +127,12 @@ class VoltageManagementPandapower(VoltageManagement):
             info = {"diverged": self.has_diverged(power_grid),
                 "cost": cost, "c_i": c_i, "c_q": c_q, "c_v": c_v, "c_j": c_j, "iteration": state.iteration,
                 **is_violated_dict, **violated_percentage_dict}
-            if reward is not None:
-                reward_info = {"reward": reward, "pos_reward": reward >= 0}
-                info = info | reward_info
-            return info
         else:
-            return {"diverged": self.has_diverged(power_grid)}
+            info = {"diverged": self.has_diverged(power_grid), "cost": cost, "iteration": state.iteration}
+        if reward is not None:
+            reward_info = {"reward": reward, "pos_reward": reward >= 0}
+            info = info | reward_info
+        return info
 
     def compute_constraint_violation(self, power_grid) -> Tuple[Dict, Dict]:
         """Computes constraints violation statistics

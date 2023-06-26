@@ -448,7 +448,9 @@ class PandaPowerBackend(AbstractBackend):
         """
         try:
             pp.runpp(power_grid, **kwargs)
-        except pp.powerflow.LoadflowNotConverged:
+        except pp.powerflow.LoadflowNotConverged: # Exception as e:# 
+            # TODO: why is it necessary ?
+            power_grid.converged = False
             pass
 
     def get_h2mg_from_power_grid(self, power_grid, structure=None, str_to_int=True):

@@ -1,4 +1,6 @@
+from functools import partial
 import jax
+from jax import vmap
 import jax.numpy as jnp
 from ml4ps.h2mg.core import H2MG, H2MGStructure
 
@@ -96,6 +98,19 @@ def h2mg_categorical_logprob(x: H2MG, logits: H2MG) -> float:
     flat_logprobs = jnp.nan_to_num(jax.nn.log_softmax(jnp.nan_to_num(logits.flat_array, nan=-jnp.inf)), neginf=0.)
     selected_logprobs = jnp.where(jnp.isnan(flat_onehot), jnp.nan, flat_logprobs * jnp.nan_to_num(flat_onehot, nan=0.))
     return jnp.nansum(selected_logprobs)
+
+def h2mg_categorical_entropy(logits: H2MG) -> float:
+    flat_logits = logits.flat_array
+    logits = jax.nn.log_softmax(flat_logits)
+    probs = jax.nn.softmax(flat_logits)
+    return - jnp.sum(probs * logits)
+
+@partial(vmap, in_axes=0, out_axes=0)
+def vmap_h2mg_categorical_entropy(logits: H2MG) -> float:
+    flat_logits = logits.flat_array
+    logits = jax.nn.log_softmax(flat_logits)
+    probs = jax.nn.softmax(flat_logits)
+    return - jnp.sum(probs * logits)
 
 
 def h2mg_factorized_categorical_sample(rng: jax.random.PRNGKey, logits: H2MG, deterministic: bool = False) -> H2MG:

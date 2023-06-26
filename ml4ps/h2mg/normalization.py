@@ -14,7 +14,7 @@ def apply_function_tree(h2mg_batch, function_tree):
     h2mg_norm = H2MG()
     for k, hyper_edges in h2mg_batch.hyper_edges.items():
         if k not in function_tree:
-            h2mg_norm.add_hyper_edges(k, hyper_edges)
+            h2mg_norm._add_hyper_edges(k, hyper_edges)
         else:
             if (hyper_edges.features is not None) and (FEATURES in function_tree[k]):
                 features_dict = {}

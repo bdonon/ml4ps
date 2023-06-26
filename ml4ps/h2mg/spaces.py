@@ -63,7 +63,9 @@ class H2MGSpace(spaces.Dict):
         """Returns only the continuous (i.e. Box) part of the H2MGSpace."""
         h2mg_space = H2MGSpace()
         for k, hyper_edges_space in self.spaces.items():
-            h2mg_space._add_hyper_edges_space(k, hyper_edges_space.continuous)
+            # TODO: check if adding this condition is correct
+            if hyper_edges_space.continuous:
+                h2mg_space._add_hyper_edges_space(k, hyper_edges_space.continuous)
         return h2mg_space
 
     @property
@@ -71,7 +73,9 @@ class H2MGSpace(spaces.Dict):
         """Returns only the multi discrete part of the H2MGSpace."""
         h2mg_space = H2MGSpace()
         for k, hyper_edges_space in self.spaces.items():
-            h2mg_space._add_hyper_edges_space(k, hyper_edges_space.multi_discrete)
+            # TODO: check if adding this condition is correct
+            if hyper_edges_space.multi_discrete:
+                h2mg_space._add_hyper_edges_space(k, hyper_edges_space.multi_discrete)
         return h2mg_space
 
     @property
@@ -79,7 +83,9 @@ class H2MGSpace(spaces.Dict):
         """Returns only the multi binary part of the H2MGSpace."""
         h2mg_space = H2MGSpace()
         for k, hyper_edges_space in self.spaces.items():
-            h2mg_space._add_hyper_edges_space(k, hyper_edges_space.multi_binary)
+            # TODO: check if adding this condition is correct, fails if it yields an empty h2mg_space
+            if hyper_edges_space.multi_binary:
+                h2mg_space._add_hyper_edges_space(k, hyper_edges_space.multi_binary)
         return h2mg_space
 
     def combine(self, other: 'H2MGSpace') -> 'H2MGSpace':
@@ -267,7 +273,7 @@ class HyperEdgesSpace(spaces.Dict):
         return HyperEdgesSpace(addresses=addresses_dict, features=features_dict)
 
     @property
-    def multi_dicrete(self) -> 'HyperEdgesSpace':
+    def multi_discrete(self) -> 'HyperEdgesSpace':
         """Returns only the multi discrete part of the HyperEdgesSpace."""
         if self.addresses is not None:
             addresses_dict = spaces.Dict({f: v for f, v in self.addresses.items() if isinstance(v, spaces.MultiDiscrete)})

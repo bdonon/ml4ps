@@ -2,7 +2,7 @@ import pickle
 from copy import deepcopy
 from functools import partial
 from numbers import Number
-from typing import Any, Dict
+from typing import Any, Dict, Callable, Tuple
 
 import gymnasium
 import jax
@@ -10,8 +10,54 @@ import jax.numpy as jnp
 import ml4ps
 from gymnasium import spaces
 from jax import jit, vmap
-from ml4ps.h2mg import H2MG, H2MGSpace, h2mg_normal_logprob, h2mg_normal_sample, shallow_repr
+from ml4ps.h2mg import H2MG, H2MGSpace, H2MGStructure, h2mg_normal_logprob, h2mg_normal_sample, shallow_repr
+from ml4ps.neural_network.base_nn import BaseNN
 from ml4ps.reinforcement.policy.base import BasePolicy
+
+def manual_normalization(_obs):  # TODO: remove this
+    obs = deepcopy(_obs)
+    gen_vm_pu = obs.local_hyper_edges["gen"].features["vm_pu"]
+    obs.local_hyper_edges["gen"].features["vm_pu"] = (gen_vm_pu - 1) * 40 + 1 - 0.57
+    ext_grid_vm_pu = obs.local_hyper_edges["ext_grid"].features["vm_pu"]
+    obs.local_hyper_edges["ext_grid"].features["vm_pu"] = (ext_grid_vm_pu - 1) * 40 + 1 - 0.57
+    return obs
+
+def continuous_forward(params: Dict, observation: H2MG, normalizer: Callable, nn: BaseNN, *, mu_structure: H2MGStructure, log_sigma_structure: H2MGStructure, action_space_structure: H2MGStructure, log_sigma_0: H2MG, mu_0: H2MG,cst_sigma: float=None, clip_sigma: float=None) -> Tuple[H2MG, H2MG]:
+    observation = manual_normalization(observation) # TODO: remove this
+    observation = normalizer(observation)
+    distrib_params = nn.apply(params, observation)
+    mu, log_sigma = postprocess_continuous_distrib_params(distrib_params, mu_structure=mu_structure, log_sigma_structure=log_sigma_structure, action_space_structure=action_space_structure, log_sigma_0=log_sigma_0, mu_0=mu_0, cst_sigma=cst_sigma, clip_sigma=clip_sigma)
+    return mu, log_sigma
+
+def continuous_log_prob(params, observation, action, normalizer, nn, *, mu_structure: H2MGStructure, log_sigma_structure: H2MGStructure, action_space_structure: H2MGStructure, log_sigma_0: H2MG, mu_0: H2MG,cst_sigma: float=None, clip_sigma: float=None):
+    mu_norm, log_sigma_norm = continuous_forward(params, observation, normalizer, nn, mu_structure=mu_structure, log_sigma_structure=log_sigma_structure, action_space_structure=action_space_structure, log_sigma_0=log_sigma_0, mu_0=mu_0, cst_sigma=cst_sigma, clip_sigma=clip_sigma)
+    return h2mg_normal_logprob(action, mu_norm, log_sigma_norm), (mu_norm, log_sigma_norm)
+
+def build_continuous_postprocessor(h2mg_space: H2MGSpace, mu_structure: H2MGStructure, box_to_sigma_ratio:float):
+    high = h2mg_space.high
+    low = h2mg_space.low
+    mu_0 = H2MG.from_structure(mu_structure)
+    mu_0.flat_array = (high.flat_array + low.flat_array) / 2.
+    log_sigma_0 = H2MG.from_structure(mu_structure)
+    log_sigma_0.flat_array = jnp.log((high.flat_array - low.flat_array) / box_to_sigma_ratio)
+    return mu_0, log_sigma_0
+
+def clip_log_sigma(log_sigma, clip_sigma, eps=0.01):
+    # return jax.numpy.clip(log_sigma, a_min=jnp.log(self.clip_sigma))
+    return jax.numpy.clip((1-eps)*log_sigma, a_min=jnp.log(clip_sigma)) + eps*log_sigma # soft clipping
+
+def postprocess_continuous_distrib_params(distrib_params: H2MG,*, mu_structure: H2MGStructure, log_sigma_structure: H2MGStructure, action_space_structure: H2MGStructure, log_sigma_0: H2MG, mu_0: H2MG,cst_sigma: float=None, clip_sigma: float=None):
+    mu = distrib_params.extract_from_structure(mu_structure)
+    log_sigma = distrib_params.extract_from_structure(log_sigma_structure)
+    mu_norm = H2MG.from_structure(action_space_structure)
+    mu_norm.flat_array = jnp.exp(log_sigma_0.flat_array) * mu.flat_array + mu_0.flat_array
+    log_sigma_norm = H2MG.from_structure(action_space_structure)
+    log_sigma_norm.flat_array = log_sigma.flat_array + log_sigma_0.flat_array
+    if clip_sigma is not None and isinstance(clip_sigma, Number):
+        log_sigma_norm.flat_array = clip_log_sigma(log_sigma_norm.flat_array)
+    if cst_sigma is not None and isinstance(cst_sigma, Number):
+        log_sigma_norm.flat_array = jnp.full_like(log_sigma.flat_array, jnp.log(cst_sigma)) # constant sigma
+    return mu_norm, log_sigma_norm
 
 class ContinuousPolicy(BasePolicy):
     """ Continuous policy for power system control.
@@ -90,12 +136,11 @@ class ContinuousPolicy(BasePolicy):
         pass
 
     def log_prob(self, params, observation, action):
-        observation = self.normalizer(observation)
-        distrib_params = self.nn.apply(params, observation)
-        mu_norm, log_sigma_norm = self._postprocess_distrib_params(distrib_params)
-        return h2mg_normal_logprob(action, mu_norm, log_sigma_norm)
+        mu_norm, log_sigma_norm = self.forward(params, observation)
+        return h2mg_normal_logprob(action, mu_norm, log_sigma_norm), (mu_norm, log_sigma_norm)
     
     def forward(self, params, observation):
+        observation = manual_normalization(observation) # TODO: remove this
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)
         mu, log_sigma = self._postprocess_distrib_params(distrib_params)
@@ -119,13 +164,14 @@ class ContinuousPolicy(BasePolicy):
         return action, log_prob, info
     
     @partial(jit, static_argnums=(0, 4, 5))
-    def vmap_sample(self, params, observation: spaces.Space, rngs, deterministic=False, n_action=1):
-        action, log_prob, _, mu, log_sigma = vmap(self._sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0, 0, 0))(params, observation, rngs, deterministic, n_action)
+    def vmap_sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1):
+        action, log_prob, _, mu, log_sigma = vmap(self._sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0, 0, 0))(params, observation, rng, deterministic, n_action)
         info = self.compute_info(mu, log_sigma)
         batch_info = self.compute_batch_info(mu, log_sigma)
         return action, log_prob, info | batch_info
     
-    def compute_info(self, mu: H2MG, log_sigma: H2MG) -> Dict[str, float]:
+    @staticmethod
+    def compute_info(mu: H2MG, log_sigma: H2MG) -> Dict[str, float]:
         mu = deepcopy(mu)
         log_sigma = deepcopy(log_sigma)
         mu.add_suffix("_mu")
@@ -134,12 +180,16 @@ class ContinuousPolicy(BasePolicy):
         info = info | shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.mean(x))))
         return info
     
-    def compute_batch_info(self, mu: H2MG, log_sigma: H2MG) -> Dict[str, float]:
-        mu.add_suffix("_mu_std")
+    @staticmethod
+    def compute_batch_info(mu: H2MG, log_sigma: H2MG) -> Dict[str, float]:
+        _mu = deepcopy(mu)
+        mu.add_suffix("_mu_batch_std")
         mu_std_accross_batch = shallow_repr(mu.apply(lambda x: jnp.asarray(jnp.std(x, axis=0).mean())))
+        _mu.add_suffix("_mu_gen_std")
+        mu_std_accross_gen = shallow_repr(_mu.apply(lambda x: jnp.asarray(jnp.std(x, axis=1).mean())))
         log_sigma.add_suffix("_log_sigma_std")
         log_sigma_std_accross_batch = shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.std(x, axis=0).mean())))
-        return mu_std_accross_batch | log_sigma_std_accross_batch
+        return mu_std_accross_batch | log_sigma_std_accross_batch | mu_std_accross_gen
 
     def save(self, filename):
         with open(filename, 'wb') as f:
@@ -162,3 +212,7 @@ class ContinuousPolicy(BasePolicy):
             self.nn = pickle.load(f)
             self.mu_0 = pickle.load(f)
             self.log_sigma_0 = pickle.load(f)
+
+    def entropy(self, log_prob_info: Dict, batch=True):
+        (mu_norm, log_sigma_norm) = log_prob_info
+        return jnp.zeros_like(log_sigma_norm.flat_array)

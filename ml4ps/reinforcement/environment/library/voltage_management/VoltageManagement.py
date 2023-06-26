@@ -18,7 +18,6 @@ class VoltageManagementState:
     stop: bool
 
 
-
 class VoltageManagement(PSBaseEnv, ABC):
     """Power system environment for voltage management problem.
 
@@ -50,9 +49,8 @@ class VoltageManagement(PSBaseEnv, ABC):
     ctrl_var_names: Dict
     obs_feature_names: Dict
 
-    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True):
+    def __init__(self, data_dir, *, max_steps, cost_hparams, soft_reset, init_cost):
         super().__init__(data_dir)
-        self._soft_reset = soft_reset
         self.max_steps = max_steps
         self.state = VoltageManagementState(power_grid=None,
                                             cost=None,
@@ -60,15 +58,7 @@ class VoltageManagement(PSBaseEnv, ABC):
                                             stop=False)
 
         self.init_cost_hparams(cost_hparams)
-    
-    @property
-    def soft_reset(self):
-        return self._soft_reset
-    
-    @soft_reset.setter
-    def soft_reset(self, value):
-        self._soft_reset = value
-
+        self.init_cost = init_cost
 
     def init_cost_hparams(self, cost_hparams: Dict = None) -> None:
         """Inits cost hparams and overrides default values with given cost_hparams dictionary."""
@@ -84,11 +74,10 @@ class VoltageManagement(PSBaseEnv, ABC):
         self.eps_v = cost_hparams["eps_v"]
         self.c_div = cost_hparams["c_div"]
 
-
     def random_power_grid_path(self) -> str:
         """Returns the path of a random power grid in self.data_dir"""
         return self.np_random.choice(self.backend.get_valid_files(self.data_dir))
-    
+
     def get_next_power_grid(self, options=None) -> Any:
         options = options if options is not None else {}
         path = options.get("power_grid_path", self.random_power_grid_path())
@@ -97,36 +86,47 @@ class VoltageManagement(PSBaseEnv, ABC):
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple:
         """Resets environment to a new power grid for the given random seed."""
         super().reset(seed=seed)
-
         power_grid = self.state.power_grid
-        if (not self.soft_reset) or (power_grid is None) or (options is not None and options.get("load_new_power_grid", False)):
+        if (power_grid is None) or (options is not None and options.get("load_new_power_grid", False)):
             power_grid = self.get_next_power_grid(options)
         ctrl_var = self.initialize_control_variables(power_grid)
         self.backend.set_h2mg_into_power_grid(power_grid, ctrl_var)
-        self.run_power_grid(power_grid)
-        iteration = 0
-        cost = self.compute_cost(power_grid)
+        if self.init_cost is not None:
+            cost = self.init_cost
+        else:
+            self.run_power_grid(power_grid)
+            cost = self.compute_cost(power_grid)
         stop = False
+        iteration = 0
         self.state = VoltageManagementState(power_grid=power_grid,
                                             cost=cost, iteration=iteration, stop=stop)
         obs = self.get_observation(self.state)
-        info = self.get_information(state=self.state, action=None) # TODO reward=None
+        info = self.get_information(
+            state=self.state, action=None)  # TODO reward=None
         return obs, info
 
     def step(self, action) -> Tuple[H2MG, float, bool, bool, Dict]:
         """Update state with action and return new observation and reward."""
+        # if self.is_terminal(self.state):
+        #     reward = 0
+        # else:
+        # last_cost = self.state.cost
+        # self.state = gt.timeit(self.dynamics)(self.state, action)
+        # reward = last_cost - self.state.cost
         last_cost = self.state.cost
         self.state = self.dynamics(self.state, action)
         reward = last_cost - self.state.cost
         observation = self.get_observation(self.state)
-        terminated = self.is_terminal(self.state)
+        terminated = self.is_terminal(self.state)  # TODO Check
         truncated = self.is_truncated(self.state)
-        info = self.get_information(state=self.state, action=action, reward=reward)
+        info = self.get_information(
+            state=self.state, action=action, reward=reward)
         return observation, reward, terminated, truncated, info
 
     def dynamics(self, state: NamedTuple, action: Dict) -> NamedTuple:
         """Return new state for a given action"""
-        old_ctrl_var = self.backend.get_h2mg_from_power_grid(state.power_grid, structure=self.control_structure)
+        old_ctrl_var = self.backend.get_h2mg_from_power_grid(
+            state.power_grid, structure=self.control_structure)
         ctrl_var = self.update_ctrl_var(old_ctrl_var, action, state)
         self.backend.set_h2mg_into_power_grid(state.power_grid, ctrl_var)
         self.run_power_grid(state.power_grid)
@@ -136,16 +136,16 @@ class VoltageManagement(PSBaseEnv, ABC):
         return VoltageManagementState(state.power_grid, cost, iteration, stop)
 
     def is_terminal(self, state: NamedTuple) -> bool:
-        return state.stop
+        return False  # state.stop # TODO Changed
 
     def is_truncated(self, state: NamedTuple) -> bool:
-        return False
+        return self.max_steps is not None and state.iteration >= self.max_steps
 
     def is_stop(self, action: H2MG) -> bool:
         if action.global_hyper_edges is not None and "stop" in action.global_hyper_edges.features:
             return bool(action.global_hyper_edges.features["stop"])
         else:
-            return True
+            return False  # TODO: check
 
     def compute_cost(self, power_grid) -> Number:
         """Computes cost of a power grid."""
@@ -168,8 +168,9 @@ class VoltageManagement(PSBaseEnv, ABC):
 
     @property
     def default_cost_hparams(self) -> Dict:
-        return {"lmb_i": 1.0, "lmb_q": 1.0, "lmb_v": 1.0, "eps_i": .1, "eps_q": 0.5, "eps_v": 0.2, "c_div": 1.0}
-    
+        # TODO c_div changeed from 1.0, 50 = 1*5*10
+        return {"lmb_i": 100.0, "lmb_q": 1.0, "lmb_v": 100.0, "eps_i": .02, "eps_q": 0.5, "eps_v": .02, "c_div": 1.0}
+
     @abstractmethod
     def run_power_grid(self, power_grid):
         self.backend.run_power_grid(power_grid)

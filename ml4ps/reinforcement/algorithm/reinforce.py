@@ -48,7 +48,7 @@ class Reinforce(Algorithm):
     logger: BaseLogger
     train_state: ReinforceTrainState
 
-    def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir, max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None, policy_args={}, nn_args={}, clip_norm, learning_rate, n_actions=5, baseline_learning_rate=None, baseline_nn_type=None, baseline_nn_args=None) -> 'Reinforce':
+    def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir, max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None, policy_args={}, nn_args={}, clip_norm, learning_rate, n_actions=5, baseline_learning_rate=None, baseline_nn_type=None, baseline_nn_args=None, init_cost=None, nn_baseline_steps=None) -> 'Reinforce':
         super().__init__()
         self.best_params_path = os.path.join(run_dir, "best_params.pkl")
         self.last_params_path = os.path.join(run_dir, "last_params.pkl")
@@ -67,10 +67,12 @@ class Reinforce(Algorithm):
         self.baseline_learning_rate = baseline_learning_rate
         self.baseline_nn_type = baseline_nn_type
         self.baseline_nn_args = baseline_nn_args
+        self.nn_baseline_steps = nn_baseline_steps
         self.validation_interval = validation_interval
         self.n_actions = n_actions
         self.run_dir = run_dir
         self.init()
+        self.init_cost = init_cost
 
     def init(self):
         single_obs, _ = self.val_env.reset()
@@ -107,6 +109,8 @@ class Reinforce(Algorithm):
         baseline_actions = []
         baseline_actions, _, _ = self.vmap_sample(
             state.params, batch, split(rng, batch_size), n_action=self.n_actions)
+        if self.n_actions == 1:
+            baseline_actions = [baseline_actions]
         for i in range(self.n_actions):
             baseline_action = baseline_actions[i]
             _, baseline_reward, _, _, _ = self.env.step(baseline_action)

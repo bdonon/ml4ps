@@ -2,19 +2,19 @@ from typing import Dict
 
 import numpy as np
 from gymnasium import spaces
+from ml4ps.h2mg import (H2MG, H2MGSpace, H2MGStructure, HyperEdgesSpace,
+                        HyperEdgesStructure)
 
 from ..VoltageManagement import VoltageManagementState
 from .VoltageManagementPandapower import VoltageManagementPandapower
 
-
-from ml4ps.h2mg import H2MGSpace
-from ml4ps.h2mg import H2MG, H2MGStructure, H2MGSpace, HyperEdgesStructure, HyperEdgesSpace
-
-
 CONTROL_STRUCTURE = H2MGStructure()
-CONTROL_STRUCTURE.add_global_hyper_edges_structure(HyperEdgesStructure(features=["stop"]))
-CONTROL_STRUCTURE.add_local_hyper_edges_structure("shunt", HyperEdgesStructure(features=["delta_step"]))
+CONTROL_STRUCTURE.add_local_hyper_edges_structure(
+    "shunt", HyperEdgesStructure(features=["step"]))
 
+MAX_STEP_STRUCTURE = H2MGStructure()
+MAX_STEP_STRUCTURE.add_local_hyper_edges_structure(
+    "shunt", HyperEdgesStructure(features=["max_step"]))
 
 
 # TODO: How to use delta and instantaneous action forlulation with the same environment.
@@ -48,36 +48,44 @@ class VoltageManagementPandapowerV2(VoltageManagementPandapower):
         c_div: The float cost hyperparameter corresponding to the penalty for diverging power grid simulations.
     """
     empty_control_structure = CONTROL_STRUCTURE
+    empty_info_structure = MAX_STEP_STRUCTURE
 
-    def __init__(self, data_dir, n_obj=None, max_steps=None, cost_hparams=None, soft_reset=True, additive=True):
+    def __init__(self, data_dir, max_steps=None, cost_hparams=None, soft_reset=True, additive=True, init_cost=None):
         self.name = "VoltageManagementPandapowerV2"
         self.additive = additive
-        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset)
+        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams,
+                         soft_reset=soft_reset, init_cost=init_cost)
+
     def _build_action_space(self, control_structure):
         action_space = H2MGSpace()
 
-        delta_step_space = spaces.MultiDiscrete(nvec=np.full(shape=(control_structure["ext_grid"].features["step"],), fill_value=3))
-        action_space._add_hyper_edges_space("shunt", HyperEdgesSpace(features=spaces.Dict({"delta_step": delta_step_space})))
+        delta_step_space = spaces.MultiDiscrete(nvec=np.full(
+            shape=(control_structure["shunt"].features["step"],), fill_value=3))
+        action_space._add_hyper_edges_space("shunt", HyperEdgesSpace(
+            features=spaces.Dict({"delta_step": delta_step_space})))
 
-        stop_space = spaces.Discrete(2)
-        action_space._add_hyper_edges_space("global", HyperEdgesSpace(features=spaces.Dict({"stop": stop_space})))
+        stop_space = spaces.MultiBinary(n=np.ones(shape=(1,)))
+        action_space._add_hyper_edges_space("global", HyperEdgesSpace(
+            features=spaces.Dict({"stop": stop_space})))
 
         return action_space
 
-    def initialize_control_variables(self, power_grid, initial_control: H2MG) -> Dict:
+    def initialize_control_variables(self, power_grid) -> Dict:
         """Inits control variable with default heuristics."""
-        initial_control = self.backend.get_h2mg_from_power_grid(power_grid, self.control_structure)
-        initial_control.flat_array = np.zeros_like(initial_control.flat_array)
+        initial_control = self.backend.get_h2mg_from_power_grid(
+            power_grid, self.control_structure)
         return initial_control
 
-    def update_ctrl_var(self, ctrl_var: Dict, action: Dict, state: VoltageManagementState) -> Dict:
+    def update_ctrl_var(self, ctrl_var: H2MG, action: H2MG, state: VoltageManagementState) -> Dict:
         """Updates control variables with action."""
-        max_step = self.backend.get_data_power_grid(
-            state.power_grid, local_feature_names={"shunt": ["max_step"]})
+        infos = self.backend.get_h2mg_from_power_grid(
+            state.power_grid, self.info_structure)
         res = H2MG.from_structure(ctrl_var.structure)
-        res.local_hyper_edges["shunt"].flat_array = res.local_hyper_edges["shunt"].flat_array + action.local_hyper_edges["shunt"].flat_array
-        res.local_hyper_edges["shunt"].flat_array = np.clip(res.local_hyper_edges["shunt"].flat_array, 0, max_step)
+        res.local_hyper_edges["shunt"].flat_array = ctrl_var.local_hyper_edges["shunt"].flat_array + \
+            action.local_hyper_edges["shunt"].flat_array - 1
+        res.local_hyper_edges["shunt"].flat_array = np.clip(
+            res.local_hyper_edges["shunt"].flat_array, 0, infos.local_hyper_edges["shunt"].flat_array)
         return res
 
     def run_power_grid(self, power_grid):
-        return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0., init="result")
+        return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0., init="results")

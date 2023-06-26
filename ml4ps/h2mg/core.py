@@ -101,14 +101,14 @@ class H2MG(dict):
     @property
     def flat_array(self) -> np.array:
         """Array made of the concatenation of all numerical features contained in an H2MG."""
-        return jnp.concatenate([self[k].flat_array for k in self if self[k].flat_array is not None], axis=-1)
+        return jnp.concatenate([self[k].flat_array for k in sorted(self) if self[k].flat_array is not None], axis=-1)
 
     @flat_array.setter
     def flat_array(self, value: np.array):
-        lengths = [self[k].flat_array.shape[-1] for k in self if self[k].flat_array is not None]
+        lengths = [self[k].flat_array.shape[-1] for k in sorted(self) if self[k].flat_array is not None]
         split_indices = [sum(lengths[:i]) for i in range(1, len(lengths))]
         new_values = jnp.split(value, split_indices, axis=-1)
-        for k_, v in zip([k for k in self if self[k].flat_array is not None], new_values):
+        for k_, v in zip([k for k in sorted(self) if self[k].flat_array is not None], new_values):
             self[k_].flat_array = v
 
     @property
@@ -163,7 +163,7 @@ class H2MG(dict):
         for k in (self | other):
             if (k in self) and (k in other):
                 h2mg._add_hyper_edges(k, self[k].combine(other[k]))
-            elif k in self.spaces:
+            elif k in self: # TODO: was k in self.spaces but error ''H2MG' object has no attribute 'spaces''
                 h2mg._add_hyper_edges(k, self[k])
             else:
                 h2mg._add_hyper_edges(k, other[k])
@@ -285,7 +285,7 @@ class H2MGStructure(dict):
         for k in (self | other):
             if (k in self) and (k in other):
                 h2mg_structure._add_hyper_edges_structure(k, self[k].combine(other[k]))
-            elif k in self.spaces:
+            elif k in self: # TODO: before was k in self.spaces: but error ''H2MGStructure' object has no attribute 'spaces''
                 h2mg_structure._add_hyper_edges_structure(k, self[k])
             else:
                 h2mg_structure._add_hyper_edges_structure(k, other[k])

@@ -25,7 +25,7 @@ class HyperEdges(dict):
         super().__init__(data)
 
     def __str__(self):
-        if self.addresses is None:
+        if self.addresses is None and self.features is not None:
             return pd.DataFrame(self.features, index=range(len(list(self.features.values())[0]))).__str__()
         elif self.features is None:
             return pd.DataFrame(self.addresses).__str__()
@@ -117,7 +117,7 @@ class HyperEdges(dict):
     def flat_array(self) -> np.array:
         """Returns a flat array by concatenating all features together."""
         if self.features:
-            return jnp.concatenate([v for v in self.features.values()], axis=-1)
+            return jnp.concatenate([self.features[k] for k in sorted(self.features)], axis=-1)
         else:
             return None
 
@@ -125,7 +125,7 @@ class HyperEdges(dict):
     def flat_array(self, value: np.array):
         if self.features:
             new_values = jnp.split(value, len(self.features), axis=-1)
-            self.features = {k: v for k, v in zip(self.features, new_values)}
+            self.features = {k: v for k, v in zip(sorted(self.features), new_values)}
         else:
             pass
 
@@ -160,6 +160,13 @@ class HyperEdges(dict):
                     features_dict[k] = other.features[k]
                 else:
                     features_dict[k] = self.features[k]
+        elif self.features is not None:
+            for k in self.features:
+                features_dict[k] = self.features[k]
+        elif other.features is not None:
+            for k in other.features:
+                features_dict[k] = other.features[k]
+
         if not features_dict:
             features_dict = None
 
@@ -175,6 +182,8 @@ class HyperEdges(dict):
                     raise ValueError("Feature {} not available in current hyper-edge.".format(k))
                 else:
                     features_dict[k] = self.features[k]
+        else:
+            features_dict = None 
 
         if structure.addresses is not None:
             assert self.addresses is not None
@@ -341,6 +350,12 @@ class HyperEdgesStructure(dict):
                     features_dict[k] = other.features[k]
                 else:
                     features_dict[k] = self.features[k]
+        elif self.features is not None:
+            for k in self.features:
+                features_dict[k] = self.features[k]
+        elif other.features is not None:
+            for k in other.features:
+                features_dict[k] = other.features[k]
         if not features_dict:
             features_dict = None
 

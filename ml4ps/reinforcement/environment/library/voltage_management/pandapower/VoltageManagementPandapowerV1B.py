@@ -1,7 +1,6 @@
 from typing import Dict
 
 from gymnasium import spaces
-from jax import numpy as jnp
 from ml4ps.h2mg import (H2MG, H2MGSpace, H2MGStructure, HyperEdgesSpace,
                         HyperEdgesStructure)
 
@@ -14,12 +13,8 @@ CONTROL_STRUCTURE.add_local_hyper_edges_structure(
 CONTROL_STRUCTURE.add_local_hyper_edges_structure(
     "ext_grid", HyperEdgesStructure(features=["vm_pu"]))
 
-INFO_STRUCTURE = H2MGStructure()
-INFO_STRUCTURE.add_local_hyper_edges_structure(
-    "gen", HyperEdgesStructure(features=["min_vm_pu", "max_vm_pu"]))
 
-
-class VoltageManagementPandapowerV1(VoltageManagementPandapower):
+class VoltageManagementPandapowerV1B(VoltageManagementPandapower):
     """Power system environment for voltage management problem implemented
         with pandapower that controls generators setpoints.
 
@@ -61,11 +56,10 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
             offset = 0.0
         else:
             offset = 1.0
-        scale = 0.05  # TODO Changed from 0.2 and 0.02, 0.08 working
         gen_vm_pu_space = spaces.Box(
-            low=offset-scale, high=offset+scale, shape=(control_structure["gen"].features["vm_pu"],))
+            low=offset-0.2, high=offset+0.2, shape=(control_structure["gen"].features["vm_pu"],))
         ext_grid_vm_pu_space = spaces.Box(
-            low=offset-scale, high=offset+scale, shape=(control_structure["ext_grid"].features["vm_pu"],))
+            low=offset-0.2, high=offset+0.2, shape=(control_structure["ext_grid"].features["vm_pu"],))
 
         action_space = H2MGSpace()
         action_space._add_hyper_edges_space('gen', HyperEdgesSpace(
@@ -83,18 +77,8 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
 
     def update_ctrl_var(self, ctrl_var: H2MG, action: H2MG, state: VoltageManagementState) -> Dict:
         """Updates control variables with action."""
-        if self.additive:
-            res = H2MG.from_structure(ctrl_var.structure)
-            res.flat_array = ctrl_var.flat_array + action.flat_array
-        else:
-            res = action
-        # TODO: find better clipping from buses ?
-        # infos: H2MG = self.backend.get_h2mg_from_power_grid(state.power_grid, self.info_structure)
-        # min_vm_pu_array = infos.hyper_edges["gen"].features["min_vm_pu"]
-        # max_vm_pu_array = infos.hyper_edges["gen"].features["max_vm_pu"]
-        res.flat_array = jnp.clip(res.flat_array, a_min=0.9, a_max=1.1)
-        return res
+        return ctrl_var
 
     def run_power_grid(self, power_grid):
         return self.backend.run_power_grid(power_grid, enforce_q_lims=True, delta_q=0.,
-                                           recycle={"bus_pq": False, "gen": True, "trafo": False}, init="results")  # TODO check results
+                                           recycle={"bus_pq": False, "gen": True, "trafo": False}, init="results")

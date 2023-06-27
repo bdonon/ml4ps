@@ -154,7 +154,7 @@ class CSVLogger(BaseLogger):
 
 
 class MLFlowLogger(BaseLogger):
-    def __init__(self, *, experiment_name, run_name, res_dir=None) -> None:
+    def __init__(self, *, experiment_name, run_name, res_dir=None, run_dir=None) -> None:
         exp = mlflow.get_experiment_by_name(experiment_name)
         if exp:
             experiment_id = exp.experiment_id

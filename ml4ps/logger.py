@@ -166,8 +166,12 @@ class MLFlowLogger(BaseLogger):
             # mlflow.set_tracking_uri(res_dir)
         mlflow.start_run(experiment_id=experiment_id, run_name=run_name)
 
-    def log_hyperparams(self, name: str, value):
+    def log_hyperparam(self, name: str, value):
         return mlflow.log_param(name, value)
+    
+    def log_hyperparams(self, params):
+        for k, v in params.items():
+            mlflow.log_param(k, v)
 
     def log_metrics(self, metrics, step=None):
         pass

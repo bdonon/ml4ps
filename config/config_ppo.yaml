@@ -11,26 +11,22 @@ debug: False
 shuffle: False
 batch_size: 8
 env_name: "VoltageManagementPandapowerV3"
-soft_reset: False
 max_steps: null
 init_cost: null # null by default or 0.0
 env:
   name: ${env_name}
   data_dir: ${train_dir}
   num_envs: ${batch_size}
-  soft_reset: ${soft_reset}
   init_cost: ${init_cost}
   max_steps: ${max_steps}
 val_env:
   name: ${env_name}
   data_dir: ${val_dir}
-  soft_reset: ${soft_reset}
   init_cost: ${init_cost}
   max_steps: ${max_steps}
 test_env:
   name: ${env_name}
   data_dir: ${test_dir}
-  soft_reset: ${soft_reset}
   init_cost: ${init_cost}
   max_steps: ${max_steps}
 algorithm_type: "ppo"

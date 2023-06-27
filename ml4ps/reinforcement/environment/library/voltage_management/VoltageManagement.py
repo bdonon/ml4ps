@@ -49,7 +49,7 @@ class VoltageManagement(PSBaseEnv, ABC):
     ctrl_var_names: Dict
     obs_feature_names: Dict
 
-    def __init__(self, data_dir, *, max_steps, cost_hparams, soft_reset, init_cost):
+    def __init__(self, data_dir, *, max_steps, cost_hparams, init_cost):
         super().__init__(data_dir)
         self.max_steps = max_steps
         self.state = VoltageManagementState(power_grid=None,

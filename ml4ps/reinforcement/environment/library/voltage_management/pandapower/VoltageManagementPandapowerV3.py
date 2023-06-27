@@ -51,10 +51,10 @@ class VoltageManagementPandapowerV3(VoltageManagementPandapower):
     empty_control_structure = CONTROL_STRUCTURE
     empty_info_structure = MAX_STEP_STRUCTURE
 
-    def __init__(self, data_dir, max_steps=None, cost_hparams=None, additive=True, soft_reset=True, init_cost=None):
+    def __init__(self, data_dir, max_steps=None, cost_hparams=None, additive=True, init_cost=None):
         self.additive=additive
         self.name = "VoltageManagementPandapowerV3"
-        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, soft_reset=soft_reset, init_cost=init_cost)
+        super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams, init_cost=init_cost)
     
     def _build_action_space(self, control_structure):
         if self.additive:

@@ -108,7 +108,8 @@ class TensorboardLogger(BaseLogger):
         self.log_summary_writer = SummaryWriter(run_dir)
 
     def log_metrics_dict(self, metrics: Dict[str, Any], step: int = None) -> None:
-        return self.log_summary_writer.add_scalars("", metrics, step)
+        for k, v in metrics.items():
+            self.log_summary_writer.add_scalar(k, v, step)
 
     def log_hyperparam(self, name, value):
         if isinstance(value, ListConfig):

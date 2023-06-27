@@ -131,21 +131,22 @@ class ContinuousAndDiscrete(BasePolicy):
     def vmap_sample(self, params: dict, observation: dict, rng, deterministic: bool = False, n_action: int = 1) -> float:
         return vmap(self.sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0))(params, observation, rng, deterministic,
                                                                                        n_action)
-
+    def discrete_forward(self, params: Dict, observation: H2MG) -> H2MG:
+        observation = manual_normalization(observation)  # TODO: remove this
+        observation = self.normalizer(observation)
+        logits = self.discrete_nn.apply(params, observation)
+        return logits
+    
     def discrete_log_prob(self, params, observation, action):
         discrete_action = action.extract_from_structure(
             self.discrete_action_space.structure)
         one_hot = self._action_to_one_hot(discrete_action)
-        observation = manual_normalization(observation)
-        norm_observation = self.normalizer(observation)
-        logits = self.discrete_nn.apply(params, norm_observation)
+        logits = self.discrete_forward(params, observation)
         return h2mg_categorical_logprob(one_hot, logits), logits
 
     def discrete_sample(self, params: Dict, observation: H2MG, rng, deterministic=False, n_action=1):
         """Sample an action and return it together with the corresponding log probability."""
-        observation = manual_normalization(observation)
-        norm_observation = self.normalizer(observation)
-        logits: H2MG = self.discrete_nn.apply(params, norm_observation)
+        logits = self.discrete_forward(params, observation)
         if n_action <= 1:
             one_hot = h2mg_categorical_sample(
                 rng, logits, deterministic=deterministic)
@@ -232,7 +233,7 @@ class ContinuousAndDiscrete(BasePolicy):
             self.continuous_action_space.structure)
         return h2mg_normal_logprob(continous_action, mu_norm, log_sigma_norm), (mu_norm, log_sigma_norm)
 
-    def continuous_forward(self, params, observation):
+    def continuous_forward(self, params: Dict, observation: H2MG) -> Tuple[H2MG, H2MG]:
         observation = manual_normalization(observation)  # TODO: remove this
         observation = self.normalizer(observation)
         distrib_params = self.continuous_nn.apply(params, observation)

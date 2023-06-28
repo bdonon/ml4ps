@@ -45,7 +45,7 @@ class VoltageManagementPandapowerV1B(VoltageManagementPandapower):
     empty_info_structure = None
 
     def __init__(self, data_dir, max_steps=None, cost_hparams=None, additive=True, init_cost=None):
-        self.name = "VoltageManagementPandapowerV1"
+        self.name = "VoltageManagementPandapowerV1B"
         self.additive = additive
         super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams,
                          init_cost=init_cost)

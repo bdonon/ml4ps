@@ -554,21 +554,23 @@ class PPO(Algorithm):
         return sample_batched_episode(policy=self.policy_network, params=self.policy_params, rng=rng,
                                       deterministic=False, env=env, max_episode_length=max_episode_length)
 
-    def test(self, *, test_env, res_dir, seed=None, max_steps=None):
-        self._test(test_env, res_dir, name="best",
+    def test(self, *, test_env, res_dir, seed=None, max_steps=None) -> float:
+        best_value = self._test(test_env, res_dir, name="best",
                    seed=seed, max_steps=max_steps)
         self._test(test_env, res_dir, name="last",
                    seed=seed, max_steps=max_steps)
+        
+        return best_value
 
-    def _test(self, test_env, res_dir, name="best", seed=None, max_steps=None):
+    def _test(self, test_env, res_dir, name="best", seed=None, max_steps=None) -> float:
         seed = seed or self.seed
         test_name = "test_" + name
         test_dir = os.path.join(res_dir, test_name)
         if not os.path.exists(test_dir):
             os.mkdir(test_dir)
         params = self.load_params(name=name, network="policy")
-        test_policy(test_env, self.policy_network, params,
-                    seed=seed, output_dir=test_dir, max_steps=max_steps)
+        value, _ = eval_reward(test_env, self.policy_network, params,seed=seed, save_folder=test_dir, max_steps=max_steps)
+        return value
 
     def _params_name(self, *,  name: str, network: str) -> str:
         return network + "_params_" + name

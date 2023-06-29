@@ -11,7 +11,7 @@ class Algorithm(ABC):
         pass
 
     @abstractmethod
-    def test(*args, test_env=None, res_dir=None, max_steps=None, **kwargs):
+    def test(*args, test_env=None, res_dir=None, max_steps=None, **kwargs) -> float:
         pass
 
     def save_params(self, folder):

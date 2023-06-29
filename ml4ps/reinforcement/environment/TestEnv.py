@@ -28,6 +28,7 @@ class TestEnv(PSBaseEnv):
         return self.filelist.popleft()
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[H2MG, Dict]:
+        self.current_step = 0
         if options is None:
             options = {}
         file_path = self.get_next_file()

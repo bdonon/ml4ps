@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Tuple
 
 import numpy as np
 import tqdm
@@ -26,8 +26,10 @@ def test_policy(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed, o
                 break
 
 
-def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: PRNGKey, n=None, max_steps: int = 20) -> float:
-    single_env = TestEnv(single_env, auto_reset=False)
+def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: PRNGKey, n=None, max_steps: int = None, save_folder=None) -> Tuple[float, Dict]:
+    if isinstance(seed, int):
+        seed = PRNGKey(seed)
+    single_env = TestEnv(single_env, auto_reset=False, save_folder=save_folder, max_steps=max_steps)
     obs, info = single_env.reset()
     init_step = single_env.state.power_grid.shunt.step
     # init_setpooints = single_env.state.power_grid.gen.vm_pu
@@ -45,7 +47,7 @@ def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: P
     stats = {}
     n = min(n, single_env.maxlen) if n is not None else single_env.maxlen
     was_reset = True
-    with tqdm.tqdm(total=n, leave=False) as pbar:
+    with tqdm.tqdm(total=n, leave=(save_folder is not None)) as pbar:
         while i < n:
             if was_reset:
                 init_cost.append(single_env.state.cost)

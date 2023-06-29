@@ -116,20 +116,23 @@ class TensorboardLogger(BaseLogger):
             value = str(list(value))
         return self.log_summary_writer.add_hparams({name: value}, {"hparam": 0}, run_name=self.run_name)
     
-    def log_hyperparams(self, params : Dict):
-        return self.log_summary_writer.add_hparams(params, {"hparam": 0}, run_name=self.run_name)
+    def log_hyperparams(self, params : Dict, name=None, value=None):
+        if name is not None and value is not None:
+            metric = {name: value}
+        else:
+            metric = {"hparam": 0}
+        return self.log_summary_writer.add_hparams(params, metric, run_name=self.run_name)
 
     def finalize(self):
         self.log_summary_writer.close()
     
-    def log_config(self, config):
+    def log_config(self, config, name=None, value=None):
         flat_config = pd.json_normalize(OmegaConf.to_container(config), sep="_")
         flat_config_dict = flat_config.to_dict(orient="records")[0]
         for k, v in flat_config_dict.items():
             if isinstance(v, list):
                 flat_config_dict[k] = str(v)
-        return self.log_hyperparams(flat_config_dict)
-
+        return self.log_hyperparams(flat_config_dict, name=name, value=value)
 
 class CSVLogger(BaseLogger):
     def log_hyperparams(self, params):
@@ -181,7 +184,7 @@ class MLFlowLogger(BaseLogger):
             v = np.asarray(value)
             mlflow.log_metric(key, v, step=step)
     
-    def log_config(self, config):
+    def log_config(self, config, name=None, value=None):
         return log_params_from_omegaconf_dict(self, config)
 
     def finalize(self):

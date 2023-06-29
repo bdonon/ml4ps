@@ -1,5 +1,9 @@
-import datetime
 import os
+os.environ["HYDRA_FULL_ERROR"] = "1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
+
+import datetime
+import random
 
 import gymnasium as gym
 import hydra
@@ -10,7 +14,6 @@ import ml4ps
 from ml4ps.logger import log_params_from_omegaconf_dict, get_logger
 from ml4ps.reinforcement.algorithm import get_algorithm
 
-os.environ["HYDRA_FULL_ERROR"] = "1"
 
 OmegaConf.register_new_resolver("add", lambda x, y: x+y)
 OmegaConf.register_new_resolver("mul", lambda x, y: x*y)
@@ -30,15 +33,15 @@ def save_config(cfg):
     if not os.path.isdir(cfg.res_dir):
         os.mkdir(cfg.res_dir)
     if cfg.run_name is None:
-        run_dir = os.path.join(
-            cfg.res_dir, f'algo_{datetime.datetime.now().strftime("%m%d%Y_%H%M%S")}')
+        run_name = f'algo_{random.randint(0,512):03d}_{datetime.datetime.now().strftime("%m%d%Y_%H%M%S")}'
     else:
-        run_dir = os.path.join(cfg.res_dir, cfg.run_name)
+        run_name = cfg.run_name
+    run_dir = os.path.join(cfg.res_dir, run_name)
     if not os.path.isdir(run_dir):
         os.mkdir(run_dir)
     with open(os.path.join(run_dir, "config.yaml"), "w") as f:
         OmegaConf.save(cfg, f)
-    return run_dir
+    return run_dir, run_name
 
 
 def init_envs(cfg):
@@ -54,7 +57,7 @@ def init_envs(cfg):
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
     # Save configuration
-    run_dir = save_config(cfg)
+    run_dir, run_name = save_config(cfg)
 
     # Training environment
     env, val_env, test_env = init_envs(cfg)
@@ -64,8 +67,8 @@ def main(cfg):
                               val_env=val_env, test_env=test_env, run_dir=run_dir, **cfg.algorithm)
 
     # Logger
-    logger = get_logger(**cfg.logger, run_dir=run_dir)
-    logger.log_config(cfg)
+    logger = get_logger(**{**cfg.logger, 'run_name': run_name}, run_dir=run_dir)
+    logger.log_config(cfg, name="hparam/test", value=-float("inf"))
 
     # Learning loop
     algorithm.learn(logger=logger, seed=cfg.seed,
@@ -77,9 +80,13 @@ def main(cfg):
     algorithm.save(run_dir)
 
     # Evaluation
-    algorithm.test(test_env=test_env, res_dir=run_dir, **cfg.test)
+    value = algorithm.test(test_env=test_env, res_dir=run_dir, **cfg.test)
+
+    logger.log_config(cfg, name="hparam/test", value=value)
 
     logger.finalize()
+
+    return value
 
 
 if __name__ == "__main__":

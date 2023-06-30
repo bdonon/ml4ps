@@ -33,7 +33,10 @@ def save_config(cfg):
     if not os.path.isdir(cfg.res_dir):
         os.mkdir(cfg.res_dir)
     if cfg.run_name is None:
-        run_name = f'algo_{random.randint(0,512):03d}_{datetime.datetime.now().strftime("%m%d%Y_%H%M%S")}'
+        if cfg.hparams is None:
+            run_name = f'algo_{random.randint(0,512):03d}_{datetime.datetime.now().strftime("%m%d%Y_%H%M%S")}'
+        else:
+            run_name = build_run_name(cfg, cfg.hparams) + f"_{random.randint(0,512):03d}"
     else:
         run_name = cfg.run_name
     run_dir = os.path.join(cfg.res_dir, run_name)
@@ -53,6 +56,19 @@ def init_envs(cfg):
     test_env.reset(seed=cfg.seed)
     return env, val_env, test_env
 
+def get_hparam_value(cfg: OmegaConf, hparam_name:str):
+    keys = hparam_name.split(".")
+    value = cfg
+    for k in keys:
+        value = value[k]
+    return value
+
+def build_run_name(cfg, hparam_names):
+    run_names = []
+    for hparam_name in hparam_names:
+        value = get_hparam_value(cfg, hparam_name)
+        run_names.append(f"{hparam_name}={value}")
+    return "_".join(run_names)
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):

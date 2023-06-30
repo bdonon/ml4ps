@@ -26,7 +26,7 @@ def test_policy(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed, o
                 break
 
 
-def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: PRNGKey, n=None, max_steps: int = None, save_folder=None) -> Tuple[float, Dict]:
+def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: PRNGKey, n=None, max_steps: int = None, save_folder=None, log_snapshots=False) -> Tuple[float, Dict]:
     if isinstance(seed, int):
         seed = PRNGKey(seed)
     single_env = TestEnv(single_env, auto_reset=False, save_folder=save_folder, max_steps=max_steps)
@@ -88,7 +88,10 @@ def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: P
     if len(cumulative_rewards) != n:
         raise ValueError(f"{len(cumulative_rewards)} != {n}")
 
-    stats = {"val_" + k: v for (k, v) in stats.items()}
+    if log_snapshots:
+        stats = {"val_" + k: v for (k, v) in stats.items()}
+    else:
+        stats ={}
 
     cumulative_rewards = np.array(cumulative_rewards)
     last_infos_dict = mean_of_dicts(last_infos)

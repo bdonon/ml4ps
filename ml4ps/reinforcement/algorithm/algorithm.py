@@ -14,6 +14,9 @@ class Algorithm(ABC):
     def test(*args, test_env=None, res_dir=None, max_steps=None, **kwargs) -> float:
         pass
 
+    def eval(self, val_env, seed=None, max_steps=None) -> float:
+        pass
+
     def save_params(self, folder):
         pass
 

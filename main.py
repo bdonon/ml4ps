@@ -84,7 +84,7 @@ def main(cfg):
 
     # Logger
     logger = get_logger(**{**cfg.logger, 'run_name': run_name}, run_dir=run_dir)
-    logger.log_config(cfg, name="hparam/test", value=-float("inf"))
+    logger.log_config(cfg, name="hparam/val", value=-float("inf"))
 
     # Learning loop
     algorithm.learn(logger=logger, seed=cfg.seed,
@@ -97,8 +97,10 @@ def main(cfg):
 
     # Evaluation
     value = algorithm.test(test_env=test_env, res_dir=run_dir, **cfg.test)
-
     logger.log_config(cfg, name="hparam/test", value=value)
+
+    value = algorithm.eval(val_env=val_env, seed=cfg.seed, **cfg.test)
+    logger.log_config(cfg, name="hparam/val", value=value)
 
     logger.finalize()
 

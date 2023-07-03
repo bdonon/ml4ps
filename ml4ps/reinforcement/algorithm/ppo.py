@@ -561,6 +561,11 @@ class PPO(Algorithm):
                    seed=seed, max_steps=max_steps)
         
         return best_value
+    
+    def eval(self, val_env, seed=None, max_steps=None):
+        params = self.load_params(name="best", network="policy")
+        value, _ = eval_reward(val_env, self.policy_network, params, seed=seed, max_steps=max_steps)
+        return value
 
     def _test(self, test_env, res_dir, name="best", seed=None, max_steps=None) -> float:
         seed = seed or self.seed

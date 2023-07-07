@@ -48,7 +48,7 @@ class Reinforce(Algorithm):
     logger: BaseLogger
     train_state: ReinforceTrainState
 
-    def __init__(self, *, env: PSBaseEnv, seed=0, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir, max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None, policy_args={}, nn_args={}, clip_norm, learning_rate, n_actions=5, baseline_learning_rate=None, baseline_nn_type=None, baseline_nn_args=None, init_cost=None, nn_baseline_steps=None) -> 'Reinforce':
+    def __init__(self, *, env: PSBaseEnv, seed=0, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir, max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None, policy_args={}, nn_args={}, clip_norm, learning_rate, n_actions=5, baseline_learning_rate=None, baseline_nn_type=None, baseline_nn_args=None, init_cost=None, nn_baseline_steps=None, normalize_baseline_rewards=False) -> 'Reinforce':
         self.best_params_path = os.path.join(run_dir, "best_params.pkl")
         self.last_params_path = os.path.join(run_dir, "last_params.pkl")
         self.policy_type = policy_type
@@ -72,6 +72,7 @@ class Reinforce(Algorithm):
         self.run_dir = run_dir
         self.init()
         self.init_cost = init_cost
+        self.normalize_baseline_rewards = normalize_baseline_rewards
 
     def init(self):
         single_obs, _ = self.val_env.reset()
@@ -115,6 +116,8 @@ class Reinforce(Algorithm):
             _, baseline_reward, _, _, _ = self.env.step(baseline_action)
             rewards.append(baseline_reward)
         rewards = jnp.stack(rewards, axis=0)
+        if self.normalize_baseline_rewards:
+            rewards = (rewards - jnp.mean(rewards, axis=0)) / (jnp.std(rewards, axis=0) + 1e-8)
         if self.baseline == "mean":
             baseline_rewards = jnp.mean(rewards, axis=0)
         elif self.baseline == "median":

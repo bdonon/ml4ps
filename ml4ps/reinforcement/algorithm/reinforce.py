@@ -164,8 +164,13 @@ class Reinforce(Algorithm):
         obs, _ = self.env.reset()
         self.val_env.reset()
         mean_cum_reward, eval_infos = self.eval_reward()
+        best_mean_cum_reward = mean_cum_reward
         logger.log_metrics_dict(
                     {"val_cumulative_reward": mean_cum_reward} | eval_infos, step=0)
+        last_step = -1
+        last_value = -np.inf
+        self.save_best_params(
+                        self.run_dir, self.policy_params, step=-1, value=best_mean_cum_reward)
         for i in tqdm(range(n_iterations)):
             # Train step
             rng_key, subkey = split(rng_key)
@@ -191,21 +196,21 @@ class Reinforce(Algorithm):
         self.save_last_params(self.run_dir, self.policy_params,
                               step=last_step, value=last_value)
 
-    def test(self, test_env, res_dir, test_name=None):
+    def test(self, test_env, res_dir, test_name=None, max_steps=None):
         test_name = "test_best"
         best_test_dir = os.path.join(res_dir, test_name)
         if not os.path.exists(best_test_dir):
             os.mkdir(best_test_dir)
         params = self.load_best_params()
         test_policy(test_env, self.policy, params,
-                    seed=self.seed, output_dir=best_test_dir)
+                    seed=self.seed, output_dir=best_test_dir, max_steps=max_steps)
         test_name = "test_last"
         last_test_dir = os.path.join(res_dir, test_name)
         if not os.path.exists(last_test_dir):
             os.mkdir(last_test_dir)
         params = self.load_last_params()
         test_policy(test_env, self.policy, params,
-                    seed=self.seed, output_dir=last_test_dir)
+                    seed=self.seed, output_dir=last_test_dir, max_steps=max_steps)
 
     def eval_reward(self):
         return eval_reward(self.val_env, self.policy, self.policy_params, seed=self.seed, n=100, max_steps=self.max_steps)

@@ -220,22 +220,22 @@ class GlobalDecoder(nn.Module):
 
     @nn.compact
     def __call__(self, h2mg_in, h2mg_encoded, h):
-        #isnan_mask = jnp.isnan(h2mg_in.global_hyper_edges.array[:,0])
+        # isnan_mask = jnp.isnan(h2mg_in.global_hyper_edges.array[:,0])
         features_dict = {}
-        # nn_input = jnp.concatenate(
-        #     [nan_max_at(h[LOCAL_KEY], h2mg_in.all_addresses_array), h[GLOBAL_KEY], h2mg_encoded[GLOBAL_KEY]], axis=1)
         nn_input = jnp.concatenate(
-            [h[GLOBAL_KEY], h2mg_encoded[GLOBAL_KEY]], axis=1)
+            [nan_mean_at(h[LOCAL_KEY], h2mg_in.all_addresses_array), h[GLOBAL_KEY], h2mg_encoded[GLOBAL_KEY]], axis=1)
+        # nn_input = jnp.concatenate(
+        #     [h[GLOBAL_KEY], h2mg_encoded[GLOBAL_KEY]], axis=1)
         # nn_input == nn.LayerNorm()(nn_input)
         for k in self.global_output_features_list:
-            # mlp = MLP(self.hidden_size, 1, smooth_activation, name="{}".format(k), use_bias=False)
-            # features_dict[k] = mlp(nn_input)[:, 0]
+            mlp = MLP(self.hidden_size, 1, smooth_activation, name="{}".format(k), use_bias=True)
+            features_dict[k] = mlp(nn_input)[:, 0]
 
             # features_dict[k] = jnp.mean(nn_input, axis=0, keepdims=True)[:, 0]
 
-            features_dict[k] = h[GLOBAL_KEY][:, 0]
+            # features_dict[k] = h[GLOBAL_KEY][:, 0]
 
-            #features_dict[k] = jnp.where(isnan_mask, jnp.nan, mlp(nn_input)[:, 0])
+            # features_dict[k] = jnp.where(isnan_mask, jnp.nan, mlp(nn_input)[:, 0])
         return HyperEdges(features=features_dict)
 
 

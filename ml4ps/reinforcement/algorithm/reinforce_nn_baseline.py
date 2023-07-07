@@ -48,10 +48,10 @@ class ReinforceBaseline(Reinforce):
     logger: BaseLogger
     train_state: ReinforceTrainState
 
-    def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir, max_steps, policy_type: str,
+    def __init__(self, *, env: PSBaseEnv, seed=0, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir, max_steps, policy_type: str,
                  logger=None, validation_interval=100, baseline, policy_args={}, nn_args={}, clip_norm, learning_rate,
                  baseline_nn_type="h2mgnode", n_actions=None, baseline_nn_args=None, baseline_learning_rate, init_cost, nn_baseline_steps) -> 'ReinforceBaseline':
-        super().__init__(env, seed, val_env=val_env, test_env=test_env, run_dir=run_dir, max_steps=max_steps, policy_type=policy_type,
+        super().__init__(env=env, seed=seed, val_env=val_env, test_env=test_env, run_dir=run_dir, max_steps=max_steps, policy_type=policy_type,
                          logger=logger, validation_interval=validation_interval, baseline=baseline, policy_args=policy_args, nn_args=nn_args,
                          clip_norm=clip_norm, learning_rate=learning_rate, baseline_learning_rate=baseline_learning_rate, n_actions=n_actions, baseline_nn_type=baseline_nn_type, baseline_nn_args=baseline_nn_args, init_cost=init_cost, nn_baseline_steps=nn_baseline_steps)
 

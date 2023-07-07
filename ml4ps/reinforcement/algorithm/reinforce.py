@@ -48,8 +48,7 @@ class Reinforce(Algorithm):
     logger: BaseLogger
     train_state: ReinforceTrainState
 
-    def __init__(self, env: PSBaseEnv, seed=0, *, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir, max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None, policy_args={}, nn_args={}, clip_norm, learning_rate, n_actions=5, baseline_learning_rate=None, baseline_nn_type=None, baseline_nn_args=None, init_cost=None, nn_baseline_steps=None) -> 'Reinforce':
-        super().__init__()
+    def __init__(self, *, env: PSBaseEnv, seed=0, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir, max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None, policy_args={}, nn_args={}, clip_norm, learning_rate, n_actions=5, baseline_learning_rate=None, baseline_nn_type=None, baseline_nn_args=None, init_cost=None, nn_baseline_steps=None) -> 'Reinforce':
         self.best_params_path = os.path.join(run_dir, "best_params.pkl")
         self.last_params_path = os.path.join(run_dir, "last_params.pkl")
         self.policy_type = policy_type
@@ -164,6 +163,9 @@ class Reinforce(Algorithm):
         rng_key, rng_key_val = split(rng_key)
         obs, _ = self.env.reset()
         self.val_env.reset()
+        mean_cum_reward, eval_infos = self.eval_reward()
+        logger.log_metrics_dict(
+                    {"val_cumulative_reward": mean_cum_reward} | eval_infos, step=0)
         for i in tqdm(range(n_iterations)):
             # Train step
             rng_key, subkey = split(rng_key)
@@ -174,9 +176,9 @@ class Reinforce(Algorithm):
             logger.log_dicts(i, "train_", policy_info, env_info, algo_info)
 
             # Val step
-            if i % validation_interval == 0 and self.val_env is not None:
+            if i % validation_interval == (validation_interval - 1) and self.val_env is not None:
                 self.val_env.reset()
-                mean_cum_reward = self.eval_reward()
+                mean_cum_reward, eval_infos = self.eval_reward()
                 last_value = mean_cum_reward
                 last_step = i
                 # Save best params
@@ -185,7 +187,7 @@ class Reinforce(Algorithm):
                     self.save_best_params(
                         self.run_dir, self.policy_params, step=i, value=best_mean_cum_reward)
                 logger.log_metrics_dict(
-                    {"val_cumulative_reward": mean_cum_reward}, i)
+                    {"val_cumulative_reward": mean_cum_reward} | eval_infos, i)
         self.save_last_params(self.run_dir, self.policy_params,
                               step=last_step, value=last_value)
 
@@ -206,7 +208,7 @@ class Reinforce(Algorithm):
                     seed=self.seed, output_dir=last_test_dir)
 
     def eval_reward(self):
-        return eval_reward(self.val_env, self.policy, self.policy_params, seed=self.seed, n=100)
+        return eval_reward(self.val_env, self.policy, self.policy_params, seed=self.seed, n=100, max_steps=self.max_steps)
 
     @partial(jit, static_argnums=(0, 6))
     def value_and_grad_fn(self, params, observations, actions, rewards, baseline=0, multiple_actions=False):
@@ -214,10 +216,10 @@ class Reinforce(Algorithm):
 
     def loss_fn(self, params, observations, actions, rewards, baseline=0, multiple_actions: bool = False):
         if multiple_actions:
-            log_probs = vmap(self.vmap_log_prob, in_axes=(
+            log_probs, info = vmap(self.vmap_log_prob, in_axes=(
                 None, None, 0), out_axes=0)(params, observations, actions)
         else:
-            log_probs = self.vmap_log_prob(
+            log_probs, info = self.vmap_log_prob(
                 params, observations, action=actions)
         return - (log_probs * (rewards - baseline)).mean()
 

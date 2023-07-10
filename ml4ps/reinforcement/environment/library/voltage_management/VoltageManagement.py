@@ -64,8 +64,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         """Inits cost hparams and overrides default values with given cost_hparams dictionary."""
         if not set(cost_hparams or dict()).issubset(set(self.default_cost_hparams)):
             raise ValueError("Unknown key in cost_hparams")
-        cost_hparams = self.default_cost_hparams.update(
-            cost_hparams) if cost_hparams is not None else self.default_cost_hparams
+        cost_hparams = {**self.default_cost_hparams, **cost_hparams} if cost_hparams is not None else self.default_cost_hparams
         self.lmb_i = cost_hparams["lmb_i"]
         self.lmb_q = cost_hparams["lmb_q"]
         self.lmb_v = cost_hparams["lmb_v"]

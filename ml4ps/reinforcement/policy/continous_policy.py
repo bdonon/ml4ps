@@ -173,11 +173,17 @@ class ContinuousPolicy(BasePolicy):
     @staticmethod
     def compute_info(mu: H2MG, log_sigma: H2MG) -> Dict[str, float]:
         mu = deepcopy(mu)
+        max_mu = deepcopy(mu)
+        min_mu = deepcopy(mu)
         log_sigma = deepcopy(log_sigma)
         mu.add_suffix("_mu")
+        max_mu.add_suffix("max_mu")
+        min_mu.add_suffix("min_mu")
         log_sigma.add_suffix("_log_sigma")
         info = shallow_repr(mu.apply(lambda x: jnp.asarray(jnp.nanmean(x))))
         info = info | shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.mean(x))))
+        info = info | shallow_repr(max_mu.apply(lambda x: jnp.asarray(jnp.nanmax(x))))
+        info = info | shallow_repr(min_mu.apply(lambda x: jnp.asarray(jnp.nanmin(x))))
         return info
     
     @staticmethod

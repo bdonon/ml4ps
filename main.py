@@ -90,7 +90,6 @@ def main(cfg):
     algorithm.learn(logger=logger, seed=cfg.seed,
                     batch_size=cfg.batch_size, **cfg.learn)
     env.close()
-    val_env.close()
 
     # Save
     algorithm.save(run_dir)
@@ -103,6 +102,9 @@ def main(cfg):
     logger.log_config(cfg, name="hparam/val", value=value)
 
     logger.finalize()
+
+    val_env.close()
+    test_env.close()
 
     return value
 

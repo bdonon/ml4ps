@@ -47,10 +47,16 @@ class Reinforce(Algorithm):
     env: PSBaseEnv
     logger: BaseLogger
     train_state: ReinforceTrainState
+    best_params_name :str = "best_params.pkl"
+    last_params_name :str = "last_params.pkl"
 
-    def __init__(self, *, env: PSBaseEnv, seed=0, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir, max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None, policy_args={}, nn_args={}, clip_norm, learning_rate, n_actions=5, baseline_learning_rate=None, baseline_nn_type=None, baseline_nn_args=None, init_cost=None, nn_baseline_steps=None, normalize_baseline_rewards=False) -> 'Reinforce':
-        self.best_params_path = os.path.join(run_dir, "best_params.pkl")
-        self.last_params_path = os.path.join(run_dir, "last_params.pkl")
+    def __init__(self, *, env: PSBaseEnv, seed=0, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir,
+                max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None,
+                policy_args={}, nn_args={}, clip_norm, learning_rate, n_actions=5, baseline_learning_rate=None,
+                baseline_nn_type=None, baseline_nn_args=None, init_cost=None, nn_baseline_steps=None,
+                normalize_baseline_rewards=False, gradient_steps=1) -> 'Reinforce':
+        self.best_params_path = os.path.join(run_dir, self.best_params_name)
+        self.last_params_path = os.path.join(run_dir, self.last_params_name)
         self.policy_type = policy_type
         self.max_steps = max_steps
         self.policy = get_policy(
@@ -73,6 +79,7 @@ class Reinforce(Algorithm):
         self.init()
         self.init_cost = init_cost
         self.normalize_baseline_rewards = normalize_baseline_rewards
+        self.gradient_steps = gradient_steps
 
     def init(self):
         single_obs, _ = self.val_env.reset()
@@ -112,16 +119,17 @@ class Reinforce(Algorithm):
         if self.n_actions == 1:
             baseline_actions = [baseline_actions]
         for i in range(self.n_actions):
-            baseline_action = baseline_actions[i]
+            baseline_action: H2MG = baseline_actions[i]
             _, baseline_reward, _, _, _ = self.env.step(baseline_action)
             rewards.append(baseline_reward)
         rewards = jnp.stack(rewards, axis=0)
         if self.normalize_baseline_rewards:
-            rewards = (rewards - jnp.mean(rewards, axis=0)) / (jnp.std(rewards, axis=0) + 1e-8)
+            rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (jnp.std(rewards, axis=0, keepdims=True) + 1e-8)
+            rewards = jnp.clip(rewards, a_min=-3, a_max=3)
         if self.baseline == "mean":
-            baseline_rewards = jnp.mean(rewards, axis=0)
+            baseline_rewards = jnp.mean(rewards, axis=0, keepdims=True)
         elif self.baseline == "median":
-            baseline_rewards = jnp.median(rewards, axis=0)
+            baseline_rewards = jnp.median(rewards, axis=0, keepdims=True)
         else:
             baseline_rewards = 0
         return baseline_rewards, collate_h2mgs(baseline_actions), rewards
@@ -135,9 +143,10 @@ class Reinforce(Algorithm):
         if step % self.max_steps == (self.max_steps-1):
             next_obs, info = self.env.reset(
                 options={"load_new_power_grid": True})
-        value, grad = self.value_and_grad_fn(
-            state.params, batch, baseline_actions, b_rewards, baseline, multiple_actions=True)
-        state = state.apply_gradients(grads=grad)
+        for _ in range(self.gradient_steps):
+            value, grad = self.value_and_grad_fn(
+                state.params, batch, baseline_actions, b_rewards, baseline, multiple_actions=True)
+            state = state.apply_gradients(grads=grad)
         algo_info = {"grad_norm": optax._src.linear_algebra.global_norm(grad),
                      "loss_value": value,
                      "log_probs": jnp.mean(log_probs),
@@ -216,7 +225,7 @@ class Reinforce(Algorithm):
                     seed=self.seed, output_dir=last_test_dir, max_steps=max_steps)
 
     def eval_reward(self):
-        return eval_reward(self.val_env, self.policy, self.policy_params, seed=self.seed, n=100, max_steps=self.max_steps)
+        return eval_reward(self.val_env, self.policy, self.policy_params, seed=self.seed, max_steps=self.max_steps)
 
     @partial(jit, static_argnums=(0, 6))
     def value_and_grad_fn(self, params, observations, actions, rewards, baseline=0, multiple_actions=False):

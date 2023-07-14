@@ -127,7 +127,7 @@ class TensorboardLogger(BaseLogger):
         self.log_summary_writer.close()
     
     def log_config(self, config, name=None, value=None):
-        flat_config = pd.json_normalize(OmegaConf.to_container(config), sep="_")
+        flat_config = pd.json_normalize(OmegaConf.to_container(config), sep=".")
         flat_config_dict = flat_config.to_dict(orient="records")[0]
         for k, v in flat_config_dict.items():
             if isinstance(v, list):

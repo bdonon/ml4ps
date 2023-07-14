@@ -49,6 +49,7 @@ class Reinforce(Algorithm):
     train_state: ReinforceTrainState
     best_params_name :str = "best_params.pkl"
     last_params_name :str = "last_params.pkl"
+    best_params_info_name: str = 'best_params_info.json'
 
     def __init__(self, *, env: PSBaseEnv, seed=0, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir,
                 max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None,
@@ -281,7 +282,7 @@ class Reinforce(Algorithm):
             params = self.policy_params
         with open(self.best_params_path, 'wb') as f:
             pickle.dump(params, f)
-        with open(os.path.join(folder, 'best_params_info.json'), 'w') as f:
+        with open(os.path.join(folder, self.best_params_info_name), 'w') as f:
             json.dump({"step": step, "value": value}, f)
 
     def save_last_params(self, folder, params=None, step=None, value=None):

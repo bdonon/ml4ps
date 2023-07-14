@@ -146,19 +146,19 @@ class ContinuousPolicy(BasePolicy):
         mu, log_sigma = self._postprocess_distrib_params(distrib_params)
         return mu, log_sigma
     
-    def _sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1):
+    def _sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1):
         """Sample an action and return it together with the corresponding log probability."""
         mu_norm, log_sigma_norm = self.forward(params, observation)
         if n_action <= 1:
             action = h2mg_normal_sample(rng, mu_norm, log_sigma_norm, deterministic=deterministic)
             log_prob = h2mg_normal_logprob(action, mu_norm, log_sigma_norm)
         else:
-            action = [h2mg_normal_sample(rng, mu_norm, log_sigma_norm, deterministic=deterministic) for rng in jax.random.split(rng, n_action)]
+            action = [h2mg_normal_sample(_rng, mu_norm, log_sigma_norm, deterministic=deterministic) for _rng in jax.random.split(rng, n_action)]
             log_prob = [h2mg_normal_logprob(a, mu_norm, log_sigma_norm) for a in action]
         info = self.compute_info(mu_norm, log_sigma_norm)
         return action, log_prob, info, mu_norm, log_sigma_norm
     
-    def sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1):
+    def sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1):
         """Sample an action and return it together with the corresponding log probability."""
         action, log_prob, info, _, _ = self._sample(params, observation, rng, deterministic, n_action)
         return action, log_prob, info
@@ -177,8 +177,8 @@ class ContinuousPolicy(BasePolicy):
         min_mu = deepcopy(mu)
         log_sigma = deepcopy(log_sigma)
         mu.add_suffix("_mu")
-        max_mu.add_suffix("max_mu")
-        min_mu.add_suffix("min_mu")
+        max_mu.add_suffix("_max_mu")
+        min_mu.add_suffix("_min_mu")
         log_sigma.add_suffix("_log_sigma")
         info = shallow_repr(mu.apply(lambda x: jnp.asarray(jnp.nanmean(x))))
         info = info | shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.mean(x))))

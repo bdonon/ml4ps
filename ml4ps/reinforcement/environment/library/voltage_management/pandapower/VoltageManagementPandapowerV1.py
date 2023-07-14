@@ -61,7 +61,7 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
             offset = 0.0
         else:
             offset = 1.0
-        scale = 0.05  # TODO Changed from 0.2 and 0.02, 0.08 working
+        scale = 0.2  # TODO Changed from 0.2 and 0.02, 0.08 working
         gen_vm_pu_space = spaces.Box(
             low=offset-scale, high=offset+scale, shape=(control_structure["gen"].features["vm_pu"],))
         ext_grid_vm_pu_space = spaces.Box(

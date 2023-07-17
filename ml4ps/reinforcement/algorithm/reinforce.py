@@ -248,6 +248,11 @@ class Reinforce(Algorithm):
     @partial(jit, static_argnums=(0,))
     def vmap_log_prob(self, params, obs, action):
         return vmap(self.policy.log_prob, in_axes=(None, 0, 0), out_axes=0)(params, obs, action)
+    
+    def eval(self, val_env, seed=None, max_steps=None):
+        params = self.load_best_params()
+        value, _ = eval_reward(val_env, self.policy, params, seed=seed, max_steps=max_steps)
+        return value
 
     def _policy_filename(self, folder):
         return os.path.join(folder, "policy.pkl")

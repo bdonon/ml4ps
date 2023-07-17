@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 class Algorithm(ABC):
     best_params_name :str = "best_params.pkl"
     last_params_name :str = "last_params.pkl"
+    best_params_info_name: str = 'best_params_info.json'
 
     def __init__(self, *, env, seed=None, val_env=None, test_env=None, run_dir=None,):
         pass

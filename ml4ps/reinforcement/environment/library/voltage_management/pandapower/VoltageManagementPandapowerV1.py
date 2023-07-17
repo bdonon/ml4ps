@@ -49,9 +49,11 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
     empty_control_structure = CONTROL_STRUCTURE
     empty_info_structure = None
 
-    def __init__(self, data_dir, max_steps=None, cost_hparams=None, additive=True, init_cost=None):
+    def __init__(self, data_dir, max_steps=None, cost_hparams=None, additive=True, init_cost=None, vm_pu_min=0.9, vm_pu_max=1.1):
         self.name = "VoltageManagementPandapowerV1"
         self.additive = additive
+        self.vm_pu_min = vm_pu_min
+        self.vm_pu_max = vm_pu_max
         super().__init__(data_dir, max_steps=max_steps, cost_hparams=cost_hparams,
                          init_cost=init_cost)
 
@@ -92,7 +94,7 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
         # infos: H2MG = self.backend.get_h2mg_from_power_grid(state.power_grid, self.info_structure)
         # min_vm_pu_array = infos.hyper_edges["gen"].features["min_vm_pu"]
         # max_vm_pu_array = infos.hyper_edges["gen"].features["max_vm_pu"]
-        res.flat_array = jnp.clip(res.flat_array, a_min=0.9, a_max=1.1)
+        res.flat_array = jnp.clip(res.flat_array, a_min=self.vm_pu_min, a_max=self.vm_pu_max)
         return res
 
     def run_power_grid(self, power_grid):

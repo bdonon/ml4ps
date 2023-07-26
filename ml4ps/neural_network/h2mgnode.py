@@ -20,10 +20,25 @@ GLOBAL_DECODER_KEY = "global_decoder"
 
 MAX_INTEGER = 2147483647
 
-def smooth_activation(x, alpha=0.01):
-    return jnn.tanh(x) # TODO: Change
-    # return alpha * x + (1-alpha) * (jnp.log(1+jnp.exp(x)) - jnp.log(2))
+def smooth_activation(x, alpha=0.1): # changed from 0.01
+    return alpha * x + (1-alpha) * (jnp.log(1+jnp.exp(x)) - jnp.log(2))
 
+def identity_fn(x):
+    return x
+
+def get_activation(name, **kwargs):
+    if name == "tanh":
+        return jnn.tanh
+    elif name == "leaky_relu":
+        return jnn.leaky_relu
+    elif name == "relu":
+        return jnn.relu
+    elif name == "smooth_leaky_relu":
+        return smooth_activation
+    elif name == "identity" or name == "none":
+        return identity_fn
+    else:
+        raise ValueError("Unknown Activation function")
 
 def nan_mean_at(h, a):
     clean_a = jnp.nan_to_num(a, nan=MAX_INTEGER).astype(int)
@@ -70,12 +85,13 @@ class LocalEncoder(nn.Module):
     """Encodes local hyper-edges variables."""
     hidden_size: Sequence[int]
     out_size: int
+    activation: str
 
     @nn.compact
     def __call__(self, h2mg_in: H2MG):
         r = {}
         for k, hyper_edges in h2mg_in.local_hyper_edges.items():
-            mlp = MLP(self.hidden_size, self.out_size, smooth_activation, name="{}".format(k))
+            mlp = MLP(self.hidden_size, self.out_size, get_activation(self.activation), name="{}".format(k))
             r[k] = mlp(jnp.nan_to_num(hyper_edges.array, nan=0.))
             #r[k] = jnp.where(hyper_edges.array, jnp.nan, jnp.nan_to_num(r[k], nan=0.))
         return r
@@ -85,11 +101,12 @@ class GlobalEncoder(nn.Module):
     """Encodes global variables."""
     hidden_size: Sequence[int]
     out_size: int
+    activation: str
 
     @nn.compact
     def __call__(self, h2mg_in: H2MG):
         if h2mg_in.global_hyper_edges is not None:
-            mlp = MLP(self.hidden_size, self.out_size, smooth_activation, name="global")
+            mlp = MLP(self.hidden_size, self.out_size, get_activation(self.activation), name="global")
             r = mlp(jnp.nan_to_num(h2mg_in.global_hyper_edges.array, nan=0.))
             #r = jnp.where(jnp.isnan(r), jnp.nan, jnp.nan_to_num(r, nan=0.))
             return r
@@ -112,6 +129,8 @@ class LocalDynamics(nn.Module):
     """
     hidden_size: Sequence[int]
     out_size: int
+    activation: str
+    final_activation: str
 
     @nn.compact
     def __call__(self, h2mg_in: H2MG, h2mg_encoded: dict, h: dict, t: float):
@@ -120,7 +139,7 @@ class LocalDynamics(nn.Module):
         for hyper_edge_name, hyper_edges in h2mg_in.local_hyper_edges.items():
             if hyper_edges.addresses is not None:
                 for address_name, address_values in hyper_edges.addresses.items():
-                    mlp = MLP(self.hidden_size, self.out_size, jnn.tanh, name="{}-{}".format(hyper_edge_name, address_name)) # leaky or tanh
+                    mlp = MLP(self.hidden_size, self.out_size, get_activation(self.activation), name="{}-{}".format(hyper_edge_name, address_name)) # leaky or tanh
                     ones = jnp.ones_like(h2mg_encoded[LOCAL_KEY][hyper_edge_name])[:, :1]
                     clean_address_values = jnp.nan_to_num(address_values, nan=MAX_INTEGER).astype(int)
                     nn_input = jnp.concatenate([
@@ -131,11 +150,11 @@ class LocalDynamics(nn.Module):
                         t * ones
                     ], axis=1)
                     # nn_input = nn.LayerNorm()(nn_input)
-                    r = jnn.tanh(mlp(nn_input)) # leaky_relu or tanh
+                    r = get_activation(self.activation)(mlp(nn_input)) # leaky_relu or tanh
                     # r = jnp.where(jnp.isnan(r), jnp.nan, jnp.nan_to_num(r, nan=0.))
                     delta_sum = delta_sum.at[clean_address_values].add(r, mode='drop')
                     count += 1
-        return jnn.tanh(delta_sum) # leaky_relu or tanh
+        return get_activation(self.final_activation)(delta_sum) # leaky_relu or tanh
 
 
 class LocalDecoder(nn.Module):
@@ -155,6 +174,7 @@ class LocalDecoder(nn.Module):
     """
     hidden_size: Sequence[int]
     local_output_features_dict: dict
+    activation: str
 
     @nn.compact
     def __call__(self, h2mg_in: H2MG, h2mg_encoded: dict, h: dict):
@@ -175,7 +195,7 @@ class LocalDecoder(nn.Module):
             # nn_input == nn.LayerNorm()(nn_input)
             features_dict = {}
             for feature_name in feature_list:
-                mlp = MLP(self.hidden_size, 1, smooth_activation, name="{}-{}".format(hyper_edges_name, feature_name))
+                mlp = MLP(self.hidden_size, 1, get_activation(self.activation), name="{}-{}".format(hyper_edges_name, feature_name))
                 features_dict[feature_name] = jnp.where(isnan_mask, jnp.nan, mlp(nn_input)[:, 0])
             r[hyper_edges_name] = HyperEdges(features=features_dict)
         return r
@@ -194,6 +214,7 @@ class GlobalDynamics(nn.Module):
     """
     hidden_size: Sequence[int]
     out_size: int
+    activation: str
 
     @nn.compact
     def __call__(self, h2mg_in: H2MG, h2mg_encoded: dict, h: dict, t: float):
@@ -204,7 +225,7 @@ class GlobalDynamics(nn.Module):
             t * jnp.ones([1, 1])
         ], axis=1)
         # nn_input = nn.LayerNorm()(nn_input)
-        r = MLP(self.hidden_size, self.out_size, smooth_activation)(nn_input) # leaky_relu or tanh
+        r = MLP(self.hidden_size, self.out_size, get_activation(self.activation))(nn_input) # leaky_relu or tanh
         # r = jnp.where(jnp.isnan(r), jnp.nan, jnp.nan_to_num(r, nan=0.))
         return r
 
@@ -217,6 +238,7 @@ class GlobalDecoder(nn.Module):
     """
     hidden_size: Sequence[int]
     global_output_features_list: list
+    activation: str
 
     @nn.compact
     def __call__(self, h2mg_in, h2mg_encoded, h):
@@ -228,7 +250,7 @@ class GlobalDecoder(nn.Module):
         #     [h[GLOBAL_KEY], h2mg_encoded[GLOBAL_KEY]], axis=1)
         # nn_input == nn.LayerNorm()(nn_input)
         for k in self.global_output_features_list:
-            mlp = MLP(self.hidden_size, 1, smooth_activation, name="{}".format(k), use_bias=True)
+            mlp = MLP(self.hidden_size, 1, get_activation(self.activation), name="{}".format(k), use_bias=True)
             features_dict[k] = mlp(nn_input)[:, 0]
 
             # features_dict[k] = jnp.mean(nn_input, axis=0, keepdims=True)[:, 0]
@@ -298,7 +320,10 @@ class H2MGNODE(flax.struct.PyTreeNode):
              stepsize_controller_name: str = "ConstantStepSize",
              stepsize_controller_kwargs: dict = None,
              adjoint_name: str = "RecursiveCheckpointAdjoint",
-             max_steps: int = 4096):
+             max_steps: int = 4096,
+             enc_dec_activation: str = "tanh",
+             dyn_activation: str = "tanh",
+             dyn_final_activation: str = "tanh"):
 
         if local_encoder_hidden_size is None:
             local_encoder_hidden_size = [32, 32]
@@ -321,22 +346,22 @@ class H2MGNODE(flax.struct.PyTreeNode):
         if stepsize_controller_kwargs is None:
             stepsize_controller_kwargs = dict()
 
-        local_encoder = LocalEncoder(local_encoder_hidden_size, local_encoder_output)
-        global_encoder = GlobalEncoder(global_encoder_hidden_size, global_encoder_output)
-        local_dynamics = LocalDynamics(local_dynamics_hidden_size, local_latent_dimension)
-        global_dynamics = GlobalDynamics(global_dynamics_hidden_size, global_latent_dimension)
+        local_encoder = LocalEncoder(local_encoder_hidden_size, local_encoder_output, activation=enc_dec_activation)
+        global_encoder = GlobalEncoder(global_encoder_hidden_size, global_encoder_output, activation=enc_dec_activation)
+        local_dynamics = LocalDynamics(local_dynamics_hidden_size, local_latent_dimension, activation=dyn_activation, final_activation=dyn_final_activation)
+        global_dynamics = GlobalDynamics(global_dynamics_hidden_size, global_latent_dimension, activation=dyn_activation)
         if any([(he_struct.features is not None) for he_struct in output_structure.local_hyper_edges_structure.values()]):
             local_output_features_dict = {k: list(he_struct.features.keys())
                 for k, he_struct in output_structure.local_hyper_edges_structure.items()
                 if he_struct.features is not None}
-            local_decoder = LocalDecoder(local_decoder_hidden_size, local_output_features_dict)
+            local_decoder = LocalDecoder(local_decoder_hidden_size, local_output_features_dict, activation=enc_dec_activation)
 
         else:
             local_decoder = None
         if output_structure.global_hyper_edges_structure is not None:
             if output_structure.global_hyper_edges_structure.features is not None:
                 global_decoder = GlobalDecoder(global_decoder_hidden_size,
-                                               global_output_features_list=list(output_structure.global_hyper_edges_structure.features.keys()))
+                                               global_output_features_list=list(output_structure.global_hyper_edges_structure.features.keys()), activation=enc_dec_activation)
         else:
             global_decoder = None
         solver = eval("diffrax.{}()".format(solver_name))

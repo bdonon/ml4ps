@@ -109,13 +109,18 @@ class ContinuousPolicy(BasePolicy):
         # return jax.numpy.clip(log_sigma, a_min=jnp.log(self.clip_sigma))
         return jax.numpy.clip((1-eps)*log_sigma, a_min=jnp.log(self.clip_sigma)) + eps*log_sigma # soft clipping
 
-    def _postprocess_distrib_params(self, distrib_params: H2MG):
+    def _postprocess_distrib_params(self, distrib_params: H2MG, env=None):
+        if env is not None:
+            action_space = env.action_space
+        else:
+            action_space = self.action_space
+        mu_0, log_sigma_0 = self._build_postprocessor(action_space)
         mu = distrib_params.extract_from_structure(self.mu_structure)
         log_sigma = distrib_params.extract_from_structure(self.log_sigma_structure)
         mu_norm = H2MG.from_structure(self.action_space.structure)
-        mu_norm.flat_array = jnp.exp(self.log_sigma_0.flat_array) * mu.flat_array + self.mu_0.flat_array
+        mu_norm.flat_array = jnp.exp(log_sigma_0.flat_array) * mu.flat_array + mu_0.flat_array
         log_sigma_norm = H2MG.from_structure(self.action_space.structure)
-        log_sigma_norm.flat_array = log_sigma.flat_array + self.log_sigma_0.flat_array
+        log_sigma_norm.flat_array = log_sigma.flat_array + log_sigma_0.flat_array
         if self.clip_sigma is not None and isinstance(self.clip_sigma, Number):
             log_sigma_norm.flat_array = self._clip_log_sigma(log_sigma_norm.flat_array)
         if self.cst_sigma is not None and isinstance(self.cst_sigma, Number):
@@ -135,20 +140,20 @@ class ContinuousPolicy(BasePolicy):
         # TODO
         pass
 
-    def log_prob(self, params, observation, action):
-        mu_norm, log_sigma_norm = self.forward(params, observation)
+    def log_prob(self, params, observation, action, env=None):
+        mu_norm, log_sigma_norm = self.forward(params, observation, env=env)
         return h2mg_normal_logprob(action, mu_norm, log_sigma_norm), (mu_norm, log_sigma_norm)
     
-    def forward(self, params, observation):
+    def forward(self, params, observation, env=None):
         observation = manual_normalization(observation) # TODO: remove this
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)
-        mu, log_sigma = self._postprocess_distrib_params(distrib_params)
+        mu, log_sigma = self._postprocess_distrib_params(distrib_params, env=env)
         return mu, log_sigma
     
-    def _sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1):
+    def _sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1, env=None):
         """Sample an action and return it together with the corresponding log probability."""
-        mu_norm, log_sigma_norm = self.forward(params, observation)
+        mu_norm, log_sigma_norm = self.forward(params, observation, env=env)
         if n_action <= 1:
             action = h2mg_normal_sample(rng, mu_norm, log_sigma_norm, deterministic=deterministic)
             log_prob = h2mg_normal_logprob(action, mu_norm, log_sigma_norm)
@@ -158,14 +163,14 @@ class ContinuousPolicy(BasePolicy):
         info = self.compute_info(mu_norm, log_sigma_norm)
         return action, log_prob, info, mu_norm, log_sigma_norm
     
-    def sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1):
+    def sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1, env=None):
         """Sample an action and return it together with the corresponding log probability."""
-        action, log_prob, info, _, _ = self._sample(params, observation, rng, deterministic, n_action)
+        action, log_prob, info, _, _ = self._sample(params, observation, rng, deterministic, n_action, env=env)
         return action, log_prob, info
     
-    @partial(jit, static_argnums=(0, 4, 5))
-    def vmap_sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1):
-        action, log_prob, _, mu, log_sigma = vmap(self._sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0, 0, 0))(params, observation, rng, deterministic, n_action)
+    @partial(jit, static_argnums=(0, 4, 5, 6))
+    def vmap_sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1, env=None):
+        action, log_prob, _, mu, log_sigma = vmap(self._sample, in_axes=(None, 0, 0, None, None, None), out_axes=(0, 0, 0, 0, 0))(params, observation, rng, deterministic, n_action, env)
         info = self.compute_info(mu, log_sigma)
         batch_info = self.compute_batch_info(mu, log_sigma)
         return action, log_prob, info | batch_info
@@ -181,7 +186,7 @@ class ContinuousPolicy(BasePolicy):
         min_mu.add_suffix("_min_mu")
         log_sigma.add_suffix("_log_sigma")
         info = shallow_repr(mu.apply(lambda x: jnp.asarray(jnp.nanmean(x))))
-        info = info | shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.mean(x))))
+        info = info | shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.nanmean(x))))
         info = info | shallow_repr(max_mu.apply(lambda x: jnp.asarray(jnp.nanmax(x))))
         info = info | shallow_repr(min_mu.apply(lambda x: jnp.asarray(jnp.nanmin(x))))
         return info
@@ -190,11 +195,11 @@ class ContinuousPolicy(BasePolicy):
     def compute_batch_info(mu: H2MG, log_sigma: H2MG) -> Dict[str, float]:
         _mu = deepcopy(mu)
         mu.add_suffix("_mu_batch_std")
-        mu_std_accross_batch = shallow_repr(mu.apply(lambda x: jnp.asarray(jnp.std(x, axis=0).mean())))
+        mu_std_accross_batch = shallow_repr(mu.apply(lambda x: jnp.asarray(jnp.nanstd(x, axis=0).mean())))
         _mu.add_suffix("_mu_gen_std")
-        mu_std_accross_gen = shallow_repr(_mu.apply(lambda x: jnp.asarray(jnp.std(x, axis=1).mean())))
+        mu_std_accross_gen = shallow_repr(_mu.apply(lambda x: jnp.asarray(jnp.nanstd(x, axis=1).mean())))
         log_sigma.add_suffix("_log_sigma_std")
-        log_sigma_std_accross_batch = shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.std(x, axis=0).mean())))
+        log_sigma_std_accross_batch = shallow_repr(log_sigma.apply(lambda x: jnp.asarray(jnp.nanstd(x, axis=0).mean())))
         return mu_std_accross_batch | log_sigma_std_accross_batch | mu_std_accross_gen
 
     def save(self, filename):
@@ -222,3 +227,19 @@ class ContinuousPolicy(BasePolicy):
     def entropy(self, log_prob_info: Dict, batch=True):
         (mu_norm, log_sigma_norm) = log_prob_info
         return jnp.zeros_like(log_sigma_norm.flat_array)
+
+    def log_sigma_sum(self, h2gm_node):
+        # assert(h2gm_node.flat_array.shape == (23,))
+        # assert(h2gm_node.flat_array.shape == (n_objects,))
+        return jnp.sum(h2gm_node.flat_array)
+
+    def entropy(self, log_prob_info: Dict, batch=True, matrix=False, axis=0):
+        (mu_norm, log_sigma_norm) = log_prob_info
+        if matrix:
+            # (na, bs, n_obj)
+            return vmap(vmap(self.log_sigma_sum, in_axes=0, out_axes=0), in_axes=0, out_axes=0)(log_sigma_norm).mean()
+        if batch:
+            # (bs, n_obj)
+            return vmap(self.log_sigma_sum, in_axes=0, out_axes=0)(log_sigma_norm).mean()
+        else:
+            raise ValueError

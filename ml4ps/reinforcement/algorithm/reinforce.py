@@ -28,12 +28,16 @@ class ReinforceTrainState(train_state.TrainState):
     pass
 
 
-def create_train_state(*, single_obs, module, apply_fn, rng, learning_rate, clip_norm=0.1) -> ReinforceTrainState:
+def create_train_state(*, single_obs, module, apply_fn, rng, learning_rate, clip_norm=0.1, lr_schedule_kwargs=None) -> ReinforceTrainState:
     """Creates an initial `TrainState`."""
     params = module.init(rng, single_obs)
     # TODO: clip_by_values ?
+    if lr_schedule_kwargs is not None:
+        lr_schedule = optax.exponential_decay(**lr_schedule_kwargs)
+    else:
+        lr_schedule = learning_rate
     tx = optax.chain(optax.clip_by_global_norm(clip_norm),
-                     optax.adam(learning_rate=learning_rate))
+                     optax.adam(learning_rate=lr_schedule))
     # tx = optax.MultiSteps(tx, every_k_schedule=2) # TODO: REMOVE
     return ReinforceTrainState.create(apply_fn=apply_fn, params=params, tx=tx)
 
@@ -53,9 +57,9 @@ class Reinforce(Algorithm):
 
     def __init__(self, *, env: PSBaseEnv, seed=0, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir,
                 max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None,
-                policy_args={}, nn_args={}, clip_norm, learning_rate, n_actions=5, baseline_learning_rate=None,
+                policy_args={}, nn_args={}, clip_norm, learning_rate, lr_schedule_kwargs=None, n_actions=5, baseline_learning_rate=None,
                 baseline_nn_type=None, baseline_nn_args=None, init_cost=None, nn_baseline_steps=None,
-                normalize_baseline_rewards=False, gradient_steps=1) -> 'Reinforce':
+                normalize_baseline_rewards=False, gradient_steps=1, update_cst_sigma=None, update_cst_sigma_kwargs={}, alpha_entropy=None, alpha_std=None, mixed_std=False, exp_decay_std=None, clip_rewards=None, reward_normalization="normal") -> 'Reinforce':
         self.best_params_path = os.path.join(run_dir, self.best_params_name)
         self.last_params_path = os.path.join(run_dir, self.last_params_name)
         self.policy_type = policy_type
@@ -70,6 +74,7 @@ class Reinforce(Algorithm):
         self.logger = logger
         self.clip_norm = clip_norm
         self.learning_rate = learning_rate
+        self.lr_schedule_kwargs = lr_schedule_kwargs
         self.baseline_learning_rate = baseline_learning_rate
         self.baseline_nn_type = baseline_nn_type
         self.baseline_nn_args = baseline_nn_args
@@ -81,11 +86,21 @@ class Reinforce(Algorithm):
         self.init_cost = init_cost
         self.normalize_baseline_rewards = normalize_baseline_rewards
         self.gradient_steps = gradient_steps
+        # only for continuous policies parametrized by sigma
+        self.update_cst_sigma = update_cst_sigma
+        self.update_cst_sigma_kwargs = update_cst_sigma_kwargs
+        self.alpha_entropy = alpha_entropy
+        self.alpha_std  = alpha_std
+        self.mixed_std = mixed_std
+        self.exp_decay_std = exp_decay_std
+        self.alpha_exp_decay_std = 1
+        self.clip_rewards = clip_rewards
+        self.reward_normalization = reward_normalization
 
     def init(self):
         single_obs, _ = self.val_env.reset()
         self.train_state = create_train_state(single_obs=single_obs, module=self.policy, apply_fn=self.vmap_sample, rng=PRNGKey(
-            self.seed), learning_rate=self.learning_rate, clip_norm=self.clip_norm)
+            self.seed), learning_rate=self.learning_rate, clip_norm=self.clip_norm, lr_schedule_kwargs=self.lr_schedule_kwargs)
         self.init_baseline()
 
     @property
@@ -125,8 +140,26 @@ class Reinforce(Algorithm):
             rewards.append(baseline_reward)
         rewards = jnp.stack(rewards, axis=0)
         if self.normalize_baseline_rewards:
-            rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (jnp.std(rewards, axis=0, keepdims=True) + 1e-8)
-            rewards = jnp.clip(rewards, a_min=-3, a_max=3)
+            if self.alpha_std is not None:
+                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (self.alpha_std * jnp.std(rewards, axis=0, keepdims=True) + 1)
+            elif self.mixed_std:
+                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (jnp.std(rewards, axis=0, keepdims=True)/2 + jnp.std(rewards, axis=0, keepdims=True).mean()/2 + 1e-8)
+            elif self.exp_decay_std is not None:
+                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (1 + self.alpha_exp_decay_std * (jnp.std(rewards, axis=0, keepdims=True)-1) + 1e-8)
+            elif self.reward_normalization == "normal":
+                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (jnp.std(rewards, axis=0, keepdims=True) + 1e-8)
+            elif self.reward_normalization == "minmax":
+                # TODO
+                _min_rewards = jnp.min(rewards, axis=0, keepdims=True)
+                _max_rewards = jnp.max(rewards, axis=0, keepdims=True)
+                rewards = 2 * (rewards - _min_rewards) / (_max_rewards - _min_rewards + 1e-8) - 1
+            else:
+                raise ValueError("Wrong reward normalization configuration")
+
+            # rewards = jnp.clip(rewards, a_min=-3, a_max=3)
+        if self.clip_rewards is not None:
+            rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True))
+            rewards = jnp.clip(rewards, a_min=-self.clip_rewards, a_max=self.clip_rewards)
         if self.baseline == "mean":
             baseline_rewards = jnp.mean(rewards, axis=0, keepdims=True)
         elif self.baseline == "median":
@@ -145,7 +178,7 @@ class Reinforce(Algorithm):
             next_obs, info = self.env.reset(
                 options={"load_new_power_grid": True})
         for _ in range(self.gradient_steps):
-            value, grad = self.value_and_grad_fn(
+            (value, loss_info), grad = self.value_and_grad_fn(
                 state.params, batch, baseline_actions, b_rewards, baseline, multiple_actions=True)
             state = state.apply_gradients(grads=grad)
         algo_info = {"grad_norm": optax._src.linear_algebra.global_norm(grad),
@@ -153,7 +186,10 @@ class Reinforce(Algorithm):
                      "log_probs": jnp.mean(log_probs),
                      "baseline": jnp.mean(baseline),
                      "mean_baseline_reward": jnp.mean(b_rewards),
-                     "std_baseline_reward": jnp.std(b_rewards, axis=0).mean()}
+                     "std_baseline_reward": jnp.std(b_rewards, axis=0).mean()} | loss_info
+        if self.exp_decay_std is not None:
+            algo_info =  algo_info | {"alpha_exp_decay_std": self.alpha_exp_decay_std, "exp_decay_std": self.exp_decay_std}
+            self.alpha_exp_decay_std *= self.exp_decay_std
         return state, next_obs, rewards, policy_info, env_info, algo_info
 
     def validation_step(self, state, batch, *, rng, batch_size):
@@ -165,6 +201,16 @@ class Reinforce(Algorithm):
     @property
     def policy_params(self):
         return self.train_state.params
+    
+    def _update_cst_sigma(self, step, alpha=1, period=1, **kwargs):
+        if self.policy_type != "continuous":
+            raise ValueError(f"Update sigma only for continuous policies, not {self.policy_type}")
+        if self.update_cst_sigma == "exponential_decay":
+            print(f"Updating sigma {self.policy.cst_sigma}")
+            self.policy.cst_sigma = np.power(alpha, 1/period) * self.policy.cst_sigma
+            print(f"Updated sigma {self.policy.cst_sigma}")
+        else:
+            raise NotImplementedError(f"{self.update_cst_sigma} not implemented.")
 
     def learn(self, logger=None, seed=None, batch_size=None, n_iterations=1000, validation_interval=None):
         best_mean_cum_reward = -np.inf
@@ -189,6 +235,9 @@ class Reinforce(Algorithm):
             rng_key, subkey = split(rng_key)
             self.train_state, obs, rewards, policy_info, env_info, algo_info = self.train_step(
                 self.train_state, obs, rng=subkey, batch_size=batch_size, step=i)
+            
+            if self.update_cst_sigma is not None:
+                self._update_cst_sigma(step=i, **self.update_cst_sigma_kwargs)
 
             # Logging
             logger.log_dicts(i, "train_", policy_info, env_info, algo_info)
@@ -230,18 +279,30 @@ class Reinforce(Algorithm):
 
     @partial(jit, static_argnums=(0, 6))
     def value_and_grad_fn(self, params, observations, actions, rewards, baseline=0, multiple_actions=False):
-        return value_and_grad(self.loss_fn)(params, observations, actions, rewards, baseline, multiple_actions)
+        return value_and_grad(self.loss_fn, has_aux=True)(params, observations, actions, rewards, baseline, multiple_actions)
 
     def loss_fn(self, params, observations, actions, rewards, baseline=0, multiple_actions: bool = False):
         if multiple_actions:
-            log_probs, info = vmap(self.vmap_log_prob, in_axes=(
+            log_probs, log_prob_info = vmap(self.vmap_log_prob, in_axes=(
                 None, None, 0), out_axes=0)(params, observations, actions)
         else:
-            log_probs, info = self.vmap_log_prob(
+            log_probs, log_prob_info = self.vmap_log_prob(
                 params, observations, action=actions)
-        return - (log_probs * (rewards - baseline)).mean()
+        reinforce_loss =  - (log_probs * (rewards - baseline)).mean()
+        loss =  reinforce_loss
+        # if self.entropy_loss is not None:
+        entropy = self.policy.entropy(log_prob_info, batch=True, matrix=True, axis=1)
+        # assert(log_probs.shape == (4,8))
+        # assert(entropy.shape == (3,7))
+        if self.alpha_entropy is not None:
+            entropy_loss = - self.alpha_entropy * entropy
+            loss += entropy_loss
+        else:
+            entropy = 0
+            entropy_loss = 0
+        return loss, {"entropy": entropy, "entropy_loss": entropy_loss, "reinforce_loss": reinforce_loss}
 
-    @partial(jit, static_argnums=(0, 4, 5))
+    # @partial(jit, static_argnums=(0, 4, 5))
     def vmap_sample(self, params, obs, seed, deterministic=False, n_action=1) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
         return self.policy.vmap_sample(params, obs, seed, deterministic, n_action)
 

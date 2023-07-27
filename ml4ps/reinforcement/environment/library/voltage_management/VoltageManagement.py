@@ -68,6 +68,7 @@ class VoltageManagement(PSBaseEnv, ABC):
         self.lmb_i = cost_hparams["lmb_i"]
         self.lmb_q = cost_hparams["lmb_q"]
         self.lmb_v = cost_hparams["lmb_v"]
+        self.lmb_j = cost_hparams["lmb_j"]
         self.eps_i = cost_hparams["eps_i"]
         self.eps_q = cost_hparams["eps_q"]
         self.eps_v = cost_hparams["eps_v"]
@@ -155,7 +156,7 @@ class VoltageManagement(PSBaseEnv, ABC):
             c_q = self.compute_reactive_cost(power_grid, self.eps_q)
             c_v = self.compute_voltage_cost(power_grid, self.eps_v)
             c_j = self.compute_joule_cost(power_grid)
-            return self.lmb_i * c_i + self.lmb_q * c_q + self.lmb_v * c_v + c_j
+            return self.lmb_i * c_i + self.lmb_q * c_q + self.lmb_v * c_v + self.lmb_j * c_j
 
     def get_feature_names(self, space: spaces.Space) -> Dict:
         """Returns a dict of list of feature names for each object class."""
@@ -168,7 +169,7 @@ class VoltageManagement(PSBaseEnv, ABC):
     @property
     def default_cost_hparams(self) -> Dict:
         # TODO c_div changeed from 1.0, 50 = 1*5*10
-        return {"lmb_i": 100.0, "lmb_q": 1.0, "lmb_v": 100.0, "eps_i": .02, "eps_q": 0.5, "eps_v": .02, "c_div": 1.0}
+        return {"lmb_i": 100.0, "lmb_q": 1.0, "lmb_v": 100.0, "lmb_j": 1, "eps_i": .02, "eps_q": 0.5, "eps_v": .02, "c_div": 1.0}
 
     @abstractmethod
     def run_power_grid(self, power_grid):

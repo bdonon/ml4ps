@@ -4,7 +4,7 @@ import numpy as np
 import tqdm
 from jax import jit
 from jax.random import PRNGKey, split
-from ml4ps.logger import dict_mean, mean_of_dicts
+from ml4ps.logger import dict_mean, mean_of_dicts, max_of_dicts, min_of_dicts
 from ml4ps.reinforcement.environment import PSBaseEnv, TestEnv
 from ml4ps.reinforcement.policy import BasePolicy
 
@@ -13,11 +13,11 @@ from ml4ps.reinforcement.policy import BasePolicy
 def test_policy(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed, output_dir: str, max_steps=None):
     test_env = TestEnv(single_env, save_folder=output_dir, max_steps=max_steps)
     obs, info = test_env.reset()
-    policy_sample = jit(policy.sample, static_argnums=(3,))
+    policy_sample = jit(policy.sample, static_argnums=(3,5))
     step = 0
     with tqdm.tqdm(total=test_env.maxlen) as pbar:
         while True:
-            action, _, _ = policy_sample(params, obs, seed, deterministic=True)
+            action, _, _ = policy_sample(params, obs, seed, deterministic=True, env=test_env)
             obs, reward, terminated, truncated, info = test_env.step(action)
             step += 1
             if terminated or truncated:
@@ -33,7 +33,7 @@ def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: P
     obs, info = single_env.reset()
     init_step = single_env.state.power_grid.shunt.step
     # init_setpooints = single_env.state.power_grid.gen.vm_pu
-    policy_sample = jit(policy.sample, static_argnums=(3,))
+    policy_sample = jit(policy.sample, static_argnums=(3,5))
     i = 0
     step = 0
     cumulative_reward = 0
@@ -47,14 +47,15 @@ def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: P
     stats = {}
     n = min(n, single_env.maxlen) if n is not None else single_env.maxlen
     was_reset = True
+    last_actions_infos = []
     with tqdm.tqdm(total=n, leave=(save_folder is not None)) as pbar:
         while i < n:
             if was_reset:
                 init_cost.append(single_env.state.cost)
             seed, val_seed = split(seed)
             # TODO: seed is not used in deterministic TODO change back to deterministic=True
-            action, _, _ = policy_sample(
-                params, obs, val_seed, deterministic=True)
+            action, _, action_infos = policy_sample(
+                params, obs, val_seed, deterministic=True, env=single_env)
             obs, reward, terminated, truncated, info = single_env.step(action)
             was_reset = False
             rewards.append(reward)
@@ -65,6 +66,7 @@ def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: P
                 shunt_delta = last_action_analysis(
                     single_env.state.power_grid, init_step=init_step)
                 shunt_deltas.append(shunt_delta)
+                last_actions_infos.append(action_infos)
                 stats[single_env.state.power_grid.name] = cumulative_reward
                 last_infos.append(dict_mean(info, nanmean=False))
                 cumulative_rewards.append(cumulative_reward)
@@ -93,6 +95,13 @@ def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: P
     else:
         stats ={}
 
+    mean_last_action = mean_of_dicts(last_actions_infos)
+    max_last_action = max_of_dicts(last_actions_infos)
+    min_last_action = min_of_dicts(last_actions_infos)
+    mean_last_action = {"val_mean_action_" + k: v for (k, v) in mean_last_action.items()}
+    max_last_action = {"val_max_action_" + k: v for (k, v) in max_last_action.items()}
+    min_last_action = {"val_min_action_" + k: v for (k, v) in min_last_action.items()}
+
     cumulative_rewards = np.array(cumulative_rewards)
     last_infos_dict = mean_of_dicts(last_infos)
     last_infos_dict = {"val_" + k: v for (k, v) in last_infos_dict.items()}
@@ -107,7 +116,7 @@ def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: P
                                          "pos_val_cumulative_reward": np.mean(cumulative_rewards >= 0),
                                          "init_cost": np.mean(init_cost), "max_init_cost": np.max(init_cost),
                                          "min_init_cost": np.min(init_cost), "shunt_deltas": np.mean(shunt_deltas)} | \
-        last_infos_dict | stats
+        last_infos_dict | stats | mean_last_action | max_last_action | min_last_action
 
 
 def last_action_analysis(power_grid, init_step=None, init_setpoints=None):

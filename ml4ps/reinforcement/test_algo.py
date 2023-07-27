@@ -44,6 +44,7 @@ def test_algo(folder, save_folder: str, algorithm: Algorithm=None, test_env_name
             os.mkdir(save_path)
         value, eval_info = eval_reward(test_env, policy, params, seed=0, max_steps=cfg.max_steps, save_folder=save_path)
         test_env.close()
+        print("Value: ", value)
 
         with open(os.path.join(save_path, 'info.json'), 'w') as f:
             json.dump({"training_step": params_info.get("step"), "validation_value": params_info.get("value"),

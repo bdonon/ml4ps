@@ -16,6 +16,7 @@ from ml4ps.reinforcement.algorithm import get_algorithm
 
 
 OmegaConf.register_new_resolver("add", lambda x, y: x+y)
+OmegaConf.register_new_resolver("sub", lambda x, y: x-y)
 OmegaConf.register_new_resolver("mul", lambda x, y: int(x*y))
 
 

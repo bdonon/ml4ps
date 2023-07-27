@@ -93,7 +93,7 @@ class LocalEncoder(nn.Module):
         for k, hyper_edges in h2mg_in.local_hyper_edges.items():
             mlp = MLP(self.hidden_size, self.out_size, get_activation(self.activation), name="{}".format(k))
             r[k] = mlp(jnp.nan_to_num(hyper_edges.array, nan=0.))
-            #r[k] = jnp.where(hyper_edges.array, jnp.nan, jnp.nan_to_num(r[k], nan=0.))
+            r[k] = jnp.where(jnp.isnan(r[k]), jnp.nan, jnp.nan_to_num(r[k], nan=0.))
         return r
 
 
@@ -108,7 +108,7 @@ class GlobalEncoder(nn.Module):
         if h2mg_in.global_hyper_edges is not None:
             mlp = MLP(self.hidden_size, self.out_size, get_activation(self.activation), name="global")
             r = mlp(jnp.nan_to_num(h2mg_in.global_hyper_edges.array, nan=0.))
-            #r = jnp.where(jnp.isnan(r), jnp.nan, jnp.nan_to_num(r, nan=0.))
+            r = jnp.where(jnp.isnan(r), jnp.nan, jnp.nan_to_num(r, nan=0.))
             return r
         else:
             return jnp.array([[]])
@@ -151,7 +151,7 @@ class LocalDynamics(nn.Module):
                     ], axis=1)
                     # nn_input = nn.LayerNorm()(nn_input)
                     r = get_activation(self.activation)(mlp(nn_input)) # leaky_relu or tanh
-                    # r = jnp.where(jnp.isnan(r), jnp.nan, jnp.nan_to_num(r, nan=0.))
+                    r = jnp.where(jnp.isnan(r), jnp.nan, jnp.nan_to_num(r, nan=0.))
                     delta_sum = delta_sum.at[clean_address_values].add(r, mode='drop')
                     count += 1
         return get_activation(self.final_activation)(delta_sum) # leaky_relu or tanh
@@ -226,7 +226,7 @@ class GlobalDynamics(nn.Module):
         ], axis=1)
         # nn_input = nn.LayerNorm()(nn_input)
         r = MLP(self.hidden_size, self.out_size, get_activation(self.activation))(nn_input) # leaky_relu or tanh
-        # r = jnp.where(jnp.isnan(r), jnp.nan, jnp.nan_to_num(r, nan=0.))
+        r = jnp.where(jnp.isnan(r), jnp.nan, jnp.nan_to_num(r, nan=0.))
         return r
 
 
@@ -242,7 +242,7 @@ class GlobalDecoder(nn.Module):
 
     @nn.compact
     def __call__(self, h2mg_in, h2mg_encoded, h):
-        # isnan_mask = jnp.isnan(h2mg_in.global_hyper_edges.array[:,0])
+        isnan_mask = jnp.isnan(h2mg_in.global_hyper_edges.array[:,0])
         features_dict = {}
         nn_input = jnp.concatenate(
             [nan_mean_at(h[LOCAL_KEY], h2mg_in.all_addresses_array), h[GLOBAL_KEY], h2mg_encoded[GLOBAL_KEY]], axis=1)
@@ -257,7 +257,7 @@ class GlobalDecoder(nn.Module):
 
             # features_dict[k] = h[GLOBAL_KEY][:, 0]
 
-            # features_dict[k] = jnp.where(isnan_mask, jnp.nan, mlp(nn_input)[:, 0])
+            features_dict[k] = jnp.where(isnan_mask, jnp.nan, mlp(nn_input)[:, 0])
         return HyperEdges(features=features_dict)
 
 

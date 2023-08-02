@@ -90,10 +90,12 @@ def main(cfg):
     # Learning loop
     algorithm.learn(logger=logger, seed=cfg.seed,
                     batch_size=cfg.batch_size, **cfg.learn)
-    env.close()
+    
 
     # Save
     algorithm.save(run_dir)
+
+    env.close()
 
     # Evaluation
     value = algorithm.test(test_env=test_env, res_dir=run_dir, **cfg.test)

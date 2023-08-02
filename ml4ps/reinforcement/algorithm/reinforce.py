@@ -202,13 +202,13 @@ class Reinforce(Algorithm):
     def policy_params(self):
         return self.train_state.params
     
-    def _update_cst_sigma(self, step, alpha=1, period=1, **kwargs):
+    def _update_cst_sigma(self, step, alpha: float=1, period=1, end_sigma: float=None, **kwargs):
         if self.policy_type != "continuous":
             raise ValueError(f"Update sigma only for continuous policies, not {self.policy_type}")
         if self.update_cst_sigma == "exponential_decay":
-            print(f"Updating sigma {self.policy.cst_sigma}")
             self.policy.cst_sigma = np.power(alpha, 1/period) * self.policy.cst_sigma
-            print(f"Updated sigma {self.policy.cst_sigma}")
+            if end_sigma is not None and end_sigma > self.policy.cst_sigma:
+                self.policy.cst_sigma = max(self.policy.cst_sigma, end_sigma)
         else:
             raise NotImplementedError(f"{self.update_cst_sigma} not implemented.")
 
@@ -226,8 +226,6 @@ class Reinforce(Algorithm):
         best_mean_cum_reward = mean_cum_reward
         logger.log_metrics_dict(
                     {"val_cumulative_reward": mean_cum_reward} | eval_infos, step=0)
-        last_step = -1
-        last_value = -np.inf
         self.save_best_params(
                         self.run_dir, self.policy_params, step=-1, value=best_mean_cum_reward)
         for i in tqdm(range(n_iterations)):
@@ -246,8 +244,6 @@ class Reinforce(Algorithm):
             if i % validation_interval == (validation_interval - 1) and self.val_env is not None:
                 self.val_env.reset()
                 mean_cum_reward, eval_infos = self.eval_reward()
-                last_value = mean_cum_reward
-                last_step = i
                 # Save best params
                 if mean_cum_reward >= best_mean_cum_reward:
                     best_mean_cum_reward = mean_cum_reward
@@ -256,7 +252,7 @@ class Reinforce(Algorithm):
                 logger.log_metrics_dict(
                     {"val_cumulative_reward": mean_cum_reward} | eval_infos, i)
         self.save_last_params(self.run_dir, self.policy_params,
-                              step=last_step, value=last_value)
+                              step=i, value=mean_cum_reward)
 
     def test(self, test_env, res_dir, test_name=None, max_steps=None):
         test_name = "test_best"

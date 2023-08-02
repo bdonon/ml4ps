@@ -17,21 +17,25 @@ class BasePolicy(ABC):
     def init(self, rng, observation):
         pass
 
-    def log_prob(self, params: Dict, observation: H2MG, action: H2MG) -> Tuple[float, Any]:
+    def log_prob(self, params: Dict, observation: H2MG, action: H2MG, env: VectorEnv = None) -> Tuple[float, Any]:
         # return log probability of actions
         pass
 
-    def sample(self, params: dict, observation: dict, rng, deterministic: bool = False, n_action: int = 1) -> Tuple[H2MG, float, Dict]:
+    def sample(self, params: dict, observation: dict, rng, deterministic: bool = False, n_action: int = 1, env: VectorEnv = None) -> Tuple[H2MG, float, Dict]:
+        # return both sample action and corresponding log probabilities
+        pass
+    
+    def jit_sample(self, params: dict, observation: dict, rng, deterministic: bool = False, n_action: int = 1, env: VectorEnv = None) -> Tuple[H2MG, float, Dict]:
         # return both sample action and corresponding log probabilities
         pass
 
     # @partial(jit, static_argnums=(0, 4, 5))
-    def vmap_sample(self, params: dict, observation: H2MG, rng, deterministic: bool = False, n_action: int = 1) -> Tuple[H2MG, float, Dict]:
+    def vmap_sample(self, params: dict, observation: H2MG, rng, deterministic: bool = False, n_action: int = 1, env: VectorEnv = None) -> Tuple[H2MG, float, Dict]:
         # return both sample action and corresponding log probabilities for a given batch
         pass
 
     # @partial(jit, static_argnums=(0,))
-    def vmap_log_prob(self, params: Dict, obs: H2MG, action: H2MG) -> float:
+    def vmap_log_prob(self, params: Dict, obs: H2MG, action: H2MG, env: VectorEnv = None) -> float:
         return vmap(self.log_prob, in_axes=(None, 0, 0), out_axes=(0, 0))(params, obs, action)
 
     def _build_normalizer(self, env, normalizer_args=None):

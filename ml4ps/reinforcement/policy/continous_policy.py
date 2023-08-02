@@ -109,7 +109,7 @@ class ContinuousPolicy(BasePolicy):
         # return jax.numpy.clip(log_sigma, a_min=jnp.log(self.clip_sigma))
         return jax.numpy.clip((1-eps)*log_sigma, a_min=jnp.log(self.clip_sigma)) + eps*log_sigma # soft clipping
 
-    def _postprocess_distrib_params(self, distrib_params: H2MG, env=None):
+    def _postprocess_distrib_params(self, distrib_params: H2MG, env=None, cst_sigma=None):
         if env is not None:
             action_space = env.action_space
         else:
@@ -124,7 +124,7 @@ class ContinuousPolicy(BasePolicy):
         if self.clip_sigma is not None and isinstance(self.clip_sigma, Number):
             log_sigma_norm.flat_array = self._clip_log_sigma(log_sigma_norm.flat_array)
         if self.cst_sigma is not None and isinstance(self.cst_sigma, Number):
-            log_sigma_norm.flat_array = jnp.full_like(log_sigma.flat_array, jnp.log(self.cst_sigma)) # constant sigma
+            log_sigma_norm.flat_array = jnp.full_like(log_sigma.flat_array, jnp.log(cst_sigma)) # constant sigma
         # print(log_sigma_norm.flat_array))
         return mu_norm, log_sigma_norm
 
@@ -140,20 +140,25 @@ class ContinuousPolicy(BasePolicy):
         # TODO
         pass
 
-    def log_prob(self, params, observation, action, env=None):
-        mu_norm, log_sigma_norm = self.forward(params, observation, env=env)
+    def _log_prob(self, params, observation, action, env=None, cst_sigma=None):
+        mu_norm, log_sigma_norm = self._forward(params, observation, env=env, cst_sigma=cst_sigma)
         return h2mg_normal_logprob(action, mu_norm, log_sigma_norm), (mu_norm, log_sigma_norm)
     
-    def forward(self, params, observation, env=None):
-        observation = manual_normalization(observation) # TODO: remove this
+    def log_prob(self, params, observation, action, env=None):
+        return self._log_prob(params, observation, action, env, cst_sigma=self.cst_sigma)
+    
+    def vmap_log_prob(self, params: Dict, obs: H2MG, action: H2MG, env = None) -> float:
+        return jit(vmap(self._log_prob, in_axes=(None, 0, 0, None, None), out_axes=(0, 0)), static_argnums=(3,))(params, obs, action, env, self.cst_sigma)
+    
+    def _forward(self, params, observation, env=None, cst_sigma=None):
         observation = self.normalizer(observation)
         distrib_params = self.nn.apply(params, observation)
-        mu, log_sigma = self._postprocess_distrib_params(distrib_params, env=env)
+        mu, log_sigma = self._postprocess_distrib_params(distrib_params, env=env, cst_sigma=cst_sigma)
         return mu, log_sigma
     
-    def _sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1, env=None):
+    def _sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1, env=None, cst_sigma=None):
         """Sample an action and return it together with the corresponding log probability."""
-        mu_norm, log_sigma_norm = self.forward(params, observation, env=env)
+        mu_norm, log_sigma_norm = self._forward(params, observation, env=env, cst_sigma=cst_sigma)
         if n_action <= 1:
             action = h2mg_normal_sample(rng, mu_norm, log_sigma_norm, deterministic=deterministic)
             log_prob = h2mg_normal_logprob(action, mu_norm, log_sigma_norm)
@@ -165,15 +170,25 @@ class ContinuousPolicy(BasePolicy):
     
     def sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1, env=None):
         """Sample an action and return it together with the corresponding log probability."""
-        action, log_prob, info, _, _ = self._sample(params, observation, rng, deterministic, n_action, env=env)
+        action, log_prob, info, _, _ = self._sample(params, observation, rng, deterministic, n_action, env=env, cst_sigma=self.cst_sigma)
         return action, log_prob, info
-    
+
+    def jit_sample(self, params, observation: H2MG, rng, deterministic=False, n_action=1, env=None):
+        """Sample an action and return it together with the corresponding log probability."""
+        action, log_prob, info, _, _ = jit(self._sample, static_argnums=(3, 4, 5))(params, observation, rng, deterministic, n_action, env, self.cst_sigma)
+        return action, log_prob, info
+
     @partial(jit, static_argnums=(0, 4, 5, 6))
-    def vmap_sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1, env=None):
-        action, log_prob, _, mu, log_sigma = vmap(self._sample, in_axes=(None, 0, 0, None, None, None), out_axes=(0, 0, 0, 0, 0))(params, observation, rng, deterministic, n_action, env)
+    def _vmap_sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1, env=None, cst_sigma=None):
+        # action, log_prob, _, mu, log_sigma = jit(vmap(self._sample, in_axes=(None, 0, 0, None, None, None, None), out_axes=(0, 0, 0, 0, 0)), static_argnums=(3, 4, 5))(params, observation, rng, deterministic, n_action, env, self.cst_sigma) # TODO
+        action, log_prob, _, mu, log_sigma = vmap(self._sample, in_axes=(None, 0, 0, None, None, None, None), out_axes=(0, 0, 0, 0, 0))(params, observation, rng, deterministic, n_action, env, cst_sigma)
         info = self.compute_info(mu, log_sigma)
         batch_info = self.compute_batch_info(mu, log_sigma)
         return action, log_prob, info | batch_info
+    
+    
+    def vmap_sample(self, params, observation: spaces.Space, rng, deterministic=False, n_action=1, env=None):
+        return self._vmap_sample(params, observation, rng, deterministic, n_action, env, self.cst_sigma)
     
     @staticmethod
     def compute_info(mu: H2MG, log_sigma: H2MG) -> Dict[str, float]:

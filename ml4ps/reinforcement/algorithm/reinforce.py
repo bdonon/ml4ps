@@ -93,15 +93,21 @@ class Reinforce(Algorithm):
         self.alpha_std  = alpha_std
         self.mixed_std = mixed_std
         self.exp_decay_std = exp_decay_std
-        self.alpha_exp_decay_std = 1
         self.clip_rewards = clip_rewards
         self.reward_normalization = reward_normalization
-
+    
     def init(self):
         single_obs, _ = self.val_env.reset()
         self.train_state = create_train_state(single_obs=single_obs, module=self.policy, apply_fn=self.vmap_sample, rng=PRNGKey(
             self.seed), learning_rate=self.learning_rate, clip_norm=self.clip_norm, lr_schedule_kwargs=self.lr_schedule_kwargs)
         self.init_baseline()
+
+        self.step = 0
+        self.rng_key = PRNGKey(self.seed)
+        self.mean_cum_reward = -np.inf
+        self.best_mean_cum_reward = -np.inf
+        self.alpha_exp_decay_std = 1
+        self.obs = None
 
     @property
     def hparams(self):
@@ -212,7 +218,7 @@ class Reinforce(Algorithm):
         else:
             raise NotImplementedError(f"{self.update_cst_sigma} not implemented.")
 
-    def learn(self, logger=None, seed=None, batch_size=None, n_iterations=1000, validation_interval=None):
+    def learn(self, logger=None, seed=None, batch_size=None, n_iterations=1000, validation_interval=None, start_step=0):
         best_mean_cum_reward = -np.inf
         validation_interval = validation_interval or self.validation_interval
         logger = logger or self.logger
@@ -225,10 +231,17 @@ class Reinforce(Algorithm):
         mean_cum_reward, eval_infos = self.eval_reward()
         best_mean_cum_reward = mean_cum_reward
         logger.log_metrics_dict(
-                    {"val_cumulative_reward": mean_cum_reward} | eval_infos, step=0)
+                    {"val_cumulative_reward": mean_cum_reward} | eval_infos, step=start_step)
         self.save_best_params(
                         self.run_dir, self.policy_params, step=-1, value=best_mean_cum_reward)
-        for i in tqdm(range(n_iterations)):
+        for i in tqdm(range(start_step, n_iterations)):
+            # Save training state
+            self.step = i
+            self.rng_key = rng_key
+            self.mean_cum_reward = mean_cum_reward
+            self.best_mean_cum_reward = best_mean_cum_reward
+            self.obs = obs
+
             # Train step
             rng_key, subkey = split(rng_key)
             self.train_state, obs, rewards, policy_info, env_info, algo_info = self.train_step(
@@ -253,6 +266,7 @@ class Reinforce(Algorithm):
                     {"val_cumulative_reward": mean_cum_reward} | eval_infos, i)
         self.save_last_params(self.run_dir, self.policy_params,
                               step=i, value=mean_cum_reward)
+        self.save(self.run_dir)
 
     def test(self, test_env, res_dir, test_name=None, max_steps=None):
         test_name = "test_best"
@@ -329,15 +343,47 @@ class Reinforce(Algorithm):
         return os.path.join(folder, f"{filename}.pkl")
 
     def load(self, folder):
-        with open(self._hparams_filename(folder), 'rb') as f:
-            self.hparams = pickle.load(f)
-        self.policy = get_policy(
-            self.policy_type, None, file=self._policy_filename(folder))
+        with open(os.path.join(folder, "reinforce.pkl"), "rb") as f:
+            train_step = pickle.load(f)
+            params = pickle.load(f)
+            opt_state = pickle.load(f)
+            self.step = pickle.load(f)
+            self.rng_key = pickle.load(f)
+            self.mean_cum_reward = pickle.load(f)
+            self.best_mean_cum_reward = pickle.load(f)
+            self.obs = pickle.load(f)
+            self.alpha_exp_decay_std = pickle.load(f)
+            self.policy.cst_sigma = pickle.load(f)
+            states = pickle.load(f)
+            np_randoms = pickle.load(f)
+            self.val_env.state = pickle.load(f)
+            self.val_env.np_random = pickle.load(f)
+        self.train_state = self.train_state.replace(
+            step=train_step,
+            params=params,
+            opt_state=opt_state)
+        self.env.set_attr("state", states)
+        self.env.set_attr("np_random", np_randoms)
 
     def save(self, folder):
         self.policy.save(self._policy_filename(folder))
         with open(self._params_filename(folder), 'wb') as f:
             pickle.dump(self.policy_params, f)
+        with open(os.path.join(folder, "reinforce.pkl"), "wb") as f:
+            pickle.dump(self.train_state.step, f)
+            pickle.dump(self.train_state.params, f)
+            pickle.dump(self.train_state.opt_state, f)
+            pickle.dump(self.step, f)
+            pickle.dump(self.rng_key, f)
+            pickle.dump(self.mean_cum_reward, f)
+            pickle.dump(self.best_mean_cum_reward, f)
+            pickle.dump(self.obs, f)
+            pickle.dump(self.alpha_exp_decay_std, f)
+            pickle.dump(self.policy.cst_sigma, f)
+            pickle.dump(self.env.get_attr("state"), f)
+            pickle.dump(self.env.get_attr("np_random"), f)
+            pickle.dump(self.val_env.state, f)
+            pickle.dump(self.val_env.np_random, f)
 
     def save_best_params(self, folder, params=None, step=None, value=None):
         if params is None:

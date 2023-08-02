@@ -26,9 +26,20 @@ def dict_mean(d: Dict[str, Any], nanmean=True) -> Dict[str, Any]:
 def mean_of_dicts(dictionaries: List[Dict[str, Any]]) -> Dict[str, Any]:
     res = {}
     for k in dictionaries[0].keys():
-        res[k] = np.mean([d[k] for d in dictionaries if k in d])
+        res[k] = np.mean([d[k] for d in dictionaries if k in d]).astype(np.float64)
     return res
 
+def max_of_dicts(dictionaries: List[Dict[str, Any]]) -> Dict[str, Any]:
+    res = {}
+    for k in dictionaries[0].keys():
+        res[k] = np.max([d[k] for d in dictionaries if k in d]).astype(np.float64)
+    return res
+
+def min_of_dicts(dictionaries: List[Dict[str, Any]]) -> Dict[str, Any]:
+    res = {}
+    for k in dictionaries[0].keys():
+        res[k] = np.min([d[k] for d in dictionaries if k in d]).astype(np.float64)
+    return res
 
 def process_venv_dict(d: Dict[str, Any], prefix: str) -> Dict[str, Any]:
     d = _remove_underscore_keys(d)

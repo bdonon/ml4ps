@@ -104,8 +104,8 @@ class Reinforce(Algorithm):
 
         self.step = 0
         self.rng_key = PRNGKey(self.seed)
-        self.mean_cum_reward = -np.inf
-        self.best_mean_cum_reward = -np.inf
+        self.mean_cum_reward = None
+        self.best_mean_cum_reward = None
         self.alpha_exp_decay_std = 1
         self.obs = None
 
@@ -218,37 +218,32 @@ class Reinforce(Algorithm):
         else:
             raise NotImplementedError(f"{self.update_cst_sigma} not implemented.")
 
-    def learn(self, logger=None, seed=None, batch_size=None, n_iterations=1000, validation_interval=None, start_step=0, start_obs=None, start_rng_key=None, start_best_mean_cum_reward=None, start_mean_cum_reward=None):
+    def learn(self, logger=None, seed=None, batch_size=None, n_iterations=1000, validation_interval=None):
         validation_interval = validation_interval or self.validation_interval
         logger = logger or self.logger
         seed = seed or self.seed
 
-        rng_key = start_rng_key or PRNGKey(seed)
-        obs = start_obs or self.env.reset()[0]
-        if start_best_mean_cum_reward is None or start_mean_cum_reward is None:
-            mean_cum_reward, eval_infos = self.eval_reward()
-            best_mean_cum_reward = mean_cum_reward
+        if self.rng_key is None:
+            self.rng_key = PRNGKey(seed)
+        if self.obs is None:
+            self.obs = self.env.reset()[0]
+        if self.best_mean_cum_reward is None or self.mean_cum_reward is None:
+            self.mean_cum_reward, eval_infos = self.eval_reward()
+            if self.best_mean_cum_reward is None:
+                self.best_mean_cum_reward = self.mean_cum_reward
             logger.log_metrics_dict(
-                        {"val_cumulative_reward": mean_cum_reward} | eval_infos, step=start_step)
+                        {"val_cumulative_reward": self.mean_cum_reward} | eval_infos, step=self.step)
             self.save_best_params(
-                            self.run_dir, self.policy_params, step=-1, value=best_mean_cum_reward)
-        else:
-            best_mean_cum_reward = start_best_mean_cum_reward
-            mean_cum_reward = start_mean_cum_reward
-
-        for i in tqdm(range(start_step, n_iterations)):
+                            self.run_dir, self.policy_params, step=-1, value=self.best_mean_cum_reward)
+        for i in tqdm(range(self.step, n_iterations)):
             # Save training state
             self.step = i
-            self.rng_key = rng_key
-            self.mean_cum_reward = mean_cum_reward
-            self.best_mean_cum_reward = best_mean_cum_reward
-            self.obs = obs
             self.save(self.run_dir)
-
+            
             # Train step
-            rng_key, subkey = split(rng_key)
-            self.train_state, obs, rewards, policy_info, env_info, algo_info = self.train_step(
-                self.train_state, obs, rng=subkey, batch_size=batch_size, step=i)
+            self.rng_key, subkey = split(self.rng_key)
+            self.train_state, self.obs, rewards, policy_info, env_info, algo_info = self.train_step(
+                self.train_state, self.obs, rng=subkey, batch_size=batch_size, step=i)
             
             if self.update_cst_sigma is not None:
                 self._update_cst_sigma(step=i, **self.update_cst_sigma_kwargs)
@@ -259,23 +254,19 @@ class Reinforce(Algorithm):
             # Val step
             if i % validation_interval == (validation_interval - 1) and self.val_env is not None:
                 self.val_env.reset()
-                mean_cum_reward, eval_infos = self.eval_reward()
+                self.mean_cum_reward, eval_infos = self.eval_reward()
                 # Save best params
-                if mean_cum_reward >= best_mean_cum_reward:
-                    best_mean_cum_reward = mean_cum_reward
+                if self.mean_cum_reward >= self.best_mean_cum_reward:
+                    self.best_mean_cum_reward = self.mean_cum_reward
                     self.save_best_params(
-                        self.run_dir, self.policy_params, step=i, value=best_mean_cum_reward)
+                        self.run_dir, self.policy_params, step=i, value=self.best_mean_cum_reward)
                 logger.log_metrics_dict(
-                    {"val_cumulative_reward": mean_cum_reward} | eval_infos, i)
+                    {"val_cumulative_reward": self.mean_cum_reward} | eval_infos, i)
         self.save_last_params(self.run_dir, self.policy_params,
-                              step=i, value=mean_cum_reward)
+                              step=i, value=self.mean_cum_reward)
         
         # Save last training state
         self.step = n_iterations
-        self.rng_key = rng_key
-        self.mean_cum_reward = mean_cum_reward
-        self.best_mean_cum_reward = best_mean_cum_reward
-        self.obs = obs
         self.save(self.run_dir)
         
 
@@ -362,7 +353,8 @@ class Reinforce(Algorithm):
             self.rng_key = pickle.load(f)
             self.mean_cum_reward = pickle.load(f)
             self.best_mean_cum_reward = pickle.load(f)
-            self.obs = pickle.load(f)
+            # self.obs = pickle.load(f)
+            pickle.load(f) # load an obs
             self.alpha_exp_decay_std = pickle.load(f)
             self.policy.cst_sigma = pickle.load(f)
             states = pickle.load(f)

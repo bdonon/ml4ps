@@ -28,3 +28,6 @@ class Algorithm(ABC):
 
     def save(self, run_dir):
         pass
+
+    def load(self, run_dir):
+        pass

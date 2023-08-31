@@ -487,15 +487,12 @@ class PandaPowerBackend(AbstractBackend):
 
                     addresses_dict = None
                     if hyper_edges_structure.addresses is not None:
-                        addresses_dict = {}
-                        for address_name in hyper_edges_structure.addresses:
-                            addresses_dict[address_name] = table[address_name].astype(str).values
+                        addresses_dict = {address_name: table[address_name].astype(str).values for address_name in hyper_edges_structure.addresses}
 
                     features_dict = None
                     if hyper_edges_structure.features is not None:
-                        features_dict = {}
-                        for feature_name in hyper_edges_structure.features:
-                            features_dict[feature_name] = np.nan_to_num(table[feature_name].astype(float).values, copy=False) * 1
+                        features_dict = {feature_name: np.nan_to_num(table[feature_name].astype(float).values, copy=False) * 1 for feature_name in hyper_edges_structure.features}
+
 
                     hyper_edges = HyperEdges(features=features_dict, addresses=addresses_dict)
                     if not hyper_edges.is_empty():

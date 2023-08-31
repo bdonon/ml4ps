@@ -1,7 +1,7 @@
 from typing import Dict
 
 from gymnasium import spaces
-from jax import numpy as jnp
+import numpy as np
 from ml4ps.h2mg import (H2MG, H2MGSpace, H2MGStructure, HyperEdgesSpace,
                         HyperEdgesStructure)
 
@@ -90,11 +90,8 @@ class VoltageManagementPandapowerV1(VoltageManagementPandapower):
             res.flat_array = ctrl_var.flat_array + action.flat_array
         else:
             res = action
-        # TODO: find better clipping from buses ?
-        # infos: H2MG = self.backend.get_h2mg_from_power_grid(state.power_grid, self.info_structure)
-        # min_vm_pu_array = infos.hyper_edges["gen"].features["min_vm_pu"]
-        # max_vm_pu_array = infos.hyper_edges["gen"].features["max_vm_pu"]
-        res.flat_array = jnp.clip(res.flat_array, a_min=self.vm_pu_min, a_max=self.vm_pu_max)
+        # TODO: improve clipping ?
+        res.flat_array = np.clip(res.flat_array, a_min=self.vm_pu_min, a_max=self.vm_pu_max)
         return res
 
     def run_power_grid(self, power_grid):

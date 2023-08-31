@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 from typing import Dict, Any
 
-from ml4ps.h2mg.hyper_edges import HyperEdges, collate_hyper_edges, separate_hyper_edges
+from ml4ps.h2mg.hyper_edges import HyperEdges, collate_hyper_edges, separate_hyper_edges, concatenate_hyper_edges
 from typing import Callable
 
 
@@ -132,17 +132,13 @@ class H2MG(dict):
                     all_addresses.append(values)
         if all_addresses:
             all_addresses = list(np.unique(np.concatenate(all_addresses)))
-            str_to_int = {address: i for i, address in enumerate(all_addresses)}
-            int_to_str = {i: address for i, address in enumerate(all_addresses)}
+            str_to_int = {address: np.array(i) for i, address in enumerate(all_addresses)}
             converter = np.vectorize(str_to_int.get)
 
             for hyper_edges_name in self.local_hyper_edges:
-                for address_name in self.local_hyper_edges[hyper_edges_name].addresses:
-                    self[hyper_edges_name].addresses[address_name] = np.array(converter(self[hyper_edges_name].addresses[address_name]))
+                self[hyper_edges_name].addresses = {address_name: np.array(converter(self[hyper_edges_name].addresses[address_name])) for address_name in self.local_hyper_edges[hyper_edges_name].addresses}
             self[ALL_ADDRESSES] = HyperEdges(addresses={"id": np.array(converter(all_addresses))})
-        else:
-            int_to_str = {}
-        return int_to_str
+        return
 
     def add_suffix(self, suffix: str) -> None:
         """Modifies a H2MG by adding a suffix to all features."""

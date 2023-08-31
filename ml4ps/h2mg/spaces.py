@@ -134,6 +134,10 @@ def _my_read(space, shared_memory, n: int = 1):
                                                                                           shared_memory[key], n=n))
     return h2mg
 
+@gym.vector.utils.shared_memory.write_to_shared_memory.register(H2MGSpace)
+def _my_write(space: H2MGSpace, index: int, values: H2MG, shared_memory: H2MG):
+    for (key, subspace) in space.spaces.items():
+        gym.vector.utils.shared_memory.write_to_shared_memory(space[key], index, values[key], shared_memory[key])
 
 @gym.vector.utils.spaces.iterate.register(H2MGSpace)
 def _iterate_h2mg_space(space, items):
@@ -358,3 +362,11 @@ def _iterate_hyper_edges_space(space, items):
         if ADDRESSES in dict_.keys():
             addresses_dict = dict_[ADDRESSES]
         yield HyperEdges(addresses=addresses_dict, features=features_dict)
+
+
+@gym.vector.utils.shared_memory.write_to_shared_memory.register(HyperEdgesSpace)
+def _my_write(space: HyperEdgesSpace, index: int, values: HyperEdges, shared_memory: HyperEdges):
+    if values.addresses is not None:
+        gym.vector.utils.shared_memory.write_to_shared_memory(space.addresses, index, values.addresses, shared_memory.addresses)
+    if values.features is not None:
+        gym.vector.utils.shared_memory.write_to_shared_memory(space.features, index, values.features, shared_memory.features)

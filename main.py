@@ -1,6 +1,10 @@
 import os
 os.environ["HYDRA_FULL_ERROR"] = "1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="false"
+# os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"]=".05"
+# os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]="platform"
+from jax.lib import xla_bridge
 
 import datetime
 import random
@@ -9,7 +13,9 @@ import gymnasium as gym
 import hydra
 from gymnasium.vector import VectorEnv
 from omegaconf import OmegaConf
-
+import numpy as np
+import jax.numpy as jnp
+import jax
 import ml4ps
 from ml4ps.logger import log_params_from_omegaconf_dict, get_logger
 from ml4ps.reinforcement.algorithm import get_algorithm
@@ -73,6 +79,7 @@ def build_run_name(cfg, hparam_names):
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
+    jax.config.update('jax_platform_name', cfg.device)
     # Save configuration
     run_dir, run_name = save_config(cfg)
 

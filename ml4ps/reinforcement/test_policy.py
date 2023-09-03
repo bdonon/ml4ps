@@ -7,6 +7,8 @@ from jax.random import PRNGKey, split
 from ml4ps.logger import dict_mean, mean_of_dicts, max_of_dicts, min_of_dicts
 from ml4ps.reinforcement.environment import PSBaseEnv, TestEnv
 from ml4ps.reinforcement.policy import BasePolicy
+import jax
+from contextlib import nullcontext
 
 
 # TODO: use eval_reward instead
@@ -54,8 +56,9 @@ def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: P
                 init_cost.append(single_env.state.cost)
             seed, val_seed = split(seed)
             # TODO: seed is not used in deterministic TODO change back to deterministic=True
-            action, _, action_infos = policy_sample(
-                params, obs, val_seed, deterministic=True, env=single_env)
+            with jax.default_device(jax.devices('gpu')[0]) if jax.devices('gpu') else nullcontext():
+                action, _, action_infos = policy_sample(
+                        params, obs, val_seed, deterministic=True, env=single_env)
             obs, reward, terminated, truncated, info = single_env.step(action)
             was_reset = False
             rewards.append(reward)

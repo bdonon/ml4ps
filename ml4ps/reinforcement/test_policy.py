@@ -10,6 +10,14 @@ from ml4ps.reinforcement.policy import BasePolicy
 import jax
 from contextlib import nullcontext
 
+def jax_device_context():
+    try:
+        ctx = jax.default_device(jax.devices('gpu')[0])
+    except:
+        ctx = nullcontext()
+    
+    return ctx
+
 
 # TODO: use eval_reward instead
 def test_policy(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed, output_dir: str, max_steps=None):
@@ -56,7 +64,8 @@ def eval_reward(single_env: PSBaseEnv, policy: BasePolicy, params: Dict, seed: P
                 init_cost.append(single_env.state.cost)
             seed, val_seed = split(seed)
             # TODO: seed is not used in deterministic TODO change back to deterministic=True
-            with jax.default_device(jax.devices('gpu')[0]) if jax.devices('gpu') else nullcontext():
+            
+            with jax_device_context():
                 action, _, action_infos = policy_sample(
                         params, obs, val_seed, deterministic=True, env=single_env)
             obs, reward, terminated, truncated, info = single_env.step(action)

@@ -22,9 +22,18 @@ from ml4ps.reinforcement.policy import BasePolicy, get_policy
 from ml4ps.reinforcement.test_policy import eval_reward, test_policy
 from tqdm import tqdm
 from dataclasses import dataclass
+from contextlib import nullcontext
 
 from .algorithm import Algorithm
 
+
+def jax_device_context():
+    try:
+        ctx = jax.default_device(jax.devices('gpu')[0])
+    except:
+        ctx = nullcontext()
+    
+    return ctx
 
 # class ReinforceTrainState(train_state.TrainState):
 #     pass
@@ -189,7 +198,7 @@ class Reinforce(Algorithm):
 
     def compute_baseline(self, state, batch, rng, batch_size):
         baseline_actions = []
-        with jax.default_device(jax.devices('gpu')[0]):
+        with jax_device_context():
             baseline_actions, _, _ = self.vmap_sample(
                 state.params, batch, split(rng, batch_size), n_action=self.n_actions)
         if self.n_actions == 1:
@@ -233,7 +242,7 @@ class Reinforce(Algorithm):
         next_obs, rewards, done, _, env_info = self.env.step(action)
         if step % self.max_steps == (self.max_steps-1):
             next_obs, info = self.env.reset(options={"load_new_power_grid": True})
-        with jax.default_device(jax.devices('gpu')[0]):
+        with jax_device_context():
             for _ in range(self.gradient_steps):
                 (value, loss_info), grad = self.value_and_grad_fn(
                     state.params, batch, baseline_actions, b_rewards, baseline, multiple_actions=True)

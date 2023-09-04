@@ -1,10 +1,6 @@
-import pickle
-from copy import deepcopy
 from functools import partial
 from numbers import Number
-from time import time
-from typing import (Any, Callable, Dict, Iterator, List, NamedTuple, Optional,
-                    Sequence, Tuple, Union)
+from typing import Any, Dict, Tuple
 
 import gymnasium as gym
 import jax
@@ -13,18 +9,13 @@ import ml4ps
 from jax import jit
 from jax import numpy as jnp
 from jax import vmap
-from jax.random import KeyArray, PRNGKey, PRNGKeyArray, split
-from jax.tree_util import tree_leaves
 from ml4ps import h2mg
-from ml4ps.h2mg import (H2MG, H2MGSpace, H2MGStructure, HyperEdgesStructure,
-                        h2mg_categorical_logprob, h2mg_categorical_sample,
-                        h2mg_normal_logprob, h2mg_normal_sample, shallow_repr,
-                        spaces, vmap_h2mg_categorical_entropy)
-from ml4ps.neural_network import get as get_neural_network
+from ml4ps.h2mg import (H2MG, H2MGSpace, h2mg_categorical_logprob,
+                        h2mg_categorical_sample, h2mg_normal_logprob,
+                        h2mg_normal_sample, spaces,
+                        vmap_h2mg_categorical_entropy)
 from ml4ps.reinforcement.policy.base import BasePolicy
-from ml4ps.reinforcement.policy.continous_policy import (ContinuousPolicy,
-                                                         manual_normalization)
-from tqdm import tqdm
+from ml4ps.reinforcement.policy.continous_policy import ContinuousPolicy
 
 
 class ContinuousAndDiscrete(BasePolicy):
@@ -131,12 +122,12 @@ class ContinuousAndDiscrete(BasePolicy):
     def vmap_sample(self, params: dict, observation: dict, rng, deterministic: bool = False, n_action: int = 1) -> float:
         return vmap(self.sample, in_axes=(None, 0, 0, None, None), out_axes=(0, 0, 0))(params, observation, rng, deterministic,
                                                                                        n_action)
+
     def discrete_forward(self, params: Dict, observation: H2MG) -> H2MG:
-        observation = manual_normalization(observation)  # TODO: remove this
         observation = self.normalizer(observation)
         logits = self.discrete_nn.apply(params, observation)
         return logits
-    
+
     def discrete_log_prob(self, params, observation, action):
         discrete_action = action.extract_from_structure(
             self.discrete_action_space.structure)
@@ -234,7 +225,6 @@ class ContinuousAndDiscrete(BasePolicy):
         return h2mg_normal_logprob(continous_action, mu_norm, log_sigma_norm), (mu_norm, log_sigma_norm)
 
     def continuous_forward(self, params: Dict, observation: H2MG) -> Tuple[H2MG, H2MG]:
-        observation = manual_normalization(observation)  # TODO: remove this
         observation = self.normalizer(observation)
         distrib_params = self.continuous_nn.apply(params, observation)
         mu, log_sigma = self._postprocess_distrib_params(distrib_params)

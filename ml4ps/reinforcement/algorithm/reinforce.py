@@ -1,15 +1,15 @@
 import json
 import os
 import pickle
+from contextlib import nullcontext
+from dataclasses import dataclass
 from functools import partial
-from time import time
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, Sequence, Tuple
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-from flax.training import train_state
-import jax
 from jax import jit
 from jax import numpy as jnp
 from jax import value_and_grad, vmap
@@ -21,8 +21,6 @@ from ml4ps.reinforcement.environment import PSBaseEnv
 from ml4ps.reinforcement.policy import BasePolicy, get_policy
 from ml4ps.reinforcement.test_policy import eval_reward, test_policy
 from tqdm import tqdm
-from dataclasses import dataclass
-from contextlib import nullcontext
 
 from .algorithm import Algorithm
 

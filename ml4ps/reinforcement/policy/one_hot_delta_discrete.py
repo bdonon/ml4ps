@@ -5,13 +5,11 @@ import gymnasium as gym
 import jax
 import jax.numpy as jnp
 import ml4ps
-import numpy as np
 from jax import jit, vmap
 from ml4ps import h2mg
 from ml4ps.h2mg import (H2MG, H2MGStructure, h2mg_categorical_logprob,
                         h2mg_categorical_sample, vmap_h2mg_categorical_entropy)
 from ml4ps.reinforcement.policy.base import BasePolicy
-from ml4ps.reinforcement.policy.continous_policy import manual_normalization
 
 
 def one_hot_to_action(one_hot: H2MG, multi_binary_struct: H2MGStructure, multi_discrete_up_struct: H2MGStructure,
@@ -46,7 +44,6 @@ def action_to_one_hot(action: H2MG, multi_binary_struct: H2MGStructure, multi_di
 
 def discrete_log_prob(params: Dict, observation: H2MG, action: H2MG, normalizer: Callable, nn):
     one_hot = action_to_one_hot(action)
-    observation = manual_normalization(observation)
     norm_observation = normalizer(observation)
     logits = nn.apply(params, norm_observation)
     return h2mg_categorical_logprob(one_hot, logits), logits
@@ -85,14 +82,12 @@ class OneHotDeltaDiscrete(BasePolicy):
 
     def log_prob(self, params, observation, action):
         one_hot = self._action_to_one_hot(action)
-        observation = manual_normalization(observation)
         norm_observation = self.normalizer(observation)
         logits = self.nn.apply(params, norm_observation)
         return h2mg_categorical_logprob(one_hot, logits), logits
 
     def sample(self, params: Dict, observation: H2MG, rng, deterministic=False, n_action=1):
         """Sample an action and return it together with the corresponding log probability."""
-        observation = manual_normalization(observation)
         norm_observation = self.normalizer(observation)
         logits: H2MG = self.nn.apply(params, norm_observation)
         if n_action <= 1:

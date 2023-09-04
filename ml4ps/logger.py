@@ -3,10 +3,10 @@ from typing import Any, Dict, List
 
 import mlflow
 import numpy as np
-from omegaconf import DictConfig, ListConfig
-from omegaconf import OmegaConf
-from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
+from omegaconf import DictConfig, ListConfig, OmegaConf
+from torch.utils.tensorboard import SummaryWriter
+
 
 def get_logger(*, name, **kwargs):
     if name == "mlflow":
@@ -218,5 +218,3 @@ def _explore_recursive(logger: BaseLogger, parent_name, element):
                 logger.log_hyperparam(f'{parent_name}.{k}', v)
     elif isinstance(element, ListConfig):
         logger.log_hyperparam(f'{parent_name}', element)
-        # for i, v in enumerate(element):
-        #     mlflow.log_param(f'{parent_name}.{i}', v)

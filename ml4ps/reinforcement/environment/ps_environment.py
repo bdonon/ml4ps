@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional, Dict, Tuple
 
-from gymnasium import Env, spaces
-from ml4ps.h2mg import H2MG, H2MGStructure, H2MGSpace
+from gymnasium import Env
+from ml4ps.h2mg import H2MG, H2MGSpace
 import os
 
 

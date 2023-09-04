@@ -26,7 +26,6 @@ from ml4ps.neural_network import H2MGNODE
 from ml4ps.neural_network import get as get_neural_network
 from ml4ps.reinforcement.environment import PSBaseEnv
 from ml4ps.reinforcement.policy import BasePolicy, get_policy
-from ml4ps.reinforcement.policy.continous_policy import manual_normalization
 from ml4ps.reinforcement.test_policy import eval_reward, test_policy
 from tqdm import tqdm
 
@@ -231,9 +230,12 @@ class ValueNetwork:
 
     def __call__(self, params, obs) -> Any:
         return self.net.apply(params, obs)
+    
+    def apply(self, params, obs) -> Any:
+        obs = self.normalizer(obs)
+        return self.scaling_factor * self.net.apply(params, obs).global_hyper_edges.features["value"].squeeze()
 
     def vmap_apply(self, params, obs) -> Any:
-        obs = manual_normalization(obs)
         obs = self.normalizer(obs)
         return self.scaling_factor * \
             vmap(self.net.apply, in_axes=(None, 0), out_axes=0)(
@@ -417,7 +419,7 @@ class PPO(Algorithm):
         return policy, params
 
     def learn(self, *, N: int, M: int, T: int, K: int, seed: int, batch_size: int = None, n_iterations: int,
-              env: gym.vector.VectorEnv = None, logger=None, validation_interval=100, log_interval=10):
+              env: gym.vector.VectorEnv = None, logger=None, validation_interval=100, log_interval=10, deterministic_exploration=False, learn_policy=True):
         rng = PRNGKey(seed)
         self.logger = logger or self.logger
         env = env or self.env
@@ -445,7 +447,7 @@ class PPO(Algorithm):
 
             # Sample data (n batched episodes of length T or N episodes of length T)
             episodes_collection, infos = sample_episodes_collection(
-                n=n, policy=self.policy_network, params=self.policy_params, rng=rng, deterministic=False,
+                n=n, policy=self.policy_network, params=self.policy_params, rng=rng, deterministic=deterministic_exploration, # TODO: change back  deterministic=False
                 env=env, max_episode_length=max_episode_length)
             if step % log_interval == 0:
                 self.log(infos, step=step)
@@ -459,7 +461,7 @@ class PPO(Algorithm):
                 rng, sub_rng = split(rng)
                 for batch in episodes_collection.shuffled(rng=sub_rng):
                     self.value_params, self.value_state, self.policy_params, self.policy_state, loss, loss_info = self.update(
-                        batch, self.value_params, self.value_state, self.policy_params, self.policy_state)
+                        batch, self.value_params, self.value_state, self.policy_params, self.policy_state, learn_policy=learn_policy)
                     if step % log_interval == 0:
                         self.log(loss_info, step=step)
                     step += 1
@@ -484,15 +486,16 @@ class PPO(Algorithm):
                                  step=step, value=mean_cum_reward, name="best")
         return mean_cum_reward, best_mean_cum_reward, eval_info
 
-    @partial(jit, static_argnums=(0,))
-    def update(self, batched_transition: BatchedPPOTuples, value_params, value_state, policy_params, policy_state):
+    @partial(jit, static_argnums=(0,6))
+    def update(self, batched_transition: BatchedPPOTuples, value_params, value_state, policy_params, policy_state, learn_policy=True):
         (loss, loss_info), (policy_grad, value_grad) = value_and_grad(self.loss_fn,
                                                                       argnums=(0, 1), has_aux=True)(policy_params,
                                                                                                     value_params,
                                                                                                     batched_transition)
         policy_updates, policy_state = self.policy_optmizer.update(
             policy_grad, policy_state, policy_params)
-        policy_params = optax.apply_updates(policy_params, policy_updates)
+        if learn_policy:
+            policy_params = optax.apply_updates(policy_params, policy_updates) #TODO :remove this please
         value_updates, value_state = self.value_optimizer.update(
             value_grad, value_state, value_params)
         value_params = optax.apply_updates(value_params, value_updates)
@@ -516,6 +519,7 @@ class PPO(Algorithm):
         state = batched_transition.state
         value = self.value_network.vmap_apply(value_params, state)
         target_value = jax.lax.stop_gradient(batched_transition.returns)
+        # target_value = jnp.ones_like(target_value) # TODO: REMOVE this please
         value_loss = jnp.square(target_value - value).mean()
 
         # Policy loss
@@ -537,8 +541,17 @@ class PPO(Algorithm):
         entropy = self.policy_network.entropy(ditrib_params, batch=True).mean()
         entropy_loss = - self.alpha_entropy * entropy
 
+        # assert(value.shape == target_value.shape) # OK
+        # assert(value.shape == (16,)) # OK
+        # assert(target_value.shape == (16,)) # OK
+        # assert((target_value - value).shape == (16,)) # OK
+        # TODO: verifier si la value loss descend ou pas.
         loss = policy_loss + value_loss + entropy_loss
-        return loss, {"loss": loss, "policy_loss": policy_loss, "value_loss": value_loss, "value": value.mean(),
+        abs_value_diff = jnp.abs(value - target_value)
+        mean_abs_value_diff = jnp.mean(abs_value_diff)
+        return loss, {"loss": loss, "policy_loss": policy_loss, "value_loss": value_loss, "value": value.mean(), "value_target": target_value.mean(), "reward": batched_transition.reward.mean(), 
+                      "med_value_diff": jnp.median(abs_value_diff), "max_value_diff": jnp.max(abs_value_diff), "min_value_diff": jnp.min(abs_value_diff), 
+                      "mean_value_diff": mean_abs_value_diff, "relative_error": jnp.mean(jnp.abs(value - target_value / (target_value+1e-8))),# TODO,
                       "entropy_loss": entropy_loss, "entropy": entropy,
                       "advantage": advantage.mean(), "max_advantage": max_adv, "min_advantage": min_adv,
                       "ratio_max": ratio.max(), "ratio_min": ratio.min(), "ratio_mean": ratio.mean(),

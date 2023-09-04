@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 from flax.training import train_state
+import jax
 from jax import jit
 from jax import numpy as jnp
 from jax import value_and_grad, vmap
@@ -20,15 +21,53 @@ from ml4ps.reinforcement.environment import PSBaseEnv
 from ml4ps.reinforcement.policy import BasePolicy, get_policy
 from ml4ps.reinforcement.test_policy import eval_reward, test_policy
 from tqdm import tqdm
+from dataclasses import dataclass
 
 from .algorithm import Algorithm
 
 
-class ReinforceTrainState(train_state.TrainState):
-    pass
+# class ReinforceTrainState(train_state.TrainState):
+#     pass
 
+@dataclass
+class ReinforceTrainState:
+    step: int
+    apply_fn: Any
+    params: Any
+    tx: Any
+    opt_state: Any
+    
+    def apply_gradients(self, *, grads, **kwargs):
+        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params)
+        new_params = optax.apply_updates(self.params, updates)
+        return self.replace(
+        step=self.step + 1,
+        params=new_params,
+        opt_state=new_opt_state,
+        **kwargs,
+    )
 
-def create_train_state(*, single_obs, module, apply_fn, rng, learning_rate, clip_norm=0.1, lr_schedule_kwargs=None) -> ReinforceTrainState:
+    @classmethod
+    def create(cls, *, apply_fn, params, tx, **kwargs):
+        """Creates a new instance with `step=0` and initialized `opt_state`."""
+        opt_state = tx.init(params)
+        return cls(
+            step=0,
+            apply_fn=apply_fn,
+            params=params,
+            tx=tx,
+            opt_state=opt_state,
+            **kwargs,
+        )
+    
+    def replace(self, *, step, params, opt_state, **kwargs) :
+        self.step = step
+        self.params = params
+        self.opt_state = opt_state
+        return self
+
+def create_train_state(*, single_obs, module, apply_fn, rng, learning_rate,
+                       clip_norm=0.1, lr_schedule_kwargs=None, every_k_schedule=None) -> ReinforceTrainState:
     """Creates an initial `TrainState`."""
     params = module.init(rng, single_obs)
     # TODO: clip_by_values ?
@@ -38,7 +77,8 @@ def create_train_state(*, single_obs, module, apply_fn, rng, learning_rate, clip
         lr_schedule = learning_rate
     tx = optax.chain(optax.clip_by_global_norm(clip_norm),
                      optax.adam(learning_rate=lr_schedule))
-    # tx = optax.MultiSteps(tx, every_k_schedule=2) # TODO: REMOVE
+    if every_k_schedule is not None and every_k_schedule > 1:
+            tx = optax.MultiSteps(tx, every_k_schedule=every_k_schedule)  # Accumulate gradient for k batches
     return ReinforceTrainState.create(apply_fn=apply_fn, params=params, tx=tx)
 
 
@@ -57,9 +97,11 @@ class Reinforce(Algorithm):
 
     def __init__(self, *, env: PSBaseEnv, seed=0, val_env: PSBaseEnv, test_env: PSBaseEnv, run_dir,
                 max_steps, policy_type: str, logger=None, validation_interval=100, baseline=None,
-                policy_args={}, nn_args={}, clip_norm, learning_rate, lr_schedule_kwargs=None, n_actions=5, baseline_learning_rate=None,
-                baseline_nn_type=None, baseline_nn_args=None, init_cost=None, nn_baseline_steps=None,
-                normalize_baseline_rewards=False, gradient_steps=1, update_cst_sigma=None, update_cst_sigma_kwargs={}, alpha_entropy=None, alpha_std=None, mixed_std=False, exp_decay_std=None, clip_rewards=None, reward_normalization="normal") -> 'Reinforce':
+                policy_args={}, nn_args={}, clip_norm, learning_rate, lr_schedule_kwargs=None, n_actions=5,
+                baseline_learning_rate=None, baseline_nn_type=None, baseline_nn_args=None, init_cost=None,
+                nn_baseline_steps=None, normalize_baseline_rewards=False, gradient_steps=1, update_cst_sigma=None,
+                update_cst_sigma_kwargs={}, alpha_entropy=None, alpha_std=None, mixed_std=False, exp_decay_std=None,
+                clip_rewards=None, reward_normalization="normal", every_k_schedule=None) -> 'Reinforce':
         self.best_params_path = os.path.join(run_dir, self.best_params_name)
         self.last_params_path = os.path.join(run_dir, self.last_params_name)
         self.policy_type = policy_type
@@ -74,6 +116,7 @@ class Reinforce(Algorithm):
         self.logger = logger
         self.clip_norm = clip_norm
         self.learning_rate = learning_rate
+        self.every_k_schedule = every_k_schedule
         self.lr_schedule_kwargs = lr_schedule_kwargs
         self.baseline_learning_rate = baseline_learning_rate
         self.baseline_nn_type = baseline_nn_type
@@ -98,8 +141,9 @@ class Reinforce(Algorithm):
     
     def init(self):
         single_obs, _ = self.val_env.reset()
-        self.train_state = create_train_state(single_obs=single_obs, module=self.policy, apply_fn=self.vmap_sample, rng=PRNGKey(
-            self.seed), learning_rate=self.learning_rate, clip_norm=self.clip_norm, lr_schedule_kwargs=self.lr_schedule_kwargs)
+        self.train_state = create_train_state(single_obs=single_obs, module=self.policy, apply_fn=self.vmap_sample,
+                                rng=PRNGKey(self.seed), learning_rate=self.learning_rate, clip_norm=self.clip_norm,
+                                lr_schedule_kwargs=self.lr_schedule_kwargs, every_k_schedule=self.every_k_schedule)
         self.init_baseline()
 
         self.step = 0
@@ -113,7 +157,8 @@ class Reinforce(Algorithm):
     def hparams(self):
         # TODO check
         return {"validation_interval": self.validation_interval, "seed": self.seed,
-                "baseline": self.baseline, "clip_norm": self.clip_norm, "learning_rate": self.learning_rate, "policy_type": self.policy_type, "n_actions": self.n_actions}
+                "baseline": self.baseline, "clip_norm": self.clip_norm, 
+                "learning_rate": self.learning_rate, "policy_type": self.policy_type, "n_actions": self.n_actions}
 
     @hparams.setter
     # TODO check
@@ -132,37 +177,43 @@ class Reinforce(Algorithm):
             return
         if self.baseline != "model":
             return
-
-    def compute_baseline(self, state, batch, rng, batch_size):
+    
+    def apply_actions(self, baseline_actions: Sequence):
+        assert(len(baseline_actions) == self.n_actions)
         rewards = []
-        baseline_actions = []
-        baseline_actions, _, _ = self.vmap_sample(
-            state.params, batch, split(rng, batch_size), n_action=self.n_actions)
-        if self.n_actions == 1:
-            baseline_actions = [baseline_actions]
         for i in range(self.n_actions):
             baseline_action: H2MG = baseline_actions[i]
-            _, baseline_reward, _, _, _ = self.env.step(baseline_action)
+            _, baseline_reward, _, _, _obs = self.env.step(baseline_action)
             rewards.append(baseline_reward)
-        rewards = jnp.stack(rewards, axis=0)
+        return jnp.stack(rewards, axis=0)
+
+    def compute_baseline(self, state, batch, rng, batch_size):
+        baseline_actions = []
+        with jax.default_device(jax.devices('gpu')[0]):
+            baseline_actions, _, _ = self.vmap_sample(
+                state.params, batch, split(rng, batch_size), n_action=self.n_actions)
+        if self.n_actions == 1:
+            baseline_actions = [baseline_actions]
+        rewards = self.apply_actions(baseline_actions)
         if self.normalize_baseline_rewards:
             if self.alpha_std is not None:
-                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (self.alpha_std * jnp.std(rewards, axis=0, keepdims=True) + 1)
+                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / \
+                    (self.alpha_std * jnp.std(rewards, axis=0, keepdims=True) + 1)
             elif self.mixed_std:
-                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (jnp.std(rewards, axis=0, keepdims=True)/2 + jnp.std(rewards, axis=0, keepdims=True).mean()/2 + 1e-8)
+                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / \
+                    (jnp.std(rewards, axis=0, keepdims=True)/2 + jnp.std(rewards, axis=0, keepdims=True).mean()/2 + 1e-8)
             elif self.exp_decay_std is not None:
-                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (1 + self.alpha_exp_decay_std * (jnp.std(rewards, axis=0, keepdims=True)-1) + 1e-8)
+                rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / \
+                    (1 + self.alpha_exp_decay_std * (jnp.std(rewards, axis=0, keepdims=True)-1) + 1e-8)
             elif self.reward_normalization == "normal":
                 rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True)) / (jnp.std(rewards, axis=0, keepdims=True) + 1e-8)
             elif self.reward_normalization == "minmax":
-                # TODO
                 _min_rewards = jnp.min(rewards, axis=0, keepdims=True)
                 _max_rewards = jnp.max(rewards, axis=0, keepdims=True)
                 rewards = 2 * (rewards - _min_rewards) / (_max_rewards - _min_rewards + 1e-8) - 1
             else:
                 raise ValueError("Wrong reward normalization configuration")
 
-            # rewards = jnp.clip(rewards, a_min=-3, a_max=3)
         if self.clip_rewards is not None:
             rewards = (rewards - jnp.mean(rewards, axis=0, keepdims=True))
             rewards = jnp.clip(rewards, a_min=-self.clip_rewards, a_max=self.clip_rewards)
@@ -181,12 +232,12 @@ class Reinforce(Algorithm):
             state.params, batch, split(rng, batch_size))
         next_obs, rewards, done, _, env_info = self.env.step(action)
         if step % self.max_steps == (self.max_steps-1):
-            next_obs, info = self.env.reset(
-                options={"load_new_power_grid": True})
-        for _ in range(self.gradient_steps):
-            (value, loss_info), grad = self.value_and_grad_fn(
-                state.params, batch, baseline_actions, b_rewards, baseline, multiple_actions=True)
-            state = state.apply_gradients(grads=grad)
+            next_obs, info = self.env.reset(options={"load_new_power_grid": True})
+        with jax.default_device(jax.devices('gpu')[0]):
+            for _ in range(self.gradient_steps):
+                (value, loss_info), grad = self.value_and_grad_fn(
+                    state.params, batch, baseline_actions, b_rewards, baseline, multiple_actions=True)
+                state = state.apply_gradients(grads=grad)
         algo_info = {"grad_norm": optax._src.linear_algebra.global_norm(grad),
                      "loss_value": value,
                      "log_probs": jnp.mean(log_probs),
@@ -194,7 +245,8 @@ class Reinforce(Algorithm):
                      "mean_baseline_reward": jnp.mean(b_rewards),
                      "std_baseline_reward": jnp.std(b_rewards, axis=0).mean()} | loss_info
         if self.exp_decay_std is not None:
-            algo_info =  algo_info | {"alpha_exp_decay_std": self.alpha_exp_decay_std, "exp_decay_std": self.exp_decay_std}
+            algo_info =  algo_info | {"alpha_exp_decay_std": self.alpha_exp_decay_std,
+                                      "exp_decay_std": self.exp_decay_std}
             self.alpha_exp_decay_std *= self.exp_decay_std
         return state, next_obs, rewards, policy_info, env_info, algo_info
 
@@ -304,8 +356,6 @@ class Reinforce(Algorithm):
         loss =  reinforce_loss
         # if self.entropy_loss is not None:
         entropy = self.policy.entropy(log_prob_info, batch=True, matrix=True, axis=1)
-        # assert(log_probs.shape == (4,8))
-        # assert(entropy.shape == (3,7))
         if self.alpha_entropy is not None:
             entropy_loss = - self.alpha_entropy * entropy
             loss += entropy_loss
@@ -315,12 +365,13 @@ class Reinforce(Algorithm):
         return loss, {"entropy": entropy, "entropy_loss": entropy_loss, "reinforce_loss": reinforce_loss}
 
     # @partial(jit, static_argnums=(0, 4, 5))
-    def vmap_sample(self, params, obs, seed, deterministic=False, n_action=1) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
+    def vmap_sample(self, params, obs, seed,
+            deterministic=False, n_action=1) -> Tuple[Sequence[Any], Sequence[float], Dict[str, Any]]:
         return self.policy.vmap_sample(params, obs, seed, deterministic, n_action)
 
-    @partial(jit, static_argnums=(0,))
+    # @partial(jit, static_argnums=(0,))
     def vmap_log_prob(self, params, obs, action):
-        return vmap(self.policy.log_prob, in_axes=(None, 0, 0), out_axes=0)(params, obs, action)
+        return self.policy.vmap_log_prob(params, obs, action)
     
     def eval(self, val_env, seed=None, max_steps=None):
         params = self.load_best_params()

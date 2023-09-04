@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 from typing import Dict, Any
 
-from ml4ps.h2mg.hyper_edges import HyperEdges, collate_hyper_edges, separate_hyper_edges, concatenate_hyper_edges
+from ml4ps.h2mg.hyper_edges import HyperEdges, collate_hyper_edges, separate_hyper_edges
 from typing import Callable
 
 

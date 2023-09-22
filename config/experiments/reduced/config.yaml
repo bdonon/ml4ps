@@ -1,0 +1,112 @@
+experiment_name: "standard"
+run_name: null
+res_dir: ${experiment_name}
+train_dir: ../data/case60nordic/reduced/train
+val_dir: ../data/case60nordic/reduced/val
+test_dir: ../data/case60nordic/reduced/test
+seed: 0
+debug: False
+device: "cpu"
+shuffle: False
+batch_size: 32
+enc_dec_hsize: [128,64]
+dyn_hsize: [128]
+latent_dim: 64
+env_name: "VoltageManagementPandapowerV1"
+hparams: null
+max_steps: 1
+init_cost: null
+cost_eps: 0.05
+cost_hparams:
+ lmb_i: 200
+ lmb_q: 0
+ lmb_v: 200
+ lmb_j: 1
+ eps_i: ${cost_eps}
+ eps_q: 0.5
+ eps_v: ${cost_eps}
+ c_div: 1
+vm_pu_width: 0.15
+vm_pu_min: ${sub:1,${vm_pu_width}}
+vm_pu_max: ${add:1,${vm_pu_width}}
+env:
+  name: ${env_name}
+  data_dir: ${train_dir}
+  num_envs: ${batch_size}
+  init_cost: ${init_cost}
+  cost_hparams: ${cost_hparams}
+  max_steps: ${max_steps}
+  vm_pu_min: ${vm_pu_min}
+  vm_pu_max: ${vm_pu_max}
+val_env:
+  name: ${env_name}
+  data_dir: ${val_dir}
+  init_cost: ${init_cost}
+  cost_hparams: ${cost_hparams}
+  max_steps: ${max_steps}
+  vm_pu_min: ${vm_pu_min}
+  vm_pu_max: ${vm_pu_max}
+test_env:
+  name: ${env_name}
+  data_dir: ${test_dir}
+  init_cost: ${init_cost}
+  cost_hparams: ${cost_hparams}
+  max_steps: ${max_steps}
+  vm_pu_min: ${vm_pu_min}
+  vm_pu_max: ${vm_pu_max}
+algorithm_type: "reinforce"
+algorithm:
+  policy_type: "continuous"
+  validation_interval: ${learn.validation_interval}
+  nn_baseline_steps: 1
+  baseline: "mean"
+  init_cost: ${init_cost}
+  clip_norm: 1000
+  learning_rate: 0.0003
+  lr_schedule_kwargs: null
+  baseline_learning_rate: 0.001
+  n_actions: 16
+  gradient_steps: 1
+  every_k_schedule: null
+  max_steps: ${max_steps}
+  normalize_baseline_rewards: true
+  reward_normalization: "normal"
+  alpha_entropy: null
+  alpha_std: null
+  mixed_std: false
+  exp_decay_std: null
+  clip_rewards: null
+  update_cst_sigma: null
+  update_cst_sigma_kwargs: null
+  policy_args:
+    cst_sigma: 5e-3
+  nn_args:
+    local_encoder_hidden_size: ${enc_dec_hsize}
+    global_encoder_hidden_size: ${enc_dec_hsize}
+    local_dynamics_hidden_size: ${dyn_hsize}
+    global_dynamics_hidden_size: ${dyn_hsize}
+    local_decoder_hidden_size: ${enc_dec_hsize}
+    global_decoder_hidden_size: ${enc_dec_hsize}
+    local_encoder_output: ${latent_dim}
+    global_encoder_output: ${latent_dim}
+    local_latent_dimension: ${latent_dim}
+    global_latent_dimension: ${latent_dim}
+    solver_name: "Euler"
+    dt0: 0.05
+    stepsize_controller_name: "ConstantStepSize"
+    stepsize_controller_kwargs: null
+    adjoint_name: "RecursiveCheckpointAdjoint"
+    max_steps: 4096
+    enc_dec_activation: "tanh"
+    dyn_activation: "tanh"
+    dyn_final_activation: "tanh"
+logger:
+  name: "tensorboard"
+  experiment_name: ${experiment_name}
+  run_name: ${run_name}
+  res_dir: ${res_dir}
+learn:
+  n_iterations: 200000
+  validation_interval: 1000
+test:
+  max_steps: ${max_steps}
